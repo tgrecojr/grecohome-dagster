@@ -31,6 +31,11 @@ jobs:
         run: uv export --frozen --no-hashes --no-emit-workspace --output-file requirements-lock.txt
 
       - name: Socket Security scan
+        # Advisory, not a hard gate: Socket's API has been intermittently timing
+        # out at scan-create for this org, which would otherwise block publishing.
+        # OSV (below) and pip-audit remain hard gates for CVE/advisory coverage;
+        # Socket adds typosquat/malware heuristics on top when it's reachable.
+        continue-on-error: true
         env:
           SOCKET_SECURITY_API_KEY: ${{ secrets.SOCKET_SECURITY_API_KEY }}
         run: |
