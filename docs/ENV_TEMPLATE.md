@@ -20,6 +20,26 @@ manager. **Never commit a real `.env`.**
 | `MAX_REQUESTS_PER_MINUTE` | no | `60` | Whoop API rate cap |
 | `RECONCILE_WINDOW_DAYS` | no | `7` | Trailing reconcile overlap; schedule re-captures this + 1 partition |
 
+### Dagster instance (required at deploy, not for local `dagster dev`)
+
+The host uses **`DefaultRunLauncher`**, so each run executes as a subprocess **inside the
+code-location container** and writes to the host instance's Postgres event/run/schedule
+storage. The container therefore needs `DAGSTER_HOME` pointing at the *same* `dagster.yaml`
+the daemon uses (mounted, not baked) plus the Postgres connection vars that file references.
+`dagster-postgres` is already bundled in the image. These are **not** read by the app's
+settings — Dagster reads them.
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `DAGSTER_HOME` | yes (deploy) | Dir holding the mounted `dagster.yaml` (matches the daemon's) |
+| `DAGSTER_POSTGRES_USER` | yes (deploy) | Instance Postgres user (referenced by `dagster.yaml`) |
+| `DAGSTER_POSTGRES_PASSWORD` | yes (deploy) | Instance Postgres password |
+| `DAGSTER_POSTGRES_HOST` | yes (deploy) | Instance Postgres host |
+| `DAGSTER_POSTGRES_DB` | yes (deploy) | Instance Postgres database |
+
+> Note: this is Dagster's *own* metadata DB (runs/events/schedules) — separate from, and
+> not a contradiction of, the app being bronze-only. The app writes no business data to it.
+
 ## Bootstrapping `.env.example`
 
 ```bash
@@ -44,5 +64,15 @@ WHOOP_TOKEN_PATH=/secrets/whoop/token.json
 # --- Whoop tuning ---
 MAX_REQUESTS_PER_MINUTE=60
 RECONCILE_WINDOW_DAYS=7
+
+# --- Dagster instance (deploy only; not needed for local `dagster dev`) ---
+# Required because DefaultRunLauncher executes runs inside this container, which
+# then writes to the host instance's Postgres. Mount the daemon's dagster.yaml
+# and point DAGSTER_HOME at it.
+DAGSTER_HOME=/opt/dagster/dagster_home
+DAGSTER_POSTGRES_USER=dagster
+DAGSTER_POSTGRES_PASSWORD=your_dagster_pg_password
+DAGSTER_POSTGRES_HOST=your_dagster_pg_host
+DAGSTER_POSTGRES_DB=dagster
 EOF
 ```

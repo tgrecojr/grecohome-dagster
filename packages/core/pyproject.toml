@@ -6,6 +6,9 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "dagster==1.13.8",
+    # Lets a run worker (DefaultRunLauncher runs execute inside the code-location
+    # container) write to the host instance's Postgres event/run/schedule storage.
+    "dagster-postgres==0.29.8",
     "pydantic==2.13.4",
     "pydantic-settings==2.14.1",
     "structlog==26.1.0",
