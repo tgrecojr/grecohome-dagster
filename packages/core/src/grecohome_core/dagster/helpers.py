@@ -7,12 +7,12 @@
 
 import asyncio
 from collections.abc import Awaitable, Sequence
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from dagster import DailyPartitionsDefinition, TimeWindowPartitionsDefinition
 
 
-def daily_utc_partitions(start_date: str) -> DailyPartitionsDefinition:
+def daily_utc_partitions(start_date: str, end_offset: int = 0) -> DailyPartitionsDefinition:
     """Daily partitions in UTC.
 
     Each partition is a **UTC fetch-slice** ``[day 00:00, next day 00:00)``, not a
@@ -21,8 +21,12 @@ def daily_utc_partitions(start_date: str) -> DailyPartitionsDefinition:
 
     Args:
         start_date: Earliest partition date, ``"YYYY-MM-DD"`` (the backfill floor).
+        end_offset: Extends the partition set this many periods past the current
+            time. Use ``1`` to make the in-progress current day a valid,
+            materializable partition (so the hourly schedule can re-capture
+            intraday data).
     """
-    return DailyPartitionsDefinition(start_date=start_date, timezone="UTC")
+    return DailyPartitionsDefinition(start_date=start_date, timezone="UTC", end_offset=end_offset)
 
 
 def trailing_partition_keys(
@@ -30,22 +34,18 @@ def trailing_partition_keys(
     before: datetime,
     count: int,
 ) -> list[str]:
-    """Return the trailing ``count`` daily partition keys ending with ``before``'s day.
+    """Return the trailing ``count`` partition keys as of ``before``.
 
-    The partition that ``before`` falls into (the in-progress current day) is
-    **included** so the hourly schedule re-captures intraday data; advancing the
-    clock one day makes Dagster treat the current day as available. The remaining
-    keys are the preceding days, giving a re-capture window that covers Whoop's
-    retroactive rescores/deletes.
+    Whether the in-progress current day is included depends on the partition
+    definition's ``end_offset`` (use ``end_offset=1`` to include it). This covers
+    Whoop's retroactive rescores/deletes by re-capturing recent days.
 
     Args:
         partitions_def: A daily ``TimeWindowPartitionsDefinition``.
         before: The reference time (typically the schedule's execution time).
         count: How many trailing partitions to return.
     """
-    keys: Sequence[str] = partitions_def.get_partition_keys(
-        current_time=before + timedelta(days=1)
-    )
+    keys: Sequence[str] = partitions_def.get_partition_keys(current_time=before)
     return list(keys[-count:])
 
 
