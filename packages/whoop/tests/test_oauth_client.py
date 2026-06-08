@@ -18,7 +18,10 @@ class TestWhoopOAuthClient:
         assert client.redirect_uri
         assert client.auth_url
         assert client.token_url
-        for scope in ("read:sleep", "read:workout", "read:recovery", "read:cycles", "offline"):
+        for scope in (
+            "read:sleep", "read:workout", "read:recovery", "read:cycles",
+            "read:profile", "read:body_measurement", "offline",
+        ):
             assert scope in client.scopes
 
     def test_generate_pkce_pair(self):
@@ -56,7 +59,10 @@ class TestWhoopOAuthClient:
         client = WhoopOAuthClient()
         auth_url, _, _ = client.get_authorization_url()
         scopes = parse_qs(urlparse(auth_url).query)["scope"][0].split(" ")
-        for scope in ("read:sleep", "read:workout", "read:recovery", "read:cycles", "offline"):
+        for scope in (
+            "read:sleep", "read:workout", "read:recovery", "read:cycles",
+            "read:profile", "read:body_measurement", "offline",
+        ):
             assert scope in scopes
 
 
