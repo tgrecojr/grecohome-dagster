@@ -26,20 +26,28 @@ class TestDailyUtcPartitions:
 
 @pytest.mark.unit
 class TestTrailingPartitionKeys:
-    def test_includes_current_in_progress_day(self):
-        pd = daily_utc_partitions("2024-01-01")
+    def test_includes_current_day_with_end_offset(self):
+        # end_offset=1 makes the in-progress current day a valid partition.
+        pd = daily_utc_partitions("2024-01-01", end_offset=1)
         before = datetime(2024, 1, 10, 5, 0, tzinfo=UTC)
         keys = trailing_partition_keys(pd, before, count=8)
         assert len(keys) == 8
-        assert keys[-1] == "2024-01-10"  # the in-progress day is included
+        assert keys[-1] == "2024-01-10"  # in-progress day included
         assert keys[0] == "2024-01-03"  # 8 trailing days ending on the 10th
 
-    def test_clamps_to_available_history(self):
+    def test_excludes_current_day_without_end_offset(self):
+        # Default end_offset=0: the in-progress day is not yet a partition.
         pd = daily_utc_partitions("2024-01-01")
-        before = datetime(2024, 1, 3, 5, 0, tzinfo=UTC)
+        before = datetime(2024, 1, 10, 5, 0, tzinfo=UTC)
         keys = trailing_partition_keys(pd, before, count=8)
-        # Only 3 partitions exist yet (Jan 1-3); count is clamped by availability.
-        assert keys == ["2024-01-01", "2024-01-02", "2024-01-03"]
+        assert keys[-1] == "2024-01-09"  # last completed day
+
+    def test_clamps_to_available_history(self):
+        pd = daily_utc_partitions("2024-01-01", end_offset=1)
+        before = datetime(2024, 1, 2, 5, 0, tzinfo=UTC)
+        keys = trailing_partition_keys(pd, before, count=8)
+        # Only Jan 1-2 exist yet (plus the in-progress 2nd); clamped by availability.
+        assert keys == ["2024-01-01", "2024-01-02"]
 
 
 @pytest.mark.unit
