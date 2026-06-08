@@ -39,6 +39,7 @@ class WhoopOAuthClient:
             "read:workout",
             "read:recovery",
             "read:cycles",
+            "read:profile",  # /user/profile/basic (the snapshots asset)
             "read:body_measurement",  # Height, weight, max heart rate
             "offline",  # For refresh tokens
         ]
