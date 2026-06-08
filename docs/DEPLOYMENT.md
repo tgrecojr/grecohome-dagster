@@ -1,8 +1,11 @@
 # Deployment
 
 Each data subject ships as its own **gRPC code-location image** that registers with
-the **existing host Dagster daemon + webserver**. We deploy code locations only — never
-a Dagster instance, webserver, or `dagster.yaml` (those live on the host).
+the **existing host Dagster daemon + webserver**. We don't *own* the Dagster instance,
+webserver, or `dagster.yaml` (the host does) — but because the host uses the
+`DefaultRunLauncher`, each run executes **inside the code-location container**, so that
+container does need the host's instance config + Postgres at run time (see
+[Dagster instance wiring](#dagster-instance-wiring)).
 
 ## Images
 
@@ -63,17 +66,43 @@ or via the CLI:
 dagster instance concurrency set whoop_api 1
 ```
 
-### 3. Required environment / mounts
+### 3. Dagster instance wiring
 
-Inject per-subject env at deploy (Ansible + secrets manager). For Whoop, see
-`docs/ENV_TEMPLATE.md` — required: `BRONZE_ROOT`, `WHOOP_CLIENT_ID`, `WHOOP_CLIENT_SECRET`,
-`WHOOP_TOKEN_PATH`.
+Because the host uses the `DefaultRunLauncher` (no `run_launcher` block), each run executes
+as a subprocess **inside the code-location container**, and that subprocess writes to the
+host instance's Postgres event/run/schedule storage. So the container must share the host's
+instance config:
 
-Mount two writable volumes into the container:
+- **Mount the daemon's `dagster.yaml`** into the container and set **`DAGSTER_HOME`** to its
+  directory. It's the same file the daemon uses (carries no secrets — it references DB creds
+  by env-var name). Don't bake it into the image.
+- **Provide the Postgres env vars** the `dagster.yaml` references:
+  `DAGSTER_POSTGRES_USER`, `DAGSTER_POSTGRES_PASSWORD`, `DAGSTER_POSTGRES_HOST`,
+  `DAGSTER_POSTGRES_DB` (port is set in `dagster.yaml`). The container must be able to reach
+  that Postgres.
+- `dagster-postgres` is bundled in the image, so the run subprocess can instantiate the
+  Postgres storage.
 
-- `BRONZE_ROOT` — where raw captures are written.
-- the directory of `WHOOP_TOKEN_PATH` — the OAuth token file is rewritten atomically on
-  every refresh (Whoop rotates the refresh token), so it must be writable.
+The host `dagster.yaml` also carries the `whoop_api` pool from step 2; mounting the same file
+into the container is harmless (the limit is enforced by the daemon's run coordinator).
+
+### 4. Required environment / mounts
+
+Inject per-subject env at deploy (Ansible + secrets manager). See `docs/ENV_TEMPLATE.md`.
+
+App env (read by the app's settings):
+- required: `BRONZE_ROOT`, `WHOOP_CLIENT_ID`, `WHOOP_CLIENT_SECRET`, `WHOOP_TOKEN_PATH`.
+
+Dagster instance env (read by Dagster, per step 3):
+- required: `DAGSTER_HOME`, `DAGSTER_POSTGRES_USER`, `DAGSTER_POSTGRES_PASSWORD`,
+  `DAGSTER_POSTGRES_HOST`, `DAGSTER_POSTGRES_DB`.
+
+Mount three things into the container:
+
+- `BRONZE_ROOT` — writable; where raw captures are written.
+- the directory of `WHOOP_TOKEN_PATH` — writable; the OAuth token file is rewritten atomically
+  on every refresh (Whoop rotates the refresh token).
+- `DAGSTER_HOME` — the directory containing the shared `dagster.yaml`.
 
 ## One-time OAuth setup
 
