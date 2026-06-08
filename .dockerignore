@@ -1,0 +1,85 @@
+# Build context is the repo root (needed for the workspace uv.lock). Keep the
+# image lean by excluding everything not required to build a code location.
+
+# Git
+.git/
+.gitattributes
+.gitignore
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+build/
+dist/
+
+# Tests, coverage, lint caches
+**/tests/
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+
+# Environment / secrets / tokens
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*token*.json
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Docs and meta (not needed in image)
+docs/
+*.md
+LICENSE
+renovate.json
+osv-scanner.toml
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Claude / agent tooling
+.claude/
+.serena/
+.cache_ggshield
+CLAUDE.md
+CLAUDE.local.md
+
+# CI config
+.github/
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+
+# Other subjects' Dockerfiles aren't needed when building one subject, but the
+# per-subject build copies only its own package, so leaving them is harmless.
+
+# Logs
+logs/
+*.log

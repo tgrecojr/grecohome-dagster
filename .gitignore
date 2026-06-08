@@ -1,0 +1,80 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+sdist/
+wheels/
+*.egg-info/
+*.egg
+develop-eggs/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# OAuth token files (written at runtime to a mounted path)
+*token*.json
+!.env.example
+
+# Bronze layer captured output (only when BRONZE_ROOT points inside the repo
+# for local testing). Root-anchored so it never matches src bronze modules.
+/data/
+/bronze/
+
+# Logs
+logs/
+*.log
+
+# Tests / coverage / lint caches
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+*.cover
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+
+# Databases (local only)
+*.db
+*.sqlite
+*.sqlite3
+
+# IDEs / editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Claude local files
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Agent tooling
+.serena/
+.cache_ggshield
+
+# Docker
+docker-compose.override.yml
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db

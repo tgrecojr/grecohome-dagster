@@ -1,0 +1,65 @@
+# Virtual workspace root for the grecohome-dagster monorepo.
+# This file has no [project] table on purpose: the root is a uv workspace
+# coordinator, not a package. Each data subject lives under packages/ as its
+# own member package, and they all share this single uv.lock.
+[tool.uv.workspace]
+members = ["packages/core", "packages/whoop"]
+# garmin/lingo are README-only scaffolds today; add them here when they ship code.
+
+[tool.uv.sources]
+grecohome-core = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest==9.0.3",
+    "pytest-asyncio==1.4.0",
+    "pytest-cov==7.1.0",
+    "pytest-mock==3.15.1",
+    "pytest-env==1.6.0",
+    "freezegun==1.5.5",
+    "respx==0.23.1",
+    "ruff==0.14.4",
+]
+
+[tool.pytest.ini_options]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+testpaths = ["packages"]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "slow: Slow running tests",
+    "asyncio: Tests that use asyncio",
+]
+asyncio_mode = "auto"
+addopts = [
+    "--verbose",
+    "--strict-markers",
+    "--tb=short",
+    "--import-mode=importlib",
+    "--cov=grecohome_core",
+    "--cov=grecohome_whoop",
+    "--cov-report=term-missing",
+    "--cov-report=xml",
+    "--cov-branch",
+    "-ra",
+]
+norecursedirs = [".git", "dist", "build", "*.egg", "__pycache__", ".venv"]
+env = [
+    "BRONZE_ROOT=/tmp/grecohome-test-bronze",
+    "WHOOP_CLIENT_ID=test_client_id",
+    "WHOOP_CLIENT_SECRET=test_client_secret",
+    "WHOOP_REDIRECT_URI=http://localhost:8000/callback",
+    "WHOOP_TOKEN_PATH=/tmp/grecohome-test-token.json",
+    "LOG_LEVEL=DEBUG",
+    "ENVIRONMENT=test",
+]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+src = ["packages/core/src", "packages/whoop/src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W"]
