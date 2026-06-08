@@ -18,8 +18,9 @@ version-coupled.
   in the host `workspace.yaml`. We ship code locations only — never a Dagster instance,
   webserver, or `dagster.yaml`.
 - **Host owns concurrency.** The shared `whoop_api` pool's limit is set on the host instance
-  (`dagster.yaml` / `dagster instance concurrency set`), not in the image. The asset only tags
-  the pool.
+  via `dagster instance concurrency set whoop_api 1` (stored in the instance Postgres), not in
+  the image. In 1.13.8 a per-pool limit can't be named in `dagster.yaml` (its `concurrency.pools`
+  only takes `default_limit`/`granularity`); the asset just tags the pool.
 
 ## Consequences
 - Subjects deploy, fail, and scale independently; one subject's bad deploy can't take down others.
