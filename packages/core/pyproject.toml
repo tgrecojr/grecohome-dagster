@@ -8,7 +8,7 @@ dependencies = [
     "dagster==1.13.8",
     "pydantic==2.13.4",
     "pydantic-settings==2.14.1",
-    "structlog==25.5.0",
+    "structlog==26.1.0",
     "python-json-logger==4.1.0",
     "python-dotenv==1.2.2",
     "tzdata>=2026.2",
