@@ -20,8 +20,15 @@ packages/
   whoop/   grecohome-whoop — Whoop data subject (the migrated app)
   garmin/  scaffold (README only)
   lingo/   scaffold (README only)
-docs/      ARCHITECTURE, BRONZE, DEPLOYMENT, ENV_TEMPLATE
+docs/      ARCHITECTURE, BRONZE, DEPLOYMENT, ENV_TEMPLATE, adr/
 ```
+
+## Docs
+
+- [Architecture](docs/ARCHITECTURE.md) — repo shape, core vs subject, orchestration model
+- [Bronze layer](docs/BRONZE.md) — capture invariants, layout, sidecar
+- [Deployment](docs/DEPLOYMENT.md) — host `workspace.yaml`, concurrency pool, OAuth setup
+- [ADRs](docs/adr/) — bronze-only, Dagster pins, token file
 
 This is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/): one
 root `pyproject.toml`, one `uv.lock`, one managed Python version.

@@ -25,7 +25,10 @@ jobs:
         run: uv python install 3.14
 
       - name: Export locked dependencies to requirements.txt
-        run: uv export --frozen --no-hashes --no-emit-project --output-file requirements-lock.txt
+        # --no-emit-workspace excludes our own workspace packages (they require
+        # Python >=3.14, which pip-audit's runner venv isn't); we only audit
+        # third-party dependencies here.
+        run: uv export --frozen --no-hashes --no-emit-workspace --output-file requirements-lock.txt
 
       - name: Socket Security scan
         env:
