@@ -294,6 +294,43 @@ the Drive API isn't enabled on the SA's project (step 2).
 > key by creating a new one (step 4), swapping the secret, then deleting the old key from the *Keys*
 > tab. Revoke all access instantly by un-sharing the folder.
 
+## Soil / NOAA USCRN (fourth subject)
+
+Soil is **schedule-driven** like Whoop/Garmin, but the source is a **public NOAA file** (the
+`hourly02` USCRN product) — **no auth, no secrets, no token/key mount**. It's the simplest subject
+to deploy.
+
+- **Image:** `ghcr.io/tgrecojr/grecohome-dagster-soil`, serving `grecohome_soil.dagster.definitions`.
+- **Daily UTC partitions + row-slice + dedup.** The source is one ever-growing year file per station
+  (`CRNH0203-{year}-{station}.txt`, one row/hour). Each daily partition's `uscrn_bronze_hourly` asset
+  fetches the year file and stores **only that UTC date's rows** (`uscrn/hourly`, `dedupe=True`), so a
+  few-times-a-day re-capture never re-stores the whole year. A finished day stores once; today
+  re-writes only when a new row appears.
+- **Schedule:** `uscrn_schedule` (every 6h, UTC) re-materializes the trailing `USCRN_LOOKBACK_DAYS`
+  partitions. Older history is reachable via `dagster backfill` over the same asset.
+
+### Host container (`dagster_soil`)
+
+Mirror the others, but **only two mounts** (no credential mount): on `monitoring`, `DAGSTER_HOME` +
+`DAGSTER_POSTGRES_*` (run worker → instance Postgres), the `USCRN_*` env (`USCRN_STATION`, optional
+`USCRN_BASE_URL` / `USCRN_LOOKBACK_DAYS` / `USCRN_START_DATE`), and the two mounts — the shared
+`dagster.yaml` (`DAGSTER_HOME`) and the bronze root (`/opt/datalake/bronze` → `/data/bronze`; the app
+writes the `uscrn/` source segment itself).
+
+```yaml
+# workspace.yaml
+  - grpc_server: { host: dagster_soil, port: 4000, location_name: soil_ingest }
+```
+
+```bash
+# optional concurrency pool (instance DB); low volume, not critical
+dagster instance concurrency set uscrn_api 1
+```
+
+Enable `uscrn_schedule` in the UI (schedules, like sensors, are off by default). Its first ticks
+capture the recent partitions; backfill the station's history with
+`dagster backfill --partition-range 2010-01-01...<today> --job uscrn_capture_job`.
+
 ## Building locally
 
 ```bash
