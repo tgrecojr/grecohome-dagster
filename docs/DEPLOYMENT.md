@@ -143,6 +143,64 @@ dagster backfill --partition-range 2024-01-01...2024-03-31 \
 
 The `whoop_api` pool keeps backfill within the API budget alongside the hourly schedule.
 
+## Garmin (second subject)
+
+Garmin deploys the same way as Whoop (per-subject gRPC code-location image registered with the
+host daemon over `workspace.yaml`, runs executing in the container via `DefaultRunLauncher`), with
+a few subject-specific differences:
+
+- **Image:** `ghcr.io/tgrecojr/grecohome-dagster-garmin`, serving
+  `grecohome_garmin.dagster.definitions`.
+- **Auth is delegated to `garminconnect`** — there is no token *file*; instead a token *store*
+  directory at **`GARMINTOKENS`** (mounted, writable, **separate from bronze**). The library
+  self-heals/refreshes it. Required env: `GARMINCONNECT_EMAIL`, `GARMINCONNECT_BASE64_PASSWORD`
+  (+ optional `GARMINCONNECT_IS_CN`); tuning: `LOOKBACK_DAYS`, `FETCH_SELECTION`/`FETCH_EXCLUDE`
+  (default empty = capture all), `RATE_LIMIT_SECONDS`, `WEEKLY_WEEKS`, `CAPTURE_ALT_FORMATS`.
+- **No dedup** (Garmin data is immutable) — the daily schedule captures each completed partition
+  **exactly once** (`run_key = partition_key`), trailing `LOOKBACK_DAYS`. A second daily schedule
+  refreshes the unpartitioned reference/snapshot collections.
+
+### Host container (`dagster_garmin`)
+
+Mirror the `dagster_whoop` task: on the `monitoring` network, `DAGSTER_HOME` + the four
+`DAGSTER_POSTGRES_*` (run worker → instance Postgres), the `GARMINCONNECT_*` env, and **three
+mounts** — the shared `dagster.yaml` (`DAGSTER_HOME`), the bronze root
+(`/opt/datalake/bronze` → `/data/bronze`; the app writes the `garmin/` source segment itself), and
+a writable **`GARMINTOKENS`** dir (e.g. `/opt/docker/dagster/garmin/tokens` → `/tokens`).
+
+```yaml
+# workspace.yaml
+  - grpc_server: { host: dagster_garmin, port: 4000, location_name: garmin_ingest }
+```
+
+```bash
+# concurrency pool (instance DB), same as whoop
+dagster instance concurrency set garmin_api 1
+```
+
+### One-time MFA bootstrap
+
+Garmin's first login needs an interactive MFA code; run it once to write the token store:
+
+```bash
+docker run --rm -it \
+  -e GARMINCONNECT_EMAIL=... -e GARMINCONNECT_BASE64_PASSWORD=... \
+  -e GARMINTOKENS=/tokens -e BRONZE_ROOT=/data/bronze \
+  -v /opt/docker/dagster/garmin/tokens:/tokens \
+  --entrypoint python ghcr.io/tgrecojr/grecohome-dagster-garmin:latest \
+  -m grecohome_garmin.bootstrap
+```
+
+### Backfill
+
+```bash
+dagster backfill --partition-range 2024-01-01...2024-03-31 --job garmin_daily_job
+```
+
+Because Garmin has no dedup, backfilling an already-captured day **appends** a second copy
+(intended for explicit re-pulls; clean for never-captured history). The `garmin_api` pool keeps a
+large backfill gentle.
+
 ## Building locally
 
 ```bash
