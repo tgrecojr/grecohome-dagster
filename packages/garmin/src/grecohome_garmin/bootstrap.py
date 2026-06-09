@@ -7,8 +7,8 @@ container resumes silently. Run once, interactively:
 
     docker run --rm -it \\
       -e GARMINCONNECT_EMAIL=... -e GARMINCONNECT_BASE64_PASSWORD=... \\
-      -e GARMINTOKENS=/tokens -e BRONZE_ROOT=/data/bronze \\
-      -v /opt/docker/dagster/garmin/tokens:/tokens \\
+      -e GARMINTOKENS=/secrets/garmin -e BRONZE_ROOT=/data/bronze \\
+      -v /opt/docker/dagster/garmin/tokens:/secrets/garmin \\
       --entrypoint python ghcr.io/tgrecojr/grecohome-dagster-garmin:latest \\
       -m grecohome_garmin.bootstrap
 """
