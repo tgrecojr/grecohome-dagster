@@ -18,7 +18,7 @@ dev = [
     "pytest-env==1.6.0",
     "freezegun==1.5.5",
     "respx==0.23.1",
-    "ruff==0.14.4",
+    "ruff==0.15.16",
 ]
 
 [tool.pytest.ini_options]
