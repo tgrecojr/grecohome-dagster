@@ -202,6 +202,38 @@ Because Garmin has no dedup, backfilling an already-captured day **appends** a s
 (intended for explicit re-pulls; clean for never-captured history). The `garmin_api` pool keeps a
 large backfill gentle.
 
+## Lingo (third subject)
+
+Lingo is **file-arrival-driven**, not schedule-driven: the user exports CGM data from the Lingo
+iOS app and uploads a cumulative CSV to a Google Drive folder; a **sensor** captures each new file.
+
+- **Image:** `ghcr.io/tgrecojr/grecohome-dagster-lingo`, serving `grecohome_lingo.dagster.definitions`.
+- **Auth = Google service account** (no interactive OAuth). In GCP, create a service account, enable
+  the Drive API, download its key JSON; in Drive, **share the watched folder (read-only) with the
+  SA's email**. Mount the key JSON (e.g. `/secrets/lingo/sa.json`) and set
+  `GDRIVE_SERVICE_ACCOUNT_PATH` to it. (Full walkthrough below / from the agent.)
+- **Sensor + dynamic partitions:** `lingo_drive_sensor` lists the folder and adds a partition +
+  run per new Drive `file_id` (one collection: `lingo/glucose`, captured once each). **Enable the
+  sensor** in the UI/daemon — sensors are off by default. No schedule, no backfill grid; the
+  sensor's first tick captures the existing folder backlog.
+
+### Host container (`dagster_lingo`)
+
+Mirror the others: on `monitoring`, `DAGSTER_HOME` + `DAGSTER_POSTGRES_*` (run worker), the
+`GDRIVE_*` env (`GDRIVE_FOLDER_ID`, `GDRIVE_SERVICE_ACCOUNT_PATH`, optional
+`GDRIVE_POLL_INTERVAL_MINUTES`), and **three mounts** — the shared `dagster.yaml`, the SA key
+(read-only, e.g. `/secrets/lingo`), and the bronze root (`/opt/datalake/bronze` → `/data/bronze`;
+the app writes the `lingo/` source segment itself).
+
+```yaml
+# workspace.yaml
+  - grpc_server: { host: dagster_lingo, port: 4000, location_name: lingo_ingest }
+```
+
+The sensor runs in this container (where the SA key lives); the host daemon triggers its
+evaluation over gRPC. Optional `dagster instance concurrency set lingo_api 1` (low volume; not
+critical).
+
 ## Building locally
 
 ```bash
