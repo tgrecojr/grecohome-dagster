@@ -26,7 +26,7 @@ manager. **Never commit a real `.env`.**
 
 | Variable | Required | Default | Purpose |
 |---|---|---|---|
-| `GARMINTOKENS` | yes | `/tokens` | Mounted, writable dir for the garminconnect token store (separate from bronze) |
+| `GARMINTOKENS` | no | `/secrets/garmin` | Mounted, writable dir for the garminconnect token store (separate from bronze) |
 | `GARMINCONNECT_EMAIL` | yes | — | Garmin Connect login email |
 | `GARMINCONNECT_BASE64_PASSWORD` | yes | — | Base64-encoded Garmin password |
 | `GARMINCONNECT_IS_CN` | no | `false` | Use the Garmin China domain |

@@ -166,7 +166,8 @@ Mirror the `dagster_whoop` task: on the `monitoring` network, `DAGSTER_HOME` + t
 `DAGSTER_POSTGRES_*` (run worker → instance Postgres), the `GARMINCONNECT_*` env, and **three
 mounts** — the shared `dagster.yaml` (`DAGSTER_HOME`), the bronze root
 (`/opt/datalake/bronze` → `/data/bronze`; the app writes the `garmin/` source segment itself), and
-a writable **`GARMINTOKENS`** dir (e.g. `/opt/docker/dagster/garmin/tokens` → `/tokens`).
+a writable **`GARMINTOKENS`** dir (e.g. `/opt/docker/dagster/garmin/tokens` → `/secrets/garmin`,
+matching Whoop's `/secrets/<subject>` convention).
 
 ```yaml
 # workspace.yaml
@@ -185,8 +186,8 @@ Garmin's first login needs an interactive MFA code; run it once to write the tok
 ```bash
 docker run --rm -it \
   -e GARMINCONNECT_EMAIL=... -e GARMINCONNECT_BASE64_PASSWORD=... \
-  -e GARMINTOKENS=/tokens -e BRONZE_ROOT=/data/bronze \
-  -v /opt/docker/dagster/garmin/tokens:/tokens \
+  -e GARMINTOKENS=/secrets/garmin -e BRONZE_ROOT=/data/bronze \
+  -v /opt/docker/dagster/garmin/tokens:/secrets/garmin \
   --entrypoint python ghcr.io/tgrecojr/grecohome-dagster-garmin:latest \
   -m grecohome_garmin.bootstrap
 ```

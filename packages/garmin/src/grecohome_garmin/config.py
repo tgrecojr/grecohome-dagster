@@ -14,9 +14,10 @@ class GarminSettings(BaseSubjectSettings):
     """Settings for the Garmin data subject (extends the shared base)."""
 
     # --- Garmin auth (delegated to the garminconnect library) ---
-    # Token store path (mounted, writable, never under BRONZE_ROOT). The library
-    # writes and self-heals it; first run is an interactive MFA bootstrap.
-    garmintokens: str = "/tokens"
+    # Token store DIRECTORY (mounted, writable, never under BRONZE_ROOT). The
+    # library writes and self-heals it; first run is an interactive MFA bootstrap.
+    # Defaults under /secrets/<subject> to match the Whoop convention.
+    garmintokens: str = "/secrets/garmin"
     garminconnect_email: str = ""
     garminconnect_base64_password: str = ""
     garminconnect_is_cn: bool = False
