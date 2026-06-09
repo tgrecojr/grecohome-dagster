@@ -21,7 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         # One gRPC code-location image per data subject.
-        subject: [whoop, garmin, lingo]
+        subject: [whoop, garmin, lingo, soil]
     permissions:
       contents: read
       packages: write

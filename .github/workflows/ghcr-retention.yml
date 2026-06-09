@@ -16,7 +16,7 @@ jobs:
     strategy:
       matrix:
         # One package per data subject.
-        subject: [whoop, garmin, lingo]
+        subject: [whoop, garmin, lingo, soil]
     concurrency:
       group: ghcr-cleanup-${{ github.repository }}-${{ matrix.subject }}
     steps:
