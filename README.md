@@ -16,9 +16,9 @@ transformation, no database. Silver/gold are a future phase.
 
 ```
 packages/
-  core/    grecohome-core  — shared framework (bronze capture, rate limiter, token store, dagster helpers)
-  whoop/   grecohome-whoop — Whoop data subject (the migrated app)
-  garmin/  scaffold (README only)
+  core/    grecohome-core   — shared framework (bronze capture, rate limiter, token store, dagster helpers)
+  whoop/   grecohome-whoop  — Whoop data subject (migrated from whoopster)
+  garmin/  grecohome-garmin — Garmin data subject (ported from garmincapture)
   lingo/   scaffold (README only)
 docs/      ARCHITECTURE, BRONZE, DEPLOYMENT, ENV_TEMPLATE, adr/
 ```
@@ -28,7 +28,7 @@ docs/      ARCHITECTURE, BRONZE, DEPLOYMENT, ENV_TEMPLATE, adr/
 - [Architecture](docs/ARCHITECTURE.md) — repo shape, core vs subject, orchestration model
 - [Bronze layer](docs/BRONZE.md) — capture invariants, layout, sidecar
 - [Deployment](docs/DEPLOYMENT.md) — host `workspace.yaml`, concurrency pool, OAuth setup
-- [ADRs](docs/adr/) — bronze-only, Dagster pins, token file
+- [ADRs](docs/adr/) — bronze-only, Dagster pins, token file, Garmin port
 
 This is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/): one
 root `pyproject.toml`, one `uv.lock`, one managed Python version.
@@ -36,7 +36,8 @@ root `pyproject.toml`, one `uv.lock`, one managed Python version.
 ## Architecture
 
 - **Bronze-only.** Subjects call their source API and write raw payloads to `BRONZE_ROOT`
-  (atomic, append-only, content-hash deduped). Downstream silver/gold reads bronze later.
+  (atomic, append-only; content-hash dedup is opt-in — on for Whoop, off for immutable Garmin).
+  Downstream silver/gold reads bronze later.
 - **Self-hosted Dagster.** The daemon + webserver run on the host. Each subject ships a
   gRPC code-location image that registers with the host via `workspace.yaml`. Dagster
   libraries are pinned (`dagster==1.13.8`, `dagster-*==0.29.8`) to match the host so the

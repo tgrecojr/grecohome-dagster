@@ -9,9 +9,11 @@ the only thing the pipelines persist in this phase; silver/gold read from it lat
   string. Decoding is a downstream concern.
 - **Append-only / immutable.** Every written capture is a new, uniquely named file. Nothing is
   overwritten or deleted by the capture path.
-- **Content-hash deduped.** Before writing, the payload's sha256 is compared to the newest
-  capture for the same `(source, collection, dt)` partition; an identical payload is skipped.
-  Re-capturing an overlapping window each hour therefore costs API calls but ~zero storage.
+- **Content-hash dedup (opt-in, `dedupe`).** With `dedupe=True` (default) the payload's sha256 is
+  compared to the newest capture for the same `(source, collection, dt)` partition and an
+  identical payload is skipped — so a source that re-captures an overlapping window (Whoop, which
+  rescores) costs API calls but ~zero storage. Immutable sources (Garmin) pass `dedupe=False` and
+  rely on **capture-once scheduling** (`run_key = partition_key`) to avoid re-pulls instead.
 - **Non-fatal.** `capture_bronze` never raises; failures are logged and swallowed.
 - **Swappable root.** The bronze root is passed in by the caller (`BRONZE_ROOT`); nothing is
   hardcoded, keeping an object-store migration open.
@@ -27,7 +29,8 @@ the only thing the pipelines persist in this phase; silver/gold read from it lat
 - `dt` is the **partition date** the payload belongs to (the asset passes its partition key),
   not necessarily the fetch date — so hourly re-captures of a trailing day dedup against the
   right folder.
-- `{ext}` reflects the *stored* form (`json` for Whoop; `bin` for unknown content types).
+- `{ext}` reflects the *stored* form (`json` for reserialized payloads, `zip` for Garmin FIT
+  downloads, `bin` for unknown content types). Sources may pass an explicit `ext`.
 
 Example:
 
@@ -41,8 +44,8 @@ bronze/whoop/recovery/dt=2026-06-08/recovery_1717900000000_a1b2c3.meta.json
 Provenance for each payload. Filled by the capture function: `source`, `collection`,
 `fetched_at`, `fetched_at_unix_ms`, `byte_size`, `sha256`, `stored_encoding`, `schema_version`
 (`v1`). Passed through by the caller: `request_url`, `request_params`, `http_status`,
-`content_type`, `charset`, `content_encoding`, `processor`, `processor_version`. **Never contains
-secrets** (no auth headers/tokens).
+`content_type`, `charset`, `content_encoding`, `processor`, `processor_version`, and (for Garmin)
+`capture_mode` + `redacted_fields`. **Never contains secrets** (no auth headers/tokens).
 
 ## Whoop specifics
 
@@ -51,3 +54,20 @@ secrets** (no auth headers/tokens).
 - Collections: `sleep`, `recovery`, `workout`, `cycle` (daily-partitioned), plus `profile` and
   `body_measurement` (current-only snapshots, fetch-date folder).
 - Timestamps are stored as-received (UTC); no timezone conversion happens in bronze.
+
+## Garmin specifics
+
+- **Two capture grades** (recorded in `capture_mode`): `reserialized` — the `garminconnect`
+  library returns parsed objects, re-serialized via deterministic compact JSON (no `sort_keys`);
+  and `raw` — binary downloads (the FIT/original `.zip`) stored byte-for-byte.
+- **No dedup** (`dedupe=False`): Garmin data is immutable, so every capture is kept and re-pulls
+  are avoided by capture-once scheduling rather than content-hash dedup.
+- **Secret-screening:** profile/settings collections (`user_settings`, `userprofile_settings`)
+  are run through a recursive secret-key remover before capture; dropped key paths are recorded
+  in `redacted_fields`. Tokens/credentials never reach bronze (the token store is a separate
+  mount, never under `BRONZE_ROOT`).
+- **Allowlist only:** an endpoint catalog is the call recipe; mutating/auth methods are never
+  invoked, and a drift detector surfaces new readable endpoints for review.
+- **Empty 200s are faithful records** for endpoints without a skip flag (e.g. `hrv`,
+  `training_readiness`) — they capture an empty payload and begin populating if a device starts
+  producing them.

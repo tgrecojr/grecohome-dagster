@@ -20,6 +20,24 @@ manager. **Never commit a real `.env`.**
 | `MAX_REQUESTS_PER_MINUTE` | no | `60` | Whoop API rate cap |
 | `RECONCILE_WINDOW_DAYS` | no | `7` | Trailing reconcile overlap; schedule re-captures this + 1 partition |
 
+### Garmin (`grecohome-garmin`) — its own container
+
+`BRONZE_ROOT`/`LOG_LEVEL`/`ENVIRONMENT` and the Dagster-instance vars below apply here too.
+
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `GARMINTOKENS` | yes | `/tokens` | Mounted, writable dir for the garminconnect token store (separate from bronze) |
+| `GARMINCONNECT_EMAIL` | yes | — | Garmin Connect login email |
+| `GARMINCONNECT_BASE64_PASSWORD` | yes | — | Base64-encoded Garmin password |
+| `GARMINCONNECT_IS_CN` | no | `false` | Use the Garmin China domain |
+| `LOOKBACK_DAYS` | no | `7` | Trailing completed partitions the daily schedule captures (once each) |
+| `FETCH_SELECTION` | no | (empty = all) | Allowlist of catalog collection names |
+| `FETCH_EXCLUDE` | no | (empty) | Denylist (wins over selection); empty = capture everything |
+| `RATE_LIMIT_SECONDS` | no | `2.0` | Sleep between API calls within a run |
+| `WEEKLY_WEEKS` | no | `4` | Trailing weeks for the weekly-aggregate endpoints |
+| `CAPTURE_ALT_FORMATS` | no | `false` | Also capture TCX/GPX/KML/CSV activity exports |
+| `PROCESSOR_VERSION` | no | `dev` | Stamped into bronze sidecars |
+
 ### Dagster instance (required at deploy, not for local `dagster dev`)
 
 The host uses **`DefaultRunLauncher`**, so each run executes as a subprocess **inside the
