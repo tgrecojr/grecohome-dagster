@@ -10,10 +10,12 @@ Design constraints (from the bronze spec):
   never from a decoded string. Decoding is left to a downstream (silver) layer.
 * **Append-only / immutable.** Every written capture is a new, uniquely named
   file. Nothing is ever overwritten or deleted here.
-* **Content-hash deduped.** Before writing, the payload's sha256 is compared to
-  the newest capture for the same ``(source, collection, dt)`` partition; an
-  identical payload is skipped. Re-capturing an overlapping window each tick
-  therefore costs API calls but near-zero storage.
+* **Content-hash dedup (opt-in).** With ``dedupe=True`` (the default), the
+  payload's sha256 is compared to the newest capture for the same
+  ``(source, collection, dt)`` partition and an identical payload is skipped —
+  so a source that re-captures an overlapping window each tick (e.g. Whoop, which
+  rescores) costs API calls but near-zero storage. Sources with immutable data
+  (e.g. Garmin) pass ``dedupe=False`` to keep every capture.
 * **Non-fatal.** :func:`capture_bronze` never raises; any failure is logged as a
   warning and swallowed so the caller's normal processing continues.
 * **Swappable root.** The bronze root is passed in by the caller (from its
@@ -123,6 +125,8 @@ def capture_bronze(
     *,
     bronze_root: str,
     dt: str | None = None,
+    dedupe: bool = True,
+    ext: str | None = None,
 ) -> str | None:
     """Write raw source bytes (and a sidecar) to the bronze layer.
 
@@ -142,6 +146,11 @@ def capture_bronze(
         dt: Partition date ``"YYYY-MM-DD"`` the payload belongs to. When omitted,
             the fetch-time UTC date is used. Pass the asset's partition date so
             hourly re-captures of a trailing day dedup against the right folder.
+        dedupe: When True (default), skip writing a payload identical to the
+            latest capture for this ``(source, collection, dt)`` partition. Pass
+            False for immutable sources that should keep every capture.
+        ext: Explicit file extension for the stored payload (e.g. ``"json"``,
+            ``"zip"``). When None, it is derived from ``content_type``.
 
     Returns:
         The payload path written, ``None`` if the payload was deduped (identical
@@ -159,8 +168,8 @@ def capture_bronze(
 
         partition_dir = os.path.join(bronze_root, source, collection, f"dt={partition_dt}")
 
-        # Content-hash dedup: skip writing an identical payload.
-        if _latest_sha256(partition_dir) == sha256:
+        # Content-hash dedup (opt-in): skip writing an identical payload.
+        if dedupe and _latest_sha256(partition_dir) == sha256:
             logger.debug(
                 "bronze capture deduped",
                 source=source,
@@ -172,10 +181,10 @@ def capture_bronze(
 
         short_id = secrets.token_hex(3)  # 6 hex chars
         stored_encoding = meta.get("stored_encoding", "identity")
-        ext = _ext_for(meta.get("content_type"), stored_encoding)
+        file_ext = ext if ext is not None else _ext_for(meta.get("content_type"), stored_encoding)
 
         rel_base = f"{collection}_{fetched_ms}_{short_id}"
-        payload_path = os.path.join(partition_dir, f"{rel_base}.{ext}")
+        payload_path = os.path.join(partition_dir, f"{rel_base}.{file_ext}")
         sidecar_path = os.path.join(partition_dir, f"{rel_base}.meta.json")
 
         sidecar = {

@@ -3,8 +3,8 @@
 # coordinator, not a package. Each data subject lives under packages/ as its
 # own member package, and they all share this single uv.lock.
 [tool.uv.workspace]
-members = ["packages/core", "packages/whoop"]
-# garmin/lingo are README-only scaffolds today; add them here when they ship code.
+members = ["packages/core", "packages/whoop", "packages/garmin"]
+# lingo is a README-only scaffold today; add it here when it ships code.
 
 [tool.uv.sources]
 grecohome-core = { workspace = true }
