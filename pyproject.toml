@@ -3,7 +3,7 @@
 # coordinator, not a package. Each data subject lives under packages/ as its
 # own member package, and they all share this single uv.lock.
 [tool.uv.workspace]
-members = ["packages/core", "packages/whoop", "packages/garmin", "packages/lingo"]
+members = ["packages/core", "packages/whoop", "packages/garmin", "packages/lingo", "packages/soil"]
 
 [tool.uv.sources]
 grecohome-core = { workspace = true }
