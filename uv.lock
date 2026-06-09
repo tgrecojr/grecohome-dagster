@@ -7,6 +7,7 @@ members = [
     "grecohome-core",
     "grecohome-garmin",
     "grecohome-lingo",
+    "grecohome-soil",
     "grecohome-whoop",
 ]
 
@@ -602,6 +603,35 @@ requires-dist = [
     { name = "google-auth", specifier = ">=2.0.0" },
     { name = "google-auth-httplib2", specifier = ">=0.2.0" },
     { name = "grecohome-core", editable = "packages/core" },
+    { name = "pydantic", specifier = "==2.13.4" },
+    { name = "pydantic-settings", specifier = "==2.14.1" },
+    { name = "python-dotenv", specifier = "==1.2.2" },
+    { name = "python-json-logger", specifier = "==4.1.0" },
+    { name = "structlog", specifier = "==26.1.0" },
+    { name = "tzdata", specifier = ">=2026.2" },
+]
+
+[[package]]
+name = "grecohome-soil"
+version = "0.1.0"
+source = { editable = "packages/soil" }
+dependencies = [
+    { name = "dagster" },
+    { name = "grecohome-core" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "python-dotenv" },
+    { name = "python-json-logger" },
+    { name = "structlog" },
+    { name = "tzdata" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "dagster", specifier = "==1.13.8" },
+    { name = "grecohome-core", editable = "packages/core" },
+    { name = "httpx", specifier = "==0.28.1" },
     { name = "pydantic", specifier = "==2.13.4" },
     { name = "pydantic-settings", specifier = "==2.14.1" },
     { name = "python-dotenv", specifier = "==1.2.2" },
