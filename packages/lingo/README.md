@@ -1,10 +1,19 @@
-# lingo (scaffold)
+# grecohome-lingo
 
-Placeholder for the **Lingo** (Abbott Lingo CGM) data subject. Not yet implemented.
+The Lingo CGM data subject: a **bronze-only** Dagster code location that captures raw
+glucose CSV files from a Google Drive folder. Ported from `glucose-loader` onto
+`grecohome-core`.
 
-When built, this becomes a uv workspace member (`packages/lingo`) following the same
-shape as `packages/whoop`: a bronze-only Dagster code location depending on
-`grecohome-core`, shipped as its own per-subject gRPC code-location image.
+Lingo has no API — glucose is exported from the Lingo iOS app and uploaded (sporadically)
+to a Drive folder; **each file is a cumulative snapshot** (the full history to date). This
+subject:
 
-To activate: add `"packages/lingo"` to `[tool.uv.workspace].members` in the root
-`pyproject.toml` and add `lingo` to the CI build matrix.
+- Authenticates to Drive with a **service account** (mounted key JSON; the Drive folder is
+  shared read-only with the SA's email — no interactive OAuth, no token refresh).
+- Uses a **sensor + dynamic partitions** keyed by Drive `file_id`: each new file becomes a
+  partition and is captured **exactly once** (Dagster's partition set replaces the old
+  `ProcessedFile` table). One collection: `lingo/glucose`.
+- Captures the raw CSV bytes to bronze (append-only); silver/parsing is downstream.
+
+Ships as a per-subject gRPC **code-location image** (`grecohome-dagster-lingo`). See
+`docs/DEPLOYMENT.md`.
