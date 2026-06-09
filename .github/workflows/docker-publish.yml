@@ -20,9 +20,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # One gRPC code-location image per data subject. Add garmin/lingo here
-        # when they ship code.
-        subject: [whoop]
+        # One gRPC code-location image per data subject. Add lingo here when it ships.
+        subject: [whoop, garmin]
     permissions:
       contents: read
       packages: write

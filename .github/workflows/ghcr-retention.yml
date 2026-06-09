@@ -15,8 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # One package per data subject; add garmin/lingo when they ship.
-        subject: [whoop]
+        # One package per data subject; add lingo when it ships.
+        subject: [whoop, garmin]
     concurrency:
       group: ghcr-cleanup-${{ github.repository }}-${{ matrix.subject }}
     steps:
