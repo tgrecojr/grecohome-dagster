@@ -211,7 +211,7 @@ iOS app and uploads a cumulative CSV to a Google Drive folder; a **sensor** capt
 - **Auth = Google service account** (no interactive OAuth). In GCP, create a service account, enable
   the Drive API, download its key JSON; in Drive, **share the watched folder (read-only) with the
   SA's email**. Mount the key JSON (e.g. `/secrets/lingo/sa.json`) and set
-  `GDRIVE_SERVICE_ACCOUNT_PATH` to it. (Full walkthrough below / from the agent.)
+  `GDRIVE_SERVICE_ACCOUNT_PATH` to it. Full walkthrough: [GCP service-account setup](#gcp-service-account-setup).
 - **Sensor + dynamic partitions:** `lingo_drive_sensor` lists the folder and adds a partition +
   run per new Drive `file_id` (one collection: `lingo/glucose`, captured once each). **Enable the
   sensor** in the UI/daemon — sensors are off by default. No schedule, no backfill grid; the
@@ -233,6 +233,66 @@ the app writes the `lingo/` source segment itself).
 The sensor runs in this container (where the SA key lives); the host daemon triggers its
 evaluation over gRPC. Optional `dagster instance concurrency set lingo_api 1` (low volume; not
 critical).
+
+### GCP service-account setup
+
+A **service account** (SA) is a non-human Google identity with its own key — no OAuth consent
+screen, no token refresh, no user in the loop. We give it read-only access to *only* the one Drive
+folder by sharing that folder with the SA's email, exactly as you would share with a person. The SA
+can see nothing else in Drive.
+
+**1. Create / pick a GCP project.** [console.cloud.google.com](https://console.cloud.google.com) →
+project picker → *New Project* (e.g. `grecohome-data`). An existing project is fine.
+
+**2. Enable the Drive API.** APIs & Services → *Library* → search "Google Drive API" → **Enable**
+(in the target project). This is the only API the SA needs.
+
+**3. Create the service account.** IAM & Admin → *Service Accounts* → **Create service account**.
+- Name: `lingo-drive-reader` (id becomes `lingo-drive-reader@<project>.iam.gserviceaccount.com`).
+- **Skip** the "Grant this service account access to the project" step — **do not** give it any
+  project IAM role. Drive access comes from folder *sharing* (step 6), not project IAM; a project
+  role would over-grant. Click **Done**.
+
+**4. Create a key.** Open the SA → *Keys* tab → **Add key → Create new key → JSON** → Create. A
+JSON file downloads **once** (Google keeps no copy). This is the secret you'll mount — treat it like
+a password.
+
+**5. Store the key as a secret (no commit).** Put the JSON into your secrets manager and have
+Ansible drop it at the mounted path (e.g. `/secrets/lingo/sa.json`), `0400`, owned by the container
+user. Never commit it; `GDRIVE_SERVICE_ACCOUNT_PATH` points at this mount.
+
+**6. Share the glucose folder with the SA — read-only (the scoping step).** This is what restricts
+the SA to just the one folder:
+- In Google Drive, open the folder you upload Lingo exports to.
+- **Share** → paste the SA email (`lingo-drive-reader@<project>.iam.gserviceaccount.com`) →
+  role **Viewer** → **uncheck "Notify people"** → Share.
+- That single share is the *entire* grant. The SA can list/read this folder and its files and
+  nothing else in your Drive. The code requests only the read-only scope
+  (`https://www.googleapis.com/auth/drive.readonly`), so even a Viewer share can't be used to write.
+
+**7. Get the folder id for `GDRIVE_FOLDER_ID`.** Open the folder; the id is the last path segment of
+the URL: `https://drive.google.com/drive/folders/`**`<THIS_IS_THE_ID>`**.
+
+**8. Verify before deploy.** With the key path and folder id set, list the folder once:
+
+```bash
+docker run --rm \
+  -e GDRIVE_SERVICE_ACCOUNT_PATH=/secrets/lingo/sa.json \
+  -e GDRIVE_FOLDER_ID=<folder-id> -e BRONZE_ROOT=/data/bronze \
+  -v /opt/docker/dagster/lingo/secrets:/secrets/lingo:ro \
+  --entrypoint python ghcr.io/tgrecojr/grecohome-dagster-lingo:latest \
+  -c "from grecohome_lingo import drive; s=drive.get_drive_service(); \
+print([f['name'] for f in drive.list_csv_files(s)])"
+```
+
+It should print your uploaded CSV names. An empty list with no error means the SA authenticated but
+the folder isn't shared with it (or wrong id) — re-check step 6/7. A `403`/`PERMISSION_DENIED` means
+the Drive API isn't enabled on the SA's project (step 2).
+
+> **Scope hygiene.** Two independent limits keep this tight: the *share* bounds the SA to one folder
+> (data scoping), and the *OAuth scope* in code is `drive.readonly` (capability scoping). Rotate the
+> key by creating a new one (step 4), swapping the secret, then deleting the old key from the *Keys*
+> tab. Revoke all access instantly by un-sharing the folder.
 
 ## Building locally
 

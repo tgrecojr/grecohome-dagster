@@ -71,3 +71,17 @@ Provenance for each payload. Filled by the capture function: `source`, `collecti
 - **Empty 200s are faithful records** for endpoints without a skip flag (e.g. `hrv`,
   `training_readiness`) — they capture an empty payload and begin populating if a device starts
   producing them.
+
+## Lingo specifics
+
+- **One collection** (`lingo/glucose`); payloads are the **CSV bytes** of each Drive export,
+  stored byte-for-byte (`text/csv` → `ext=csv`). No reserialization.
+- **`dt` is the fetch/capture date**, not a per-record date: each export is a *cumulative* dump of
+  all CGM records to date, so the file belongs to "when it arrived," and successive uploads land in
+  successive `dt=` folders.
+- **Dedup on** (`dedupe=True`): re-uploading an unchanged export is skipped on content hash; a new
+  export (with more records) differs and is captured. Capture-once per Drive `file_id` (the
+  sensor's `run_key`) is the first line of defense; content-hash dedup backstops a re-upload of the
+  same file under a new id.
+- **Drive provenance in the sidecar:** `file_id`, `file_name`, `folder_id`, and Drive
+  `created_time` / `modified_time`. **Never** the service-account key or any credential.
