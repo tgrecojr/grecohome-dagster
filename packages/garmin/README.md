@@ -1,10 +1,18 @@
-# garmin (scaffold)
+# grecohome-garmin
 
-Placeholder for the **Garmin** data subject. Not yet implemented.
+The Garmin data subject: a **bronze-only** Dagster code location that captures the
+full Garmin Connect data surface (allowlisted) to the bronze layer. Ported from
+`garmincapture` onto `grecohome-core`.
 
-When built, this becomes a uv workspace member (`packages/garmin`) following the same
-shape as `packages/whoop`: a bronze-only Dagster code location depending on
-`grecohome-core`, shipped as its own per-subject gRPC code-location image.
+- Auth fully delegated to the `garminconnect` library; a one-time interactive MFA
+  bootstrap writes a token store at `GARMINTOKENS` (mounted, writable, never under
+  `BRONZE_ROOT`).
+- An allowlisted endpoint **catalog** (Buckets A/B/C) drives every call; mutating/
+  auth methods are never callable, and a drift detector surfaces new readable
+  endpoints. Two capture grades: reserialized JSON, and raw FIT `.zip` downloads.
+- One asset per collection (daily-partitioned for date-oriented data, unpartitioned
+  for reference/snapshots), captured **append-only, no dedup** (Garmin data is
+  immutable). Backfill via `dagster backfill`.
 
-To activate: add `"packages/garmin"` to `[tool.uv.workspace].members` in the root
-`pyproject.toml` and add `garmin` to the CI build matrix.
+Ships as a per-subject gRPC **code-location image** (`grecohome-dagster-garmin`)
+that registers with the host Dagster daemon/webserver. See `docs/DEPLOYMENT.md`.
