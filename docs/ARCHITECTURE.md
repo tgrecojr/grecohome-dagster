@@ -12,7 +12,7 @@ packages/
   core/    grecohome-core   — shared, source-agnostic framework
   whoop/   grecohome-whoop  — Whoop data subject (migrated from whoopster)
   garmin/  grecohome-garmin — Garmin data subject (ported from garmincapture)
-  lingo/   scaffold (README only)
+  lingo/   grecohome-lingo  — Lingo CGM data subject (ported from glucose-loader)
 ```
 
 One root `pyproject.toml`, one `uv.lock`, one pinned Python (`.python-version`). Subjects
@@ -88,6 +88,32 @@ How Garmin differs from Whoop (both reuse core):
 - **No dedup** (Garmin data is immutable): a **daily capture-once** schedule (`run_key =
   partition_key`) over the trailing `LOOKBACK_DAYS` *completed* partitions, instead of Whoop's
   hourly re-capture + content-hash dedup.
+
+## `grecohome-lingo` — a third data subject
+
+```
+grecohome_lingo/
+  config.py          LingoSettings(BaseSubjectSettings)
+  drive.py           Drive client (service-account creds, list folder, download bytes)
+  capture.py         adapter over core capture_bronze (lingo/glucose, dedupe=True)
+  dagster/
+    assets.py        lingo_bronze_glucose (DynamicPartitionsDefinition keyed on file_id)
+    sensors.py       lingo_drive_sensor + the capture job
+    definitions.py   the gRPC code-location target
+```
+
+How Lingo differs (it reuses core too):
+- **File-arrival-driven, not schedule-driven** — the only such subject. The user periodically
+  exports a *cumulative* CGM CSV from the Lingo iOS app and uploads it to a watched Drive folder.
+- **Auth is a Google service account** (mounted key JSON; the folder is shared read-only with the
+  SA email) — no interactive OAuth, no rotating token file. See
+  [DEPLOYMENT](DEPLOYMENT.md#gcp-service-account-setup).
+- **A sensor + dynamic partitions.** `lingo_drive_sensor` lists the folder every
+  `GDRIVE_POLL_INTERVAL_MINUTES`; each Drive `file_id` not already a partition gets a partition + a
+  run (`run_key == file_id`, captured exactly once). **The dynamic partition set is the
+  "already captured" ledger** — replacing glucose-loader's Postgres `ProcessedFile` table. The
+  first tick captures the existing backlog; there is no backfill grid.
+- **Dedup on** (`dedupe=True`): re-uploading an unchanged export is a no-op.
 
 ## Orchestration model
 

@@ -38,6 +38,19 @@ manager. **Never commit a real `.env`.**
 | `CAPTURE_ALT_FORMATS` | no | `false` | Also capture TCX/GPX/KML/CSV activity exports |
 | `PROCESSOR_VERSION` | no | `dev` | Stamped into bronze sidecars |
 
+### Lingo (`grecohome-lingo`) — its own container
+
+`BRONZE_ROOT`/`LOG_LEVEL`/`ENVIRONMENT` and the Dagster-instance vars below apply here too.
+
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `GDRIVE_SERVICE_ACCOUNT_PATH` | yes | — | Mounted, read-only path to the Google service-account key JSON |
+| `GDRIVE_FOLDER_ID` | yes | — | Drive folder id the sensor watches (the folder shared with the SA) |
+| `GDRIVE_POLL_INTERVAL_MINUTES` | no | `5` | Sensor minimum interval between folder listings |
+
+> The SA key is the only credential; it's mounted, never baked into the image and never written to
+> bronze. See [DEPLOYMENT — GCP service-account setup](DEPLOYMENT.md#gcp-service-account-setup).
+
 ### Dagster instance (required at deploy, not for local `dagster dev`)
 
 The host uses **`DefaultRunLauncher`**, so each run executes as a subprocess **inside the
