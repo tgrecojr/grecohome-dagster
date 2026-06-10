@@ -1,7 +1,7 @@
 # grecohome-dagster
 
 A monorepo of personal **data-subject** pipelines, orchestrated by self-hosted
-[Dagster](https://dagster.io/). Each data subject (Whoop, Garmin, Lingo) is a
+[Dagster](https://dagster.io/). Each data subject (Whoop, Garmin, Lingo, Soil/USCRN) is a
 **bronze-only** code location that captures raw source data to a bronze layer — no
 transformation, no database. Silver/gold are a future phase.
 
@@ -20,6 +20,7 @@ packages/
   whoop/   grecohome-whoop  — Whoop data subject (migrated from whoopster)
   garmin/  grecohome-garmin — Garmin data subject (ported from garmincapture)
   lingo/   grecohome-lingo  — Lingo CGM data subject (ported from glucose-loader)
+  soil/    grecohome-soil   — NOAA USCRN soil/temp data subject (ported from soildata)
 docs/      ARCHITECTURE, BRONZE, DEPLOYMENT, ENV_TEMPLATE, adr/
 ```
 
@@ -28,7 +29,7 @@ docs/      ARCHITECTURE, BRONZE, DEPLOYMENT, ENV_TEMPLATE, adr/
 - [Architecture](docs/ARCHITECTURE.md) — repo shape, core vs subject, orchestration model
 - [Bronze layer](docs/BRONZE.md) — capture invariants, layout, sidecar
 - [Deployment](docs/DEPLOYMENT.md) — host `workspace.yaml`, concurrency pool, OAuth / service-account setup
-- [ADRs](docs/adr/) — bronze-only, Dagster pins, token file, Garmin port, Lingo port
+- [ADRs](docs/adr/) — bronze-only, Dagster pins, token file, Garmin port, Lingo port, Soil port
 
 This is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/): one
 root `pyproject.toml`, one `uv.lock`, one managed Python version.
@@ -45,8 +46,9 @@ root `pyproject.toml`, one `uv.lock`, one managed Python version.
 - **Orchestration varies by source.** Whoop: daily UTC partitions, one hourly schedule
   re-captures the trailing 8 (rescores) + content-hash dedup. Garmin: daily capture-once over
   the trailing window (immutable, no dedup). Lingo: a Drive **sensor** + dynamic partitions
-  keyed on file id (file-arrival-driven, no schedule). Backfill (where applicable) via
-  `dagster backfill`.
+  keyed on file id (file-arrival-driven, no schedule). Soil/USCRN: daily UTC partitions where
+  each stores only that day's rows sliced from the public NOAA year file, re-captured every 6h
+  with dedup. Backfill (where applicable) via `dagster backfill`.
 
 ## Commands
 

@@ -51,6 +51,18 @@ manager. **Never commit a real `.env`.**
 > The SA key is the only credential; it's mounted, never baked into the image and never written to
 > bronze. See [DEPLOYMENT — GCP service-account setup](DEPLOYMENT.md#gcp-service-account-setup).
 
+### Soil / NOAA USCRN (`grecohome-soil`) — its own container
+
+`BRONZE_ROOT`/`LOG_LEVEL`/`ENVIRONMENT` and the Dagster-instance vars below apply here too.
+**No secrets** — the source is public NOAA HTTP, so there is nothing to mount beyond bronze.
+
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `USCRN_STATION` | no | `PA_Avondale_2_N` | Station filename stem (`STATE_LOCATION_DIST_DIR`) |
+| `USCRN_BASE_URL` | no | `.../products/hourly02` | USCRN hourly02 product base URL |
+| `USCRN_LOOKBACK_DAYS` | no | `2` | Trailing daily partitions the 6-hourly schedule re-captures |
+| `USCRN_START_DATE` | no | `2010-01-01` | Backfill floor for the daily partition set |
+
 ### Dagster instance (required at deploy, not for local `dagster dev`)
 
 The host uses **`DefaultRunLauncher`**, so each run executes as a subprocess **inside the

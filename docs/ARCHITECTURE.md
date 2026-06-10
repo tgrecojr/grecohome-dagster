@@ -13,6 +13,7 @@ packages/
   whoop/   grecohome-whoop  — Whoop data subject (migrated from whoopster)
   garmin/  grecohome-garmin — Garmin data subject (ported from garmincapture)
   lingo/   grecohome-lingo  — Lingo CGM data subject (ported from glucose-loader)
+  soil/    grecohome-soil   — NOAA USCRN soil/temp data subject (ported from soildata)
 ```
 
 One root `pyproject.toml`, one `uv.lock`, one pinned Python (`.python-version`). Subjects
@@ -114,6 +115,34 @@ How Lingo differs (it reuses core too):
   "already captured" ledger** — replacing glucose-loader's Postgres `ProcessedFile` table. The
   first tick captures the existing backlog; there is no backfill grid.
 - **Dedup on** (`dedupe=True`): re-uploading an unchanged export is a no-op.
+
+## `grecohome-soil` — a fourth data subject
+
+```
+grecohome_soil/
+  config.py          SoilSettings(BaseSubjectSettings)
+  fetch.py           build the year-file URL, GET it (httpx), slice a UTC date's rows
+  capture.py         adapter over core capture_bronze (uscrn/hourly, dedupe=True)
+  dagster/
+    assets.py        uscrn_bronze_hourly (daily UTC partitions, end_offset=1)
+    schedules.py     6-hourly trailing-window schedule + the capture job
+    definitions.py   the gRPC code-location target
+```
+
+How Soil differs (it reuses core too):
+- **Public file source, no auth.** The NOAA USCRN `hourly02` product exposes one headerless,
+  whitespace-delimited file per station-year (`CRNH0203-{year}-{station}.txt`) that gains one row
+  per hour. No token, no key, no credential mount — the simplest subject to deploy.
+- **Row-slice keeps storage flat.** The whole year file changes every hour, so whole-file dedup
+  would re-store the year on every tick. Instead each **daily UTC partition** stores only *that
+  date's rows* (sliced by the `UTC_DATE` column), content-hash deduped — a finished day stores once;
+  today re-writes only when a new row appears. The stored lines are byte-faithful to the source
+  (selection, not transformation).
+- **Schedule-driven** (like Whoop/Garmin): `uscrn_schedule` re-captures the trailing
+  `USCRN_LOOKBACK_DAYS` partitions every 6h; full history is reachable via `dagster backfill` since
+  every past year is on the server.
+- **Single station** (env-configurable; default `PA_Avondale_2_N`), consistent with the single-user
+  constraint — the station is recorded in the sidecar, not the path.
 
 ## Orchestration model
 
