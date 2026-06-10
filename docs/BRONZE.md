@@ -85,3 +85,20 @@ Provenance for each payload. Filled by the capture function: `source`, `collecti
   same file under a new id.
 - **Drive provenance in the sidecar:** `file_id`, `file_name`, `folder_id`, and Drive
   `created_time` / `modified_time`. **Never** the service-account key or any credential.
+
+## Soil / USCRN specifics
+
+- **One collection** (`uscrn/hourly`); payloads are the **raw text rows** for a single UTC date,
+  sliced out of the station's year file (`text/plain` → `ext=txt`). Pure selection — the stored
+  lines are byte-faithful to the source (no value parsing/reformatting).
+- **Why slice, not store the whole file.** The source is one ever-growing year file (one row/hour),
+  so a whole-file content hash differs on every fetch and would never dedup — re-storing the year
+  several times a day. Storing only the partition date's rows means a finished day is ~24 lines
+  stored **once**; today re-writes only when a new hourly row appears.
+- **`dt` is the partition's UTC date** (the asset passes its partition key), matched against the
+  file's `UTC_DATE` column (field 2). Re-captures of a trailing day dedup against the right folder.
+- **Dedup on** (`dedupe=True`): an unchanged day-slice across ticks is skipped; a day that gained a
+  row differs and is captured (so today's folder may hold a few progressively-larger slices — each a
+  faithful snapshot of what the source showed at that time).
+- **Provenance in the sidecar:** `station`, `wbanno`, `year`, `utc_date`, `row_count`, and the
+  source `request_url`. No secrets exist for this source (public NOAA HTTP).
