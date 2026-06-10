@@ -59,6 +59,11 @@ env = [
 target-version = "py314"
 line-length = 100
 src = ["packages/core/src", "packages/whoop/src"]
+# scripts/ holds standalone reference/fallback validators (verify_bronze.py,
+# sweep_streams.py) kept byte-faithful to their canonical versions maintained
+# outside this repo; they're imported by nothing, so they're not held to the
+# package lint standard.
+extend-exclude = ["scripts"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "W"]
