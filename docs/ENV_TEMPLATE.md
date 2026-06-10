@@ -8,6 +8,7 @@ manager. **Never commit a real `.env`.**
 | Variable | Required | Default | Purpose |
 |---|---|---|---|
 | `BRONZE_ROOT` | yes | — | Root dir for bronze raw capture (mounted volume / object-store path) |
+| `BRONZE_MONITOR_DIR` | no | — | Writable dir for bronze-**check** state (schema-drift baselines), kept **outside** `BRONZE_ROOT`. Unset → schema-drift check no-ops. See [VALIDATION.md](VALIDATION.md) |
 | `LOG_LEVEL` | no | `INFO` | Log level |
 | `ENVIRONMENT` | no | `development` | Environment name |
 | `WHOOP_CLIENT_ID` | yes | — | Whoop OAuth client id |
@@ -92,6 +93,8 @@ cat > .env.example <<'EOF'
 
 # --- Shared (grecohome-core BaseSubjectSettings) ---
 BRONZE_ROOT=/data/bronze
+# Bronze-check state (schema-drift baselines); MUST be outside BRONZE_ROOT.
+BRONZE_MONITOR_DIR=/data/bronze-monitor
 LOG_LEVEL=INFO
 ENVIRONMENT=development
 
