@@ -105,17 +105,23 @@ Inject per-subject env at deploy (Ansible + secrets manager). See `docs/ENV_TEMP
 
 App env (read by the app's settings):
 - required: `BRONZE_ROOT`, `WHOOP_CLIENT_ID`, `WHOOP_CLIENT_SECRET`, `WHOOP_TOKEN_PATH`.
+- optional: `BRONZE_MONITOR_DIR` — enables the bronze schema-drift check by giving it a
+  writable place for baselines, **outside** `BRONZE_ROOT` (bronze stays immutable raw
+  capture). Unset → schema-drift no-ops. See `docs/VALIDATION.md`.
 
 Dagster instance env (read by Dagster, per step 3):
 - required: `DAGSTER_HOME`, `DAGSTER_POSTGRES_USER`, `DAGSTER_POSTGRES_PASSWORD`,
   `DAGSTER_POSTGRES_HOST`, `DAGSTER_POSTGRES_DB`.
 
-Mount three things into the container:
+Mount these into the container:
 
 - `BRONZE_ROOT` — writable; where raw captures are written.
 - the directory of `WHOOP_TOKEN_PATH` — writable; the OAuth token file is rewritten atomically
   on every refresh (Whoop rotates the refresh token).
 - `DAGSTER_HOME` — the directory containing the shared `dagster.yaml`.
+- `BRONZE_MONITOR_DIR` (optional) — writable; holds schema-drift baselines. Mount it as a
+  **separate** volume from `BRONZE_ROOT` so checks never write under the immutable bronze tree
+  (the check refuses to write a baseline that would land inside `BRONZE_ROOT`).
 
 ## One-time OAuth setup
 

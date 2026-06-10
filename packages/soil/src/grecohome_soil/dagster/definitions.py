@@ -7,10 +7,16 @@ registered with the host daemon/webserver via the host's ``workspace.yaml``.
 from dagster import Definitions
 
 from grecohome_soil.dagster.assets import uscrn_bronze_hourly
+from grecohome_soil.dagster.checks import (
+    soil_checks,
+    soil_checks_job,
+    soil_checks_schedule,
+)
 from grecohome_soil.dagster.schedules import uscrn_capture_job, uscrn_schedule
 
 defs = Definitions(
     assets=[uscrn_bronze_hourly],
-    jobs=[uscrn_capture_job],
-    schedules=[uscrn_schedule],
+    asset_checks=soil_checks,
+    jobs=[uscrn_capture_job, soil_checks_job],
+    schedules=[uscrn_schedule, soil_checks_schedule],
 )

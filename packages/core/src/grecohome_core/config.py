@@ -24,6 +24,12 @@ class BaseSubjectSettings(BaseSettings):
     # Root directory for bronze raw capture. Required -- bronze is always on.
     bronze_root: str
 
+    # Writable directory for bronze-check *state* (schema-drift baselines), kept
+    # strictly OUTSIDE bronze_root so raw capture stays immutable. Optional: when
+    # unset, the schema-drift check no-ops (records nothing, never fails) rather
+    # than writing a baseline. Mount this in deployment (see docs/DEPLOYMENT.md).
+    bronze_monitor_dir: str | None = None
+
     log_level: str = "INFO"
     environment: str = "development"
 
