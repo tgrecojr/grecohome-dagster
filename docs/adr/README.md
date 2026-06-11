@@ -10,3 +10,4 @@ Short records of the load-bearing decisions behind `grecohome-dagster`.
 - [0006 — Soil/USCRN port: daily row-slice + dedup over a growing year file](0006-soil-port.md)
 - [0007 — Silver sleep: two co-equal sources, FULL OUTER JOIN, neither authoritative](0007-silver-sleep.md)
 - [0008 — Silver glucose: per-reading grain, dedup on the UTC instant](0008-silver-glucose.md)
+- [0009 — Silver workouts: per-activity grain, dedup on activityId](0009-silver-workouts.md)
