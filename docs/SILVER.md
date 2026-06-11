@@ -12,8 +12,10 @@ Tables today:
   checks. See [Sleep](#sleep) below.
 - **Glucose** — `silver_glucose` (per-reading Lingo CGM). The first single-source reduction of
   the template. See [Glucose (Lingo CGM)](#glucose-lingo-cgm) below.
+- **Workouts** — `silver_workouts` (per-activity Garmin). See
+  [Workouts (Garmin activities)](#workouts-garmin-activities) below.
 
-Later tables (workouts, fitness, recovery) are further single-source reductions.
+Later tables (recovery, fitness) are further single-source reductions.
 
 ## Invariants
 
@@ -58,6 +60,7 @@ whoop_bronze_sleep  ─▶ silver_sleep_whoop  ─┘
 {SILVER_ROOT}/sleep/_garmin.parquet          # sleep source intermediate (one row per night)
 {SILVER_ROOT}/sleep/_whoop.parquet           # sleep source intermediate (one row per sleep id)
 {SILVER_ROOT}/glucose/silver_glucose.parquet # glucose: one row per CGM reading
+{SILVER_ROOT}/workouts/silver_workouts.parquet # workouts: one row per Garmin activity
 ```
 
 - **Atomic overwrite.** Each asset `COPY`s to a temp file in the destination dir and `os.replace`s
@@ -214,6 +217,41 @@ One row per reading.
 | `glucose_value_range` | ERROR | non-null `mgdl` within 10–600 |
 | `glucose_coverage_vs_bronze` | WARN | silver readings ≈ bronze distinct instants; reports distinct days |
 
+# Workouts (Garmin activities)
+
+`silver_workouts` is a single-source table — one row per Garmin activity.
+
+### Source & event date
+Garmin activities bronze (`garmin/activities`) is a top-level JSON **array** of activity objects
+per file (empty `[]` on days with none). Garmin appends and re-fetches overlapping windows, so the
+same activity recurs across files — dedup by **`activityId`** (keeping the latest fetch). Activities
+carry a **local** `startTimeLocal` and a UTC `startTimeGMT`, so the event date is just the local
+date — no timezone subtlety.
+
+### Schema (`silver_workouts`)
+One row per activity.
+
+| Column | Type | Note |
+|---|---|---|
+| `activity_id` | BIGINT | dedup key |
+| `activity_name` | VARCHAR | |
+| `activity_type` | VARCHAR | `activityType.typeKey` (running / cycling / yoga / …) |
+| `activity_date` | DATE | local date of `startTimeLocal` |
+| `start_time_local` / `start_time_gmt` | TIMESTAMP | local / UTC start |
+| `duration_sec` / `moving_duration_sec` / `elapsed_duration_sec` | DOUBLE | seconds |
+| `distance_m` | DOUBLE | metres (null on non-distance sports) |
+| `calories` | DOUBLE | |
+| `avg_hr` / `max_hr` | INT | bpm (`avg_hr` = 0 when HR not recorded) |
+| `hr_z1_sec` … `hr_z5_sec` | DOUBLE | seconds in each HR zone (present on a subset) |
+| `device_id` | BIGINT | |
+
+### Asset checks
+| Check | Severity | What |
+|---|---|---|
+| `workouts_id_unique_nonnull` | ERROR | one row per `activity_id`; `activity_id`/`activity_date` non-null |
+| `workouts_value_ranges` | ERROR | durations/distance/calories ≥ 0 and bounded; HR 0–240 (0 = not recorded) |
+| `workouts_coverage_vs_bronze` | WARN | silver activities ≈ bronze distinct `activityId` (no silent drop) |
+
 # Operations
 
 ## Scheduling
@@ -222,8 +260,9 @@ One row per reading.
   lands (Garmin daily + Whoop hourly).
 - `silver_glucose_daily` (06:30 UTC) rebuilds `silver_glucose` (Lingo arrives via sensor; a daily
   rebuild keeps silver a current projection without chasing each upload).
-- `silver_checks_daily` (07:00 UTC) runs **all** silver checks (sleep + glucose) independently, so
-  a *stopped* silver asset is still caught.
+- `silver_workouts_daily` (06:45 UTC) rebuilds `silver_workouts` (after the Garmin daily capture).
+- `silver_checks_daily` (07:00 UTC) runs **all** silver checks (sleep + glucose + workouts)
+  independently, so a *stopped* silver asset is still caught.
 
 All are off by default; enable them in the UI. Rebuild on demand (e.g. after a bronze backfill)
 with `dagster job execute --job silver_sleep_job` (or `--job silver_glucose_job`).

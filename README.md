@@ -28,9 +28,9 @@ docs/      ARCHITECTURE, BRONZE, DEPLOYMENT, ENV_TEMPLATE, adr/
 
 - [Architecture](docs/ARCHITECTURE.md) — repo shape, core vs subject, orchestration model
 - [Bronze layer](docs/BRONZE.md) — capture invariants, layout, sidecar
-- [Silver layer](docs/SILVER.md) — derived/rebuildable Parquet; unified sleep (two sources) + glucose (CGM)
+- [Silver layer](docs/SILVER.md) — derived/rebuildable Parquet; sleep (two sources) + glucose (CGM) + workouts
 - [Deployment](docs/DEPLOYMENT.md) — host `workspace.yaml`, concurrency pool, OAuth / service-account setup
-- [ADRs](docs/adr/) — bronze-only, Dagster pins, token file, Garmin port, Lingo port, Soil port, silver sleep, silver glucose
+- [ADRs](docs/adr/) — bronze-only, Dagster pins, token file, Garmin port, Lingo port, Soil port, silver sleep/glucose/workouts
 
 This is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/): one
 root `pyproject.toml`, one `uv.lock`, one managed Python version.
