@@ -6,9 +6,14 @@ deduplicates to **one row per logical record**, and writes columnar **Parquet**.
 *derived and rebuildable* — it can always be dropped and regenerated from bronze, so it is not
 immutable and not precious. **Bronze remains the only source of truth**; silver never touches it.
 
-Scope today: the first silver asset, **unified daily sleep** (`silver_sleep`). It is the
-pattern-setter — event-date extraction, dedup, typing, Parquet, a two-source join, and asset
-checks — that later single-source silver tables (glucose, workouts, fitness) reduce from.
+Tables today:
+- **Sleep** — `silver_sleep` (unified daily sleep) + its two source intermediates. The
+  pattern-setter: event-date extraction, dedup, typing, Parquet, a two-source join, and asset
+  checks. See [Sleep](#sleep) below.
+- **Glucose** — `silver_glucose` (per-reading Lingo CGM). The first single-source reduction of
+  the template. See [Glucose (Lingo CGM)](#glucose-lingo-cgm) below.
+
+Later tables (workouts, fitness, recovery) are further single-source reductions.
 
 ## Invariants
 
@@ -49,15 +54,19 @@ whoop_bronze_sleep  ─▶ silver_sleep_whoop  ─┘
 - **Layout** under `SILVER_ROOT`:
 
 ```
-{SILVER_ROOT}/sleep/silver_sleep.parquet   # the product (one row per night)
-{SILVER_ROOT}/sleep/_garmin.parquet        # source intermediate (one row per night)
-{SILVER_ROOT}/sleep/_whoop.parquet         # source intermediate (one row per sleep id)
+{SILVER_ROOT}/sleep/silver_sleep.parquet     # sleep: the product (one row per night)
+{SILVER_ROOT}/sleep/_garmin.parquet          # sleep source intermediate (one row per night)
+{SILVER_ROOT}/sleep/_whoop.parquet           # sleep source intermediate (one row per sleep id)
+{SILVER_ROOT}/glucose/silver_glucose.parquet # glucose: one row per CGM reading
 ```
 
 - **Atomic overwrite.** Each asset `COPY`s to a temp file in the destination dir and `os.replace`s
   it into place, so a crashed run never leaves a half-written Parquet.
-- **Partitioning: none (v1).** The data is small (thousands of nights); each asset is a
-  whole-table rebuild reading all bronze partitions. Partition by year later only if it grows.
+- **Partitioning: none (v1).** The data is small (thousands of nights, ~55k glucose readings); each
+  asset is a whole-table rebuild reading all bronze partitions. Partition by year later only if it
+  grows.
+
+# Sleep
 
 ## The source decision (two co-equal sources)
 
@@ -160,15 +169,64 @@ coverage/expectation drift = **WARN** — and all run off the `*_api` pools.
 | `sleep_coverage_split` | `silver_sleep` | WARN | reports both / garmin-only / whoop-only counts |
 | `garmin_coverage_vs_bronze` | `silver_sleep_garmin` | WARN | silver nights ≈ bronze distinct `calendarDate` (no silent drop) |
 
+# Glucose (Lingo CGM)
+
+`silver_glucose` is the first **single-source** table — a straight reduction of the sleep
+template (no join). One row per CGM reading.
+
+### Source & event date
+Lingo bronze (`lingo/glucose`) is a 2-column CSV (reading time, `Measurement(mg/dL)`) plus the
+bronze `dt` column, re-uploaded cumulatively so each reading recurs in many files (~13× raw
+duplication). The reading time is **already local with its offset embedded**
+(`2026-06-11T18:05-04:00`) — so the event date is just its local date; no UTC/wake-date subtlety
+like Whoop.
+
+### Deduplication — on the UTC instant
+The same physical reading is re-exported under **different offset spellings** (up to 4×, e.g. after
+a timezone change): ~163k distinct local strings map to only **~55k distinct UTC instants**, and
+every duplicate carries an **identical** value (zero conflicts). So dedup keys on the **UTC
+instant** — lossless; keying on the local string would ~3× inflate. The instant is computed
+arithmetically as `reading_ts_local − tz_offset` (the offset string lacks seconds and won't cast to
+`TIMESTAMPTZ`).
+
+### Local-date caveat
+For ~11% of instants the derived local **date** differs across an instant's offset spellings. The
+**instant is canonical**; for the local fields (`reading_ts_local`, `reading_date`,
+`tz_offset_minutes`) the **latest-captured** export's representation wins (consistent with silver
+being a projection of current bronze). `mgdl` is never ambiguous. A null measurement is kept with
+`mgdl` null (never dropped), matching the null-safe convention.
+
+### Schema (`silver_glucose`)
+One row per reading.
+
+| Column | Type | Note |
+|---|---|---|
+| `reading_ts_utc` | TIMESTAMP | UTC instant — the dedup key / canonical identity |
+| `reading_ts_local` | TIMESTAMP | local wall-clock of the reading |
+| `reading_date` | DATE | local date (the day) |
+| `tz_offset_minutes` | INT | signed UTC offset of the reading |
+| `mgdl` | INT | `Measurement(mg/dL)` (nullable) |
+
+### Asset checks
+| Check | Severity | What |
+|---|---|---|
+| `glucose_reading_unique_nonnull` | ERROR | one row per `reading_ts_utc`; `reading_ts_utc`/`reading_date` non-null |
+| `glucose_value_range` | ERROR | non-null `mgdl` within 10–600 |
+| `glucose_coverage_vs_bronze` | WARN | silver readings ≈ bronze distinct instants; reports distinct days |
+
+# Operations
+
 ## Scheduling
 
-- `silver_sleep_daily` (06:00 UTC) rebuilds all three assets after the day's bronze sleep lands
-  (Garmin daily + Whoop hourly).
-- `silver_checks_daily` (07:00 UTC) runs the silver checks independently, so a *stopped* silver
-  asset is still caught.
+- `silver_sleep_daily` (06:00 UTC) rebuilds the three sleep assets after the day's bronze sleep
+  lands (Garmin daily + Whoop hourly).
+- `silver_glucose_daily` (06:30 UTC) rebuilds `silver_glucose` (Lingo arrives via sensor; a daily
+  rebuild keeps silver a current projection without chasing each upload).
+- `silver_checks_daily` (07:00 UTC) runs **all** silver checks (sleep + glucose) independently, so
+  a *stopped* silver asset is still caught.
 
-Both are off by default; enable them in the UI. Rebuild on demand (e.g. after a bronze backfill)
-with `dagster job execute --job silver_sleep_job`.
+All are off by default; enable them in the UI. Rebuild on demand (e.g. after a bronze backfill)
+with `dagster job execute --job silver_sleep_job` (or `--job silver_glucose_job`).
 
 ## Deployment
 

@@ -9,3 +9,4 @@ Short records of the load-bearing decisions behind `grecohome-dagster`.
 - [0005 — Lingo port: sensor + dynamic partitions, service-account auth](0005-lingo-port.md)
 - [0006 — Soil/USCRN port: daily row-slice + dedup over a growing year file](0006-soil-port.md)
 - [0007 — Silver sleep: two co-equal sources, FULL OUTER JOIN, neither authoritative](0007-silver-sleep.md)
+- [0008 — Silver glucose: per-reading grain, dedup on the UTC instant](0008-silver-glucose.md)
