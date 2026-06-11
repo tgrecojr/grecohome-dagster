@@ -14,9 +14,9 @@ Source shapes (profiled against live bronze, spec §1/§5):
 * **Whoop** — ``{"records": [...]}``; each record is one sleep with a UUID ``id``,
   ``updated_at`` (rescored), ``start``/``end`` timestamps (UTC), ``timezone_offset``,
   ``nap`` flag, ``cycle_id``, and a nested ``score``. Event date (the night) is the
-  **local** date of ``start`` (``start + timezone_offset``; see
-  :func:`_whoop_local_night`), so it matches the date the user slept and aligns with
-  Garmin's local ``calendarDate``. Stage durations are in **millis**.
+  **local wake date** — the local date of ``end`` (``end + timezone_offset``; see
+  :func:`_whoop_local_wake_night`), which matches Garmin's ``calendarDate`` (the
+  morning's date) convention. Stage durations are in **millis**.
 
 Unit decision: **all stage durations normalized to minutes** (Garmin ``/60``, Whoop
 ``/60000``) so ``garmin_*_min`` and ``whoop_*_min`` are directly comparable.
@@ -50,28 +50,30 @@ def _ts_epoch_ms_or_iso(value_sql: str) -> str:
     )
 
 
-def _whoop_local_night(rec: str) -> str:
-    """The local calendar night for a Whoop sleep record.
+def _whoop_local_wake_night(rec: str) -> str:
+    """The local calendar night for a Whoop sleep record — its **wake/morning** date.
 
-    Whoop ``start`` is a UTC timestamp; the user's bedtime is evening *local* time,
-    which for a negative UTC offset is after midnight UTC — so ``CAST(start AS DATE)``
-    in UTC dates ~93% of nights a day late (verified against live bronze) and
-    misaligns with Garmin's local ``calendarDate``. We shift ``start`` by the
-    record's own ``timezone_offset`` (``±HH:MM``) and take that date, so the night
-    matches the date the user actually slept. Falls back to the UTC date if the
-    offset is missing/unparseable (so a bad offset never drops the night).
+    Garmin's ``calendarDate`` (the authoritative night for the ~4-year history) is the
+    **wake date** — a sleep from 11pm to 7am is labelled the morning's date, not the
+    bedtime evening's. Verified against live bronze: keying Whoop on the local date of
+    ``end`` aligns 38/38 Garmin nights in the overlap window and keeps every sleep a
+    distinct night, whereas the bedtime (``start``) date misaligns (35/38) and falsely
+    merges nights. So the night is the local date of ``end``.
 
-    The offset's minutes inherit the hours' sign (``-04:30`` → −4h −30m).
+    Whoop ``end`` is UTC; we shift it by the record's own ``timezone_offset``
+    (``±HH:MM``, minutes inheriting the hours' sign — ``-04:30`` → −4h −30m) and take
+    that date. Falls back to the UTC date of ``end`` if the offset is
+    missing/unparseable, so a bad offset never drops the night.
     """
-    start_ts = f"TRY_CAST({json_str(rec, 'start')} AS TIMESTAMP)"
+    end_ts = f"TRY_CAST({json_str(rec, 'end')} AS TIMESTAMP)"
     tz = json_str(rec, "timezone_offset")
     offset_min = (
         f"(TRY_CAST(substr({tz}, 1, 3) AS INTEGER) * 60 "
         f"+ (CASE WHEN substr({tz}, 1, 1) = '-' THEN -1 ELSE 1 END) "
         f"* COALESCE(TRY_CAST(substr({tz}, 5, 2) AS INTEGER), 0))"
     )
-    local_date = f"TRY_CAST(({start_ts} + {offset_min} * INTERVAL 1 MINUTE) AS DATE)"
-    return f"COALESCE({local_date}, {json_date(rec, 'start')})"
+    local_date = f"TRY_CAST(({end_ts} + {offset_min} * INTERVAL 1 MINUTE) AS DATE)"
+    return f"COALESCE({local_date}, {json_date(rec, 'end')})"
 
 
 # ---------------------------------------------------------------------------
@@ -129,7 +131,7 @@ def whoop_sleep_sql(payloads_sql: str) -> str:
     )
     typed = f"""
         SELECT
-            {_whoop_local_night('r')}                                   AS night_date,
+            {_whoop_local_wake_night('r')}                              AS night_date,
             {json_str('r', 'id')}                                       AS whoop_sleep_id,
             COALESCE(TRY_CAST({json_str('r', 'nap')} AS BOOLEAN), FALSE) AS is_nap,
             {json_num('r', score + 'sleep_performance_percentage')}     AS whoop_performance_pct,
@@ -152,7 +154,7 @@ def whoop_sleep_sql(payloads_sql: str) -> str:
             {json_str('r', 'updated_at')}                               AS _updated_at
         FROM ({records})
         WHERE {json_str('r', 'id')} IS NOT NULL
-          AND {_whoop_local_night('r')} IS NOT NULL
+          AND {_whoop_local_wake_night('r')} IS NOT NULL
     """
     deduped = dedup_latest_sql(typed, partition_key="whoop_sleep_id", order_by="_updated_at")
     return f"SELECT * EXCLUDE (_updated_at) FROM ({deduped})"
