@@ -81,13 +81,15 @@ one — `whoop_*` is null before the device existed — which `has_whoop` makes 
 
 ### Event date (the night)
 - **Garmin:** `dailySleepDTO.calendarDate` (a clean DATE; authoritative, already local).
-- **Whoop:** the **local** date of `start` — `start` is UTC and carries a
-  `timezone_offset`, so the night is `CAST(start + timezone_offset AS DATE)`. A bedtime
-  in the evening local time is after midnight UTC for a negative offset, so a naive
-  `CAST(start AS DATE)` in UTC dates ~93% of nights a day late (measured against live
-  bronze) and misaligns with Garmin's local `calendarDate`. The offset's minutes inherit
-  the hours' sign (`-04:30` → −4h −30m); a missing/unparseable offset falls back to the
-  UTC date so the night is never dropped.
+  This is the **wake/morning date** — a sleep from 11pm to 7am is labelled the morning's
+  date, verified against live bronze.
+- **Whoop:** the **local wake date** — the local date of `end`. `end` is UTC and the
+  record carries a `timezone_offset`, so the night is `CAST(end + timezone_offset AS
+  DATE)`. This matches Garmin's wake-date `calendarDate` convention (38/38 alignment in
+  the overlap window) and keeps every sleep a distinct night; keying on the bedtime
+  (`start`) date instead misaligns with Garmin and falsely merges nights. The offset's
+  minutes inherit the hours' sign (`-04:30` → −4h −30m); a missing/unparseable offset
+  falls back to the UTC date of `end`, so the night is never dropped.
 
 ### Deduplication (bronze is heavily re-captured)
 - **Garmin:** dedup key = `calendarDate`; keep the **latest fetch**. The same night appears in
