@@ -2,12 +2,39 @@
 
 from __future__ import annotations
 
+import json
+import os
+
 import pytest
 
 from grecohome_core.silver import connect, list_payload_files, payloads_relation_sql
 from grecohome_silver.sleep import garmin_sleep_sql, unified_sleep_sql, whoop_sleep_sql
 
 pytestmark = pytest.mark.unit
+
+
+def _whoop_record(start: str, *, tz: str | None, sleep_id: str = "id-x") -> dict:
+    rec: dict = {
+        "id": sleep_id,
+        "start": start,
+        "end": start,
+        "updated_at": "2026-01-16T12:00:00.000Z",
+        "nap": False,
+        "score": {"sleep_performance_percentage": 90.0},
+    }
+    if tz is not None:
+        rec["timezone_offset"] = tz
+    return rec
+
+
+def _write_whoop(tmp_path, record: dict) -> str:
+    """A one-file Whoop bronze tree; returns the bronze root."""
+    root = os.path.join(str(tmp_path), "bronze")
+    pdir = os.path.join(root, "whoop", "sleep", "dt=2026-01-16")
+    os.makedirs(pdir, exist_ok=True)
+    with open(os.path.join(pdir, "sleep_1700000000000_aa.json"), "w") as fh:
+        json.dump({"records": [record]}, fh)
+    return root
 
 
 def _rows(sql: str) -> list[dict]:
@@ -114,3 +141,24 @@ def test_empty_collection_yields_typed_empty(bronze_root: str) -> None:
     assert files == []
     rows = _rows(garmin_sleep_sql(payloads_relation_sql(files)))
     assert rows == []
+
+
+def test_whoop_night_uses_local_timezone(tmp_path) -> None:
+    """A bedtime that crosses midnight in UTC is dated by its LOCAL night.
+
+    start 03:00 UTC with a -05:00 offset is 22:00 the previous local evening, so the
+    night is the 15th — not the UTC 16th that a naive CAST(start AS DATE) would give.
+    """
+    root = _write_whoop(tmp_path, _whoop_record("2026-01-16T03:00:00.000Z", tz="-05:00"))
+    files = list_payload_files(root, "whoop", "sleep")
+    rows = _rows(whoop_sleep_sql(payloads_relation_sql(files)))
+    assert rows[0]["night_date"].isoformat() == "2026-01-15"
+
+
+def test_whoop_night_falls_back_to_utc_without_offset(tmp_path) -> None:
+    """A record missing timezone_offset falls back to the UTC date (never dropped)."""
+    root = _write_whoop(tmp_path, _whoop_record("2026-01-16T03:00:00.000Z", tz=None))
+    files = list_payload_files(root, "whoop", "sleep")
+    rows = _rows(whoop_sleep_sql(payloads_relation_sql(files)))
+    assert len(rows) == 1
+    assert rows[0]["night_date"].isoformat() == "2026-01-16"

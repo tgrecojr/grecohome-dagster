@@ -80,8 +80,14 @@ one — `whoop_*` is null before the device existed — which `has_whoop` makes 
 ## Transform rules
 
 ### Event date (the night)
-- **Garmin:** `dailySleepDTO.calendarDate` (a clean DATE; authoritative).
-- **Whoop:** `CAST(start AS DATE)` — a sleep that starts late evening belongs to that night.
+- **Garmin:** `dailySleepDTO.calendarDate` (a clean DATE; authoritative, already local).
+- **Whoop:** the **local** date of `start` — `start` is UTC and carries a
+  `timezone_offset`, so the night is `CAST(start + timezone_offset AS DATE)`. A bedtime
+  in the evening local time is after midnight UTC for a negative offset, so a naive
+  `CAST(start AS DATE)` in UTC dates ~93% of nights a day late (measured against live
+  bronze) and misaligns with Garmin's local `calendarDate`. The offset's minutes inherit
+  the hours' sign (`-04:30` → −4h −30m); a missing/unparseable offset falls back to the
+  UTC date so the night is never dropped.
 
 ### Deduplication (bronze is heavily re-captured)
 - **Garmin:** dedup key = `calendarDate`; keep the **latest fetch**. The same night appears in
