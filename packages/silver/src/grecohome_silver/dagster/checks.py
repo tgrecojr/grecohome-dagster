@@ -209,7 +209,7 @@ def garmin_coverage_vs_bronze() -> AssetCheckResult:
     )
 
 
-ALL_CHECKS = [
+SLEEP_CHECKS = [
     garmin_night_unique_nonnull,
     whoop_id_unique_night_nonnull,
     sleep_night_unique_nonnull,
