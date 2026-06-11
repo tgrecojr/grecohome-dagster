@@ -14,8 +14,10 @@ Tables today:
   the template. See [Glucose (Lingo CGM)](#glucose-lingo-cgm) below.
 - **Workouts** — `silver_workouts` (per-activity Garmin). See
   [Workouts (Garmin activities)](#workouts-garmin-activities) below.
+- **Recovery** — `silver_recovery` (per-cycle Whoop; joins to sleep). See
+  [Recovery (Whoop)](#recovery-whoop) below.
 
-Later tables (recovery, fitness) are further single-source reductions.
+Later tables (fitness) are further single-source reductions.
 
 ## Invariants
 
@@ -61,6 +63,7 @@ whoop_bronze_sleep  ─▶ silver_sleep_whoop  ─┘
 {SILVER_ROOT}/sleep/_whoop.parquet           # sleep source intermediate (one row per sleep id)
 {SILVER_ROOT}/glucose/silver_glucose.parquet # glucose: one row per CGM reading
 {SILVER_ROOT}/workouts/silver_workouts.parquet # workouts: one row per Garmin activity
+{SILVER_ROOT}/recovery/silver_recovery.parquet # recovery: one row per Whoop cycle
 ```
 
 - **Atomic overwrite.** Each asset `COPY`s to a temp file in the destination dir and `os.replace`s
@@ -252,6 +255,43 @@ One row per activity.
 | `workouts_value_ranges` | ERROR | durations/distance/calories ≥ 0 and bounded; HR 0–240 (0 = not recorded) |
 | `workouts_coverage_vs_bronze` | WARN | silver activities ≈ bronze distinct `activityId` (no silent drop) |
 
+# Recovery (Whoop)
+
+`silver_recovery` is a single-source table — one row per Whoop cycle — and the natural companion
+to sleep: each recovery links to a sleep.
+
+### Source & event date
+Whoop recovery bronze (`whoop/recovery`) is `{"records": [...]}`; each record is one cycle's
+recovery with `cycle_id` and `sleep_id` (both 1:1 with the recovery), `created_at`/`updated_at`
+(UTC; Whoop rescores), and a nested `score`. Dedup by **`cycle_id`** keeping the latest
+`updated_at`. Recovery records carry **no `timezone_offset`**, so `recovery_date` is the **UTC
+date of `created_at`** (≈ the wake morning) — for precise alignment, gold joins to
+`silver_sleep_whoop` on `sleep_id` (= `whoop_sleep_id`) or `cycle_id` (= `whoop_cycle_id`), which
+carry the sleep's true local night.
+
+### Schema (`silver_recovery`)
+One row per cycle.
+
+| Column | Type | Note |
+|---|---|---|
+| `cycle_id` | BIGINT | dedup key; joins `silver_sleep_whoop.whoop_cycle_id` |
+| `sleep_id` | VARCHAR | joins `silver_sleep_whoop.whoop_sleep_id` |
+| `recovery_date` | DATE | UTC date of `created_at` (≈ wake morning) |
+| `created_at` | TIMESTAMP | UTC |
+| `recovery_score` | DOUBLE | 0–100 % |
+| `resting_heart_rate` | DOUBLE | bpm |
+| `hrv_rmssd_milli` | DOUBLE | ms |
+| `spo2_percentage` | DOUBLE | % |
+| `skin_temp_celsius` | DOUBLE | °C |
+| `user_calibrating` | BOOLEAN | Whoop still calibrating that day |
+
+### Asset checks
+| Check | Severity | What |
+|---|---|---|
+| `recovery_cycle_unique_nonnull` | ERROR | one row per `cycle_id`; `cycle_id`/`recovery_date` non-null |
+| `recovery_value_ranges` | ERROR | score 0–100, RHR 20–120, HRV 0–500, SpO2 50–100, skin 20–45 |
+| `recovery_coverage_vs_bronze` | WARN | silver recoveries ≈ bronze distinct `cycle_id` (no silent drop) |
+
 # Operations
 
 ## Scheduling
@@ -261,8 +301,9 @@ One row per activity.
 - `silver_glucose_daily` (06:30 UTC) rebuilds `silver_glucose` (Lingo arrives via sensor; a daily
   rebuild keeps silver a current projection without chasing each upload).
 - `silver_workouts_daily` (06:45 UTC) rebuilds `silver_workouts` (after the Garmin daily capture).
-- `silver_checks_daily` (07:00 UTC) runs **all** silver checks (sleep + glucose + workouts)
-  independently, so a *stopped* silver asset is still caught.
+- `silver_recovery_daily` (06:50 UTC) rebuilds `silver_recovery` (Whoop hourly capture).
+- `silver_checks_daily` (07:00 UTC) runs **all** silver checks (sleep + glucose + workouts +
+  recovery) independently, so a *stopped* silver asset is still caught.
 
 All are off by default; enable them in the UI. Rebuild on demand (e.g. after a bronze backfill)
 with `dagster job execute --job silver_sleep_job` (or `--job silver_glucose_job`).
