@@ -64,6 +64,18 @@ manager. **Never commit a real `.env`.**
 | `USCRN_LOOKBACK_DAYS` | no | `2` | Trailing daily partitions the 6-hourly schedule re-captures |
 | `USCRN_START_DATE` | no | `2010-01-01` | Backfill floor for the daily partition set |
 
+### Silver (`grecohome-silver`) — its own container, cross-subject
+
+Silver reads bronze and writes Parquet; it makes **no source-API calls** (no secrets, no
+token/key mount). `LOG_LEVEL`/`ENVIRONMENT` and the Dagster-instance vars below apply here
+too. Mount `BRONZE_ROOT` **read-only** and `SILVER_ROOT` writable on a separate volume.
+
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `BRONZE_ROOT` | yes | — | Bronze tree to read (mount **read-only**; silver never writes under it) |
+| `SILVER_ROOT` | yes | — | Writable root for silver Parquet, **outside** `BRONZE_ROOT` (writes there are refused) |
+| `SILVER_MONITOR_DIR` | no | — | Reserved for the future silver monitor (mirrors `BRONZE_MONITOR_DIR`); kept **outside** `SILVER_ROOT`. Unused today; unset → future silver checks no-op |
+
 ### Dagster instance (required at deploy, not for local `dagster dev`)
 
 The host uses **`DefaultRunLauncher`**, so each run executes as a subprocess **inside the
@@ -110,6 +122,12 @@ WHOOP_TOKEN_PATH=/secrets/whoop/token.json
 # --- Whoop tuning ---
 MAX_REQUESTS_PER_MINUTE=60
 RECONCILE_WINDOW_DAYS=7
+
+# --- Silver (grecohome-silver); cross-subject layer, no source API/secrets ---
+# Mount BRONZE_ROOT read-only here; SILVER_ROOT must be a separate path outside it.
+SILVER_ROOT=/data/silver
+# Reserved for the future silver monitor (unused today); MUST be outside SILVER_ROOT.
+SILVER_MONITOR_DIR=/data/silver-monitor
 
 # --- Dagster instance (deploy only; not needed for local `dagster dev`) ---
 # Required because DefaultRunLauncher executes runs inside this container, which
