@@ -1,0 +1,26 @@
+[project]
+name = "grecohome-silver"
+version = "0.1.0"
+description = "Silver layer: cross-subject derived/rebuildable Dagster code location (Parquet over bronze)"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "grecohome-core",
+    "dagster==1.13.8",
+    # DuckDB is silver's transform + Parquet engine; it lives only in this image,
+    # never in the bronze capture images (which need no query engine).
+    "duckdb==1.5.3",
+    "pydantic==2.13.4",
+    "pydantic-settings==2.14.1",
+    "structlog==26.1.0",
+    "python-json-logger==4.1.0",
+    "python-dotenv==1.2.2",
+    "tzdata>=2026.2",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/grecohome_silver"]
