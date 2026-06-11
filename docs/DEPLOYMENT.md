@@ -337,6 +337,62 @@ Enable `uscrn_schedule` in the UI (schedules, like sensors, are off by default).
 capture the recent partitions; backfill the station's history with
 `dagster backfill --partition-range 2010-01-01...<today> --job uscrn_capture_job`.
 
+## Silver (cross-subject layer)
+
+Silver is **not** a data subject — it captures nothing. It's a derived, rebuildable layer
+that reads immutable bronze and writes typed, deduplicated **Parquet** for analysis. It
+makes **no source-API calls** (no auth, no secrets, no token/key mount) and stays **off**
+the `*_api` concurrency pools. Its first table is sleep (`silver_sleep`, a FULL OUTER JOIN
+of the Garmin and Whoop sleep streams; see [SILVER.md](SILVER.md)).
+
+- **Image:** `ghcr.io/tgrecojr/grecohome-dagster-silver`, serving
+  `grecohome_silver.dagster.definitions`. Depends only on `grecohome-core` + DuckDB — the
+  bronze API clients are deliberately absent.
+- **Cross-code-location lineage:** the silver sleep assets declare their bronze upstreams
+  (`garmin_bronze_sleep`, `whoop_bronze_sleep`) by `AssetKey`, so lineage renders across
+  code locations. The reads themselves are **filesystem reads of `BRONZE_ROOT`**, not gRPC
+  calls into the subject locations.
+- **Whole-table rebuild.** Assets are unpartitioned; each run overwrites its Parquet from
+  current bronze (idempotent — last run wins). `silver_sleep_daily` (06:00 UTC, after the
+  day's bronze sleep lands) rebuilds the three sleep assets; `silver_checks_daily` (07:00
+  UTC) runs the silver asset checks independently. Enable both in the UI (schedules are off
+  by default).
+
+### Host container (`dagster_silver`)
+
+Mirror the others — on `monitoring`, `DAGSTER_HOME` + `DAGSTER_POSTGRES_*` (run worker →
+instance Postgres) — but the data mounts differ from a subject's: silver **reads** bronze
+and **writes** a separate silver root.
+
+- required app env: `BRONZE_ROOT`, `SILVER_ROOT`.
+- optional app env: `SILVER_MONITOR_DIR` — reserved for the forthcoming silver
+  monitor/validation (mirrors `BRONZE_MONITOR_DIR`); unused today, declared + mounted now so
+  turning it on needs no deploy change. Unset → future silver checks no-op.
+
+Mounts (note bronze is **read-only** here — silver never writes under it):
+
+- **`BRONZE_ROOT` — read-only** (`/opt/datalake/bronze` → `/data/bronze:ro`). Silver only
+  reads the `garmin/` and `whoop/` source segments.
+- **`SILVER_ROOT` — writable**, a **separate** volume outside bronze (e.g.
+  `/opt/datalake/silver` → `/data/silver`). The atomic Parquet writer refuses any path under
+  `BRONZE_ROOT`.
+- **`SILVER_MONITOR_DIR`** (optional) — writable, **separate** from `SILVER_ROOT` (e.g.
+  `/opt/docker/dagster/silver/monitor` → `/monitor/silver`), so future checks never write
+  under the silver Parquet tree.
+- `DAGSTER_HOME` — the directory containing the shared `dagster.yaml`.
+
+```yaml
+# workspace.yaml
+  - grpc_server: { host: dagster_silver, port: 4000, location_name: silver }
+```
+
+No concurrency pool is needed — silver makes no source calls. To rebuild on demand (e.g.
+after a bronze backfill), materialize the job rather than backfilling partitions:
+
+```bash
+dagster job execute --job silver_sleep_job   # whole-table rebuild from current bronze
+```
+
 ## Building locally
 
 ```bash
