@@ -3,7 +3,7 @@
 # coordinator, not a package. Each data subject lives under packages/ as its
 # own member package, and they all share this single uv.lock.
 [tool.uv.workspace]
-members = ["packages/core", "packages/whoop", "packages/garmin", "packages/lingo", "packages/soil"]
+members = ["packages/core", "packages/whoop", "packages/garmin", "packages/lingo", "packages/soil", "packages/silver"]
 
 [tool.uv.sources]
 grecohome-core = { workspace = true }
@@ -39,6 +39,7 @@ addopts = [
     "--import-mode=importlib",
     "--cov=grecohome_core",
     "--cov=grecohome_whoop",
+    "--cov=grecohome_silver",
     "--cov-report=term-missing",
     "--cov-report=xml",
     "--cov-branch",
@@ -47,6 +48,7 @@ addopts = [
 norecursedirs = [".git", "dist", "build", "*.egg", "__pycache__", ".venv"]
 env = [
     "BRONZE_ROOT=/tmp/grecohome-test-bronze",
+    "SILVER_ROOT=/tmp/grecohome-test-silver",
     "WHOOP_CLIENT_ID=test_client_id",
     "WHOOP_CLIENT_SECRET=test_client_secret",
     "WHOOP_REDIRECT_URI=http://localhost:8000/callback",
@@ -58,7 +60,7 @@ env = [
 [tool.ruff]
 target-version = "py314"
 line-length = 100
-src = ["packages/core/src", "packages/whoop/src"]
+src = ["packages/core/src", "packages/whoop/src", "packages/silver/src"]
 # scripts/ holds standalone reference/fallback validators (verify_bronze.py,
 # sweep_streams.py) kept byte-faithful to their canonical versions maintained
 # outside this repo; they're imported by nothing, so they're not held to the
