@@ -73,6 +73,27 @@ def payloads_relation_sql(files: list[str]) -> str:
     )
 
 
+def csv_relation_sql(files: list[str], columns: dict[str, str]) -> str:
+    """A SQL subquery selecting named CSV columns (+ ``filename``) for the given files.
+
+    ``columns`` maps a safe output alias to the exact source header (CSV headers can
+    contain spaces/brackets, e.g. Lingo's reading-time column), so callers reference
+    clean identifiers downstream. Files are read ``all_varchar`` with header detection
+    and ``union_by_name`` (tolerating minor column drift across captures); typing is
+    the caller's job. With no files, returns a correctly-typed empty relation so a
+    not-yet-captured collection yields the right columns instead of erroring.
+    """
+    aliases = list(columns)
+    if not files:
+        cols = ", ".join(f"NULL::VARCHAR AS {a}" for a in aliases)
+        return f"SELECT {cols}, NULL::VARCHAR AS filename WHERE false"
+    sel = ", ".join(f'"{hdr}" AS {a}' for a, hdr in columns.items())
+    return (
+        f"SELECT {sel}, filename FROM read_csv({_sql_str_list(files)}, "
+        "header=true, all_varchar=true, union_by_name=true, filename=true)"
+    )
+
+
 def write_parquet_atomic(
     con: duckdb.DuckDBPyConnection,
     select_sql: str,

@@ -93,4 +93,4 @@ def silver_sleep(context: AssetExecutionContext) -> MaterializeResult:
     return MaterializeResult(metadata={"rows": rows, "path": dest})
 
 
-ALL_ASSETS = [silver_sleep_garmin, silver_sleep_whoop, silver_sleep]
+SLEEP_ASSETS = [silver_sleep_garmin, silver_sleep_whoop, silver_sleep]
