@@ -304,3 +304,59 @@ class TestWhoopClientBronzeCapture:
         files = _bronze_files(isolate_bronze_root)
         assert files and all("dt=2025-01-05" in f for f in files)
         await client.aclose()
+
+    @respx.mock
+    async def test_paginate_stops_on_nonadvancing_cursor(self):
+        """A next_token that never advances must terminate, not loop forever."""
+        client = WhoopClient(user_id=1)
+        with patch.object(
+            client.token_manager, "get_valid_token", new=AsyncMock(return_value="tok")
+        ), patch.object(client.rate_limiter, "acquire", new=AsyncMock()):
+            respx.get(f"{client.base_url}/test").mock(
+                return_value=httpx.Response(
+                    200, json={"records": [{"id": 1}], "next_token": "STUCK"}
+                )
+            )
+            records = [r async for r in client._paginate("/test")]
+        # page 1 records the token; page 2 sees it repeat -> stop. Bounded, not infinite.
+        assert len(records) == 2
+        assert respx.calls.call_count == 2
+        await client.aclose()
+
+    @respx.mock
+    async def test_paginate_stops_at_max_pages(self):
+        """An advancing-but-never-clearing cursor is bounded by max_pages."""
+        client = WhoopClient(user_id=1)
+        counter = {"n": 0}
+
+        def _responder(request):
+            counter["n"] += 1
+            return httpx.Response(
+                200, json={"records": [{"id": counter["n"]}], "next_token": f"t{counter['n']}"}
+            )
+
+        with patch.object(
+            client.token_manager, "get_valid_token", new=AsyncMock(return_value="tok")
+        ), patch.object(client.rate_limiter, "acquire", new=AsyncMock()):
+            respx.get(f"{client.base_url}/test").mock(side_effect=_responder)
+            records = [r async for r in client._paginate("/test", max_pages=3)]
+        assert len(records) == 3
+        assert respx.calls.call_count == 3
+        await client.aclose()
+
+    @respx.mock
+    async def test_paginate_normal_termination(self):
+        """Normal pagination still ends when next_token clears (guards don't interfere)."""
+        client = WhoopClient(user_id=1)
+        pages = [
+            httpx.Response(200, json={"records": [{"id": 1}], "next_token": "t1"}),
+            httpx.Response(200, json={"records": [{"id": 2}]}),  # no next_token -> done
+        ]
+        with patch.object(
+            client.token_manager, "get_valid_token", new=AsyncMock(return_value="tok")
+        ), patch.object(client.rate_limiter, "acquire", new=AsyncMock()):
+            respx.get(f"{client.base_url}/test").mock(side_effect=pages)
+            records = [r async for r in client._paginate("/test")]
+        assert [r["id"] for r in records] == [1, 2]
+        assert respx.calls.call_count == 2
+        await client.aclose()
