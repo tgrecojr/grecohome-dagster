@@ -76,6 +76,18 @@ too. Mount `BRONZE_ROOT` **read-only** and `SILVER_ROOT` writable on a separate 
 | `SILVER_ROOT` | yes | — | Writable root for silver Parquet, **outside** `BRONZE_ROOT` (writes there are refused) |
 | `SILVER_MONITOR_DIR` | no | — | Reserved for the future silver monitor (mirrors `BRONZE_MONITOR_DIR`); kept **outside** `SILVER_ROOT`. Unused today; unset → future silver checks no-op |
 
+### Gold (`grecohome-gold`) — its own container, cross-layer
+
+Gold reads silver and writes marts; **no source-API calls** (no secrets). `LOG_LEVEL`/
+`ENVIRONMENT` and the Dagster-instance vars below apply too. Mount `SILVER_ROOT` **read-only**
+and `GOLD_ROOT` writable on a separate volume.
+
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `SILVER_ROOT` | yes | — | Silver tree to read (mount **read-only**; gold never writes under it) |
+| `GOLD_ROOT` | yes | — | Writable root for gold marts, **outside** `SILVER_ROOT` (writes there are refused) |
+| `GOLD_MONITOR_DIR` | no | — | Reserved for a future gold monitor; kept **outside** `GOLD_ROOT`. Unused today |
+
 ### Dagster instance (required at deploy, not for local `dagster dev`)
 
 The host uses **`DefaultRunLauncher`**, so each run executes as a subprocess **inside the
@@ -128,6 +140,12 @@ RECONCILE_WINDOW_DAYS=7
 SILVER_ROOT=/data/silver
 # Reserved for the future silver monitor (unused today); MUST be outside SILVER_ROOT.
 SILVER_MONITOR_DIR=/data/silver-monitor
+
+# --- Gold (grecohome-gold); analysis marts from silver, no source API/secrets ---
+# Mount SILVER_ROOT read-only here; GOLD_ROOT must be a separate path outside it.
+GOLD_ROOT=/data/gold
+# Reserved for the future gold monitor (unused today); MUST be outside GOLD_ROOT.
+GOLD_MONITOR_DIR=/data/gold-monitor
 
 # --- Dagster instance (deploy only; not needed for local `dagster dev`) ---
 # Required because DefaultRunLauncher executes runs inside this container, which
