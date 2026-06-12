@@ -1,19 +1,23 @@
 # Architecture
 
-`grecohome-dagster` is a monorepo of personal **data-subject** pipelines orchestrated by
-self-hosted Dagster. Each subject is a **bronze-only** code location: it calls a source API
-and writes the raw responses to a bronze layer. No transformation, no database — silver/gold
-are a future phase.
+`grecohome-dagster` is a monorepo of personal data pipelines orchestrated by self-hosted
+Dagster, in three layers. **Bronze** subjects call a source API and write the raw responses to
+a bronze layer (the immutable source of truth). **Silver** reads bronze and writes typed,
+deduplicated Parquet. **Gold** reads silver and writes analysis marts. Silver/gold are
+DuckDB-over-Parquet (no database), derived and fully rebuildable; each layer is its own gRPC
+code location.
 
 ## Repository shape (uv workspace)
 
 ```
 packages/
-  core/    grecohome-core   — shared, source-agnostic framework
-  whoop/   grecohome-whoop  — Whoop data subject (migrated from whoopster)
-  garmin/  grecohome-garmin — Garmin data subject (ported from garmincapture)
-  lingo/   grecohome-lingo  — Lingo CGM data subject (ported from glucose-loader)
-  soil/    grecohome-soil   — NOAA USCRN soil/temp data subject (ported from soildata)
+  core/    grecohome-core   — shared framework (bronze capture + checks, silver helpers, dagster)
+  whoop/   grecohome-whoop  — Whoop bronze subject (migrated from whoopster)
+  garmin/  grecohome-garmin — Garmin bronze subject (ported from garmincapture)
+  lingo/   grecohome-lingo  — Lingo CGM bronze subject (ported from glucose-loader)
+  soil/    grecohome-soil   — NOAA USCRN soil/temp bronze subject (ported from soildata)
+  silver/  grecohome-silver — silver layer (sleep, glucose, workouts, recovery)
+  gold/    grecohome-gold   — gold layer (daily wellness mart)
 ```
 
 One root `pyproject.toml`, one `uv.lock`, one pinned Python (`.python-version`). Subjects
@@ -29,8 +33,11 @@ depend on `grecohome-core` via the workspace. See [ADRs](adr/) for the load-bear
 | `config.py` | `BaseSubjectSettings` + `init_settings()` (friendly missing-var errors) |
 | `logging_config.py` | structlog / JSON logging setup |
 | `dagster/helpers.py` | `daily_utc_partitions`, `trailing_partition_keys`, `run_async` |
+| `checks/` | bronze asset-check families + builders (see [VALIDATION](VALIDATION.md)) |
+| `silver/` | silver helpers: DuckDB connection, sidecar-safe bronze reading (JSON + CSV), dedup idiom, atomic Parquet write (`protected_root` guard) |
 
-Nothing in core is Whoop-specific; a new subject reuses all of it.
+Nothing in core is source-specific; a new subject reuses the bronze framework, and the silver
+helpers are shared by every silver/gold table.
 
 ## `grecohome-whoop` — a data subject
 
@@ -144,6 +151,49 @@ How Soil differs (it reuses core too):
 - **Single station** (env-configurable; default `PA_Avondale_2_N`), consistent with the single-user
   constraint — the station is recorded in the sidecar, not the path.
 
+## `grecohome-silver` — the silver layer
+
+```
+grecohome_silver/
+  config.py          SilverSettings (silver_root + reserved silver_monitor_dir)
+  sleep.py           Garmin + Whoop sleep column mapping (two co-equal sources)
+  glucose.py         Lingo CGM column mapping (dedup on the UTC instant)
+  workouts.py        Garmin activities column mapping
+  recovery.py        Whoop recovery column mapping (joins sleep)
+  dagster/           per-table assets + checks, daily jobs/schedules, definitions
+```
+
+One cross-subject code location (sleep spans two subjects, so it can't live inside one). Each
+table reads `BRONZE_ROOT` via DuckDB and writes a typed, deduplicated Parquet under
+`SILVER_ROOT` — a whole-table rebuild, idempotent, never written under bronze. Bronze upstreams
+are declared by `AssetKey` (cross-location lineage); the reads are filesystem reads. Tables:
+
+- **`silver_sleep`** — FULL OUTER JOIN of `silver_sleep_garmin` + `silver_sleep_whoop` on the
+  night; both devices side by side, neither authoritative (ADR 0007). Whoop night = local wake
+  date.
+- **`silver_glucose`** — one row per CGM reading; dedup on the **UTC instant** (the local string
+  repeats under different offsets) (ADR 0008).
+- **`silver_workouts`** — one row per Garmin activity (ADR 0009).
+- **`silver_recovery`** — one row per Whoop cycle; joins sleep via `sleep_id`/`cycle_id` (ADR 0010).
+
+Each table has `@asset_check`s (uniqueness/ranges = ERROR, coverage = WARN) and a daily rebuild
+schedule; a shared checks-only job catches a stopped asset. Full guide: [SILVER](SILVER.md).
+
+## `grecohome-gold` — the gold layer
+
+```
+grecohome_gold/
+  config.py          GoldSettings (silver_root + gold_root + reserved gold_monitor_dir)
+  daily_wellness.py  the daily wellness mart SQL
+  dagster/           asset + checks, daily job/schedule (after silver), definitions
+```
+
+Analysis marts derived from silver — joins and per-day rollups silver deliberately deferred.
+Reads `SILVER_ROOT`, writes `GOLD_ROOT` (never under silver). v1: **`gold_daily_wellness`** — one
+row per local day over a continuous spine, joining sleep + recovery + daily workout load + daily
+glucose summary (time-in-range 70–140), with `has_*` provenance (ADR 0011). Full guide:
+[GOLD](GOLD.md).
+
 ## Orchestration model
 
 - **Self-hosted Dagster.** The daemon + webserver run on the host. Each subject ships a gRPC
@@ -158,8 +208,9 @@ How Soil differs (it reuses core too):
   usage across the tick + any backfill and serializes token access.
 - **Backfill** = `dagster backfill` over the same assets.
 
-## Per-subject deployment
+## Per-layer deployment
 
-Each subject is built into its own image (`ghcr.io/tgrecojr/grecohome-dagster-<subject>`) by a
-CI matrix, signed (cosign) with an SBOM + SLSA provenance. Subjects deploy, fail, and scale
-independently.
+Each layer — every bronze subject, plus silver and gold — is built into its own image
+(`ghcr.io/tgrecojr/grecohome-dagster-<name>`) by a CI matrix, signed (cosign) with an SBOM +
+SLSA provenance. Layers deploy, fail, and scale independently; silver mounts `BRONZE_ROOT`
+read-only and gold mounts `SILVER_ROOT` read-only (see [DEPLOYMENT](DEPLOYMENT.md)).

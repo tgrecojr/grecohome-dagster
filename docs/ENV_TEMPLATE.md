@@ -105,8 +105,9 @@ settings — Dagster reads them.
 | `DAGSTER_POSTGRES_HOST` | yes (deploy) | Instance Postgres host |
 | `DAGSTER_POSTGRES_DB` | yes (deploy) | Instance Postgres database |
 
-> Note: this is Dagster's *own* metadata DB (runs/events/schedules) — separate from, and
-> not a contradiction of, the app being bronze-only. The app writes no business data to it.
+> Note: this is Dagster's *own* metadata DB (runs/events/schedules) — separate from, and not a
+> contradiction of, the app having no database. Bronze is files and silver/gold are Parquet; the
+> app writes no business data to Postgres.
 
 ## Bootstrapping `.env.example`
 
