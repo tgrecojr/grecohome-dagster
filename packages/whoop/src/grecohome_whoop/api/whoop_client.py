@@ -59,6 +59,13 @@ _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 # Fallback backoff when the server doesn't tell us how long to wait.
 _EXP_WAIT = wait_exponential(multiplier=1, min=2, max=10)
 
+# Hard backstop on cursor pagination. Whoop pages 25 records each; a real per-day
+# window is a handful of pages, so 1000 (25k records) is absurdly generous yet
+# bounds a misbehaving cursor. Without this, a ``next_token`` the API never clears
+# (a known Whoop failure mode) makes ``_paginate`` loop forever — wedging the run
+# and, via the ``whoop_api`` pool, every hourly tick behind it.
+_MAX_PAGES = 1000
+
 
 def _parse_retry_after(value: str | None) -> float | None:
     """Parse a Retry-After header (delta-seconds form). HTTP-date form -> None."""
@@ -292,12 +299,21 @@ class WhoopClient:
         params: dict[str, Any] | None = None,
         limit: int = 25,
         collection: str | None = None,
+        max_pages: int = _MAX_PAGES,
     ) -> AsyncIterator[dict[str, Any]]:
-        """Paginate through API results (cursor-based via ``next_token``)."""
+        """Paginate through API results (cursor-based via ``next_token``).
+
+        Guarded against a runaway cursor: stops if ``next_token`` fails to advance
+        (repeats the previous token or one already seen) or if ``max_pages`` is hit.
+        Either is a Whoop-side failure (a cursor that never clears), not normal
+        end-of-results, so it's logged at WARNING — but it still terminates the loop
+        so the run finishes and releases the ``whoop_api`` pool instead of wedging.
+        """
         params = params or {}
         params["limit"] = min(limit, 25)  # Whoop max is 25
         next_token = None
         page_count = 0
+        seen_tokens: set[str] = set()
 
         while True:
             page_count += 1
@@ -320,8 +336,27 @@ class WhoopClient:
             for record in records:
                 yield record
 
+            # Normal termination: no further cursor, or an empty page.
             if not next_token or not records:
                 logger.info("Pagination complete", endpoint=endpoint, total_pages=page_count)
+                break
+
+            # Runaway-cursor guards (Whoop sometimes returns a non-clearing token).
+            if next_token in seen_tokens:
+                logger.warning(
+                    "Pagination cursor did not advance; stopping",
+                    endpoint=endpoint,
+                    page=page_count,
+                )
+                break
+            seen_tokens.add(next_token)
+
+            if page_count >= max_pages:
+                logger.warning(
+                    "Pagination hit max_pages cap; stopping (possible runaway cursor)",
+                    endpoint=endpoint,
+                    max_pages=max_pages,
+                )
                 break
 
     async def _fetch_range(
