@@ -393,6 +393,47 @@ after a bronze backfill), materialize the job rather than backfilling partitions
 dagster job execute --job silver_sleep_job   # whole-table rebuild from current bronze
 ```
 
+## Gold (cross-layer marts)
+
+Gold is the analysis layer — derived, rebuildable marts built **from silver** (not bronze).
+It reads `SILVER_ROOT` and writes marts under a new `GOLD_ROOT`; like silver it makes **no
+source-API calls** (no auth/secrets) and stays **off** the `*_api` pools. Its first mart is
+`gold_daily_wellness` (one row per local day joining sleep + recovery + workout load + glucose
+summary; see [GOLD.md](GOLD.md)).
+
+- **Image:** `ghcr.io/tgrecojr/grecohome-dagster-gold`, serving `grecohome_gold.dagster.definitions`.
+  Depends only on `grecohome-core` + DuckDB.
+- **Cross-code-location lineage:** the mart declares its four silver upstreams (`silver_sleep`,
+  `silver_recovery`, `silver_workouts`, `silver_glucose`) by `AssetKey`; the reads are
+  **filesystem reads of `SILVER_ROOT`**, not gRPC calls.
+- **Runs after silver.** `gold_wellness_daily` (07:30 UTC) rebuilds the mart once silver's daily
+  rebuilds (≤ 06:50) and silver checks (07:00) have run; `gold_checks_daily` (08:00 UTC) runs the
+  gold checks. Enable both in the UI. On-demand: `dagster job execute --job gold_wellness_job`.
+
+### Host container (`dagster_gold`)
+
+Mirror silver — on `monitoring`, `DAGSTER_HOME` + `DAGSTER_POSTGRES_*` (run worker) — but the data
+mounts are silver→gold:
+
+- required app env: `SILVER_ROOT`, `GOLD_ROOT`.
+- optional app env: `GOLD_MONITOR_DIR` — reserved for a future gold monitor (mirrors
+  `*_MONITOR_DIR`); unused today, declared + mounted now so turning it on needs no deploy change.
+
+Mounts (silver is **read-only** here — gold never writes under it):
+
+- **`SILVER_ROOT` — read-only** (`/opt/datalake/silver` → `/data/silver:ro`).
+- **`GOLD_ROOT` — writable**, a **separate** volume outside silver (e.g. `/opt/datalake/gold` →
+  `/data/gold`). The atomic writer refuses any path under `SILVER_ROOT`.
+- **`GOLD_MONITOR_DIR`** (optional) — writable, separate from `GOLD_ROOT`.
+- `DAGSTER_HOME` — the directory containing the shared `dagster.yaml`.
+
+```yaml
+# workspace.yaml
+  - grpc_server: { host: dagster_gold, port: 4000, location_name: gold }
+```
+
+No concurrency pool is needed — gold makes no source calls.
+
 ## Building locally
 
 ```bash

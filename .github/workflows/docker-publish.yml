@@ -21,8 +21,8 @@ jobs:
       fail-fast: false
       matrix:
         # One gRPC code-location image per data subject, plus the cross-subject
-        # silver layer.
-        subject: [whoop, garmin, lingo, soil, silver]
+        # silver and gold layers.
+        subject: [whoop, garmin, lingo, soil, silver, gold]
     permissions:
       contents: read
       packages: write

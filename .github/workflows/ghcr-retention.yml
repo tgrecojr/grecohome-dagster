@@ -15,8 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # One package per data subject, plus the cross-subject silver layer.
-        subject: [whoop, garmin, lingo, soil, silver]
+        # One package per data subject, plus the cross-subject silver and gold layers.
+        subject: [whoop, garmin, lingo, soil, silver, gold]
     concurrency:
       group: ghcr-cleanup-${{ github.repository }}-${{ matrix.subject }}
     steps:
