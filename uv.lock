@@ -6,6 +6,7 @@ requires-python = ">=3.14"
 members = [
     "grecohome-core",
     "grecohome-garmin",
+    "grecohome-gold",
     "grecohome-lingo",
     "grecohome-silver",
     "grecohome-soil",
@@ -585,6 +586,35 @@ dependencies = [
 requires-dist = [
     { name = "dagster", specifier = "==1.13.8" },
     { name = "garminconnect", specifier = ">=0.3.5" },
+    { name = "grecohome-core", editable = "packages/core" },
+    { name = "pydantic", specifier = "==2.13.4" },
+    { name = "pydantic-settings", specifier = "==2.14.1" },
+    { name = "python-dotenv", specifier = "==1.2.2" },
+    { name = "python-json-logger", specifier = "==4.1.0" },
+    { name = "structlog", specifier = "==26.1.0" },
+    { name = "tzdata", specifier = ">=2026.2" },
+]
+
+[[package]]
+name = "grecohome-gold"
+version = "0.1.0"
+source = { editable = "packages/gold" }
+dependencies = [
+    { name = "dagster" },
+    { name = "duckdb" },
+    { name = "grecohome-core" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "python-dotenv" },
+    { name = "python-json-logger" },
+    { name = "structlog" },
+    { name = "tzdata" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "dagster", specifier = "==1.13.8" },
+    { name = "duckdb", specifier = "==1.5.3" },
     { name = "grecohome-core", editable = "packages/core" },
     { name = "pydantic", specifier = "==2.13.4" },
     { name = "pydantic-settings", specifier = "==2.14.1" },

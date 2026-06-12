@@ -33,7 +33,7 @@ def silver_glucose(context: AssetExecutionContext) -> MaterializeResult:
     files = list_payload_files(settings.bronze_root, "lingo", "glucose")
     sql = glucose_sql(files)
     dest = glucose_path(GLUCOSE_PARQUET)
-    rows = write_parquet_atomic(con, sql, dest, bronze_root=settings.bronze_root)
+    rows = write_parquet_atomic(con, sql, dest, protected_root=settings.bronze_root)
     context.log.info(f"silver_glucose: {rows} readings from {len(files)} bronze files -> {dest}")
     return MaterializeResult(metadata={"rows": rows, "bronze_files": len(files), "path": dest})
 

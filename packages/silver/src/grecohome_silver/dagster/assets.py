@@ -59,7 +59,7 @@ def silver_sleep_garmin(context: AssetExecutionContext) -> MaterializeResult:
     files = list_payload_files(settings.bronze_root, "garmin", "sleep")
     sql = garmin_sleep_sql(payloads_relation_sql(files))
     dest = silver_path(GARMIN_PARQUET)
-    rows = write_parquet_atomic(con, sql, dest, bronze_root=settings.bronze_root)
+    rows = write_parquet_atomic(con, sql, dest, protected_root=settings.bronze_root)
     context.log.info(f"silver_sleep_garmin: {rows} nights from {len(files)} bronze files -> {dest}")
     return MaterializeResult(metadata={"rows": rows, "bronze_files": len(files), "path": dest})
 
@@ -71,7 +71,7 @@ def silver_sleep_whoop(context: AssetExecutionContext) -> MaterializeResult:
     files = list_payload_files(settings.bronze_root, "whoop", "sleep")
     sql = whoop_sleep_sql(payloads_relation_sql(files))
     dest = silver_path(WHOOP_PARQUET)
-    rows = write_parquet_atomic(con, sql, dest, bronze_root=settings.bronze_root)
+    rows = write_parquet_atomic(con, sql, dest, protected_root=settings.bronze_root)
     context.log.info(f"silver_sleep_whoop: {rows} records from {len(files)} bronze files -> {dest}")
     return MaterializeResult(metadata={"rows": rows, "bronze_files": len(files), "path": dest})
 
@@ -88,7 +88,7 @@ def silver_sleep(context: AssetExecutionContext) -> MaterializeResult:
     whoop_sql = _read_parquet_sql(silver_path(WHOOP_PARQUET))
     sql = unified_sleep_sql(garmin_sql, whoop_sql)
     dest = silver_path(UNIFIED_PARQUET)
-    rows = write_parquet_atomic(con, sql, dest, bronze_root=settings.bronze_root)
+    rows = write_parquet_atomic(con, sql, dest, protected_root=settings.bronze_root)
     context.log.info(f"silver_sleep: {rows} unified nights -> {dest}")
     return MaterializeResult(metadata={"rows": rows, "path": dest})
 
