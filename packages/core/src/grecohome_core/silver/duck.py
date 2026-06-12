@@ -99,23 +99,23 @@ def write_parquet_atomic(
     select_sql: str,
     dest_path: str,
     *,
-    bronze_root: str,
+    protected_root: str,
 ) -> int:
     """Write ``select_sql`` to ``dest_path`` as Parquet, atomically and idempotently.
 
-    Silver fully overwrites its output every run (last run wins, a pure projection
-    of current bronze). We ``COPY`` to a temp file in the destination directory and
-    ``os.replace`` it into place, so a crashed run never leaves a half-written
+    A derived layer fully overwrites its output every run (last run wins, a pure
+    projection of its source). We ``COPY`` to a temp file in the destination directory
+    and ``os.replace`` it into place, so a crashed run never leaves a half-written
     Parquet where readers expect a complete one.
 
-    Refuses to write anywhere under ``bronze_root`` — silver must never touch the
-    bronze tree. Returns the row count written.
+    Refuses to write anywhere under ``protected_root`` — the immutable source a layer
+    must never write into (bronze for silver; silver for gold). Returns the row count.
     """
     dest_abs = os.path.abspath(dest_path)
-    bronze_abs = os.path.abspath(bronze_root)
-    if dest_abs == bronze_abs or dest_abs.startswith(bronze_abs + os.sep):
+    protected_abs = os.path.abspath(protected_root)
+    if dest_abs == protected_abs or dest_abs.startswith(protected_abs + os.sep):
         raise ValueError(
-            f"refusing to write silver under bronze_root: {dest_abs} is inside {bronze_abs}"
+            f"refusing to write under protected_root: {dest_abs} is inside {protected_abs}"
         )
 
     os.makedirs(os.path.dirname(dest_abs), exist_ok=True)

@@ -31,7 +31,7 @@ def silver_workouts(context: AssetExecutionContext) -> MaterializeResult:
     files = list_payload_files(settings.bronze_root, "garmin", "activities")
     sql = workouts_sql(files)
     dest = workouts_path(WORKOUTS_PARQUET)
-    rows = write_parquet_atomic(con, sql, dest, bronze_root=settings.bronze_root)
+    rows = write_parquet_atomic(con, sql, dest, protected_root=settings.bronze_root)
     context.log.info(f"silver_workouts: {rows} activities from {len(files)} bronze files -> {dest}")
     return MaterializeResult(metadata={"rows": rows, "bronze_files": len(files), "path": dest})
 

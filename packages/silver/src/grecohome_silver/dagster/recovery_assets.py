@@ -31,7 +31,7 @@ def silver_recovery(context: AssetExecutionContext) -> MaterializeResult:
     files = list_payload_files(settings.bronze_root, "whoop", "recovery")
     sql = recovery_sql(files)
     dest = recovery_path(RECOVERY_PARQUET)
-    rows = write_parquet_atomic(con, sql, dest, bronze_root=settings.bronze_root)
+    rows = write_parquet_atomic(con, sql, dest, protected_root=settings.bronze_root)
     context.log.info(f"silver_recovery: {rows} cycles from {len(files)} bronze files -> {dest}")
     return MaterializeResult(metadata={"rows": rows, "bronze_files": len(files), "path": dest})
 
