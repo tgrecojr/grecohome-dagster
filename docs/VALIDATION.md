@@ -1,5 +1,10 @@
 # Bronze validation (Dagster asset checks)
 
+This doc covers **bronze**-layer data quality. The silver and gold layers carry their own
+`@asset_check`s (uniqueness, ranges, coverage) documented in [SILVER](SILVER.md) /
+[GOLD](GOLD.md); they follow the same conventions established here (structural = ERROR,
+coverage = WARN; off the `*_api` pools; a checks-only job catches a stopped asset).
+
 Bronze-layer data quality runs *inside Dagster* as `@asset_check`s, so it surfaces
 in the UI next to materializations, fails where runs are watched, and catches the
 one failure per-materialization checks can't: **an asset that stops capturing.**

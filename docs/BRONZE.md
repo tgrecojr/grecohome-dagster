@@ -1,7 +1,8 @@
 # Bronze layer
 
 The bronze layer is the raw, immutable record of exactly what each source API returned. It is
-the only thing the pipelines persist in this phase; silver/gold read from it later.
+the only **source of truth**; the silver and gold layers are derived from it and fully
+rebuildable (see [SILVER](SILVER.md), [GOLD](GOLD.md)). Bronze itself is never modified by them.
 
 ## Invariants
 

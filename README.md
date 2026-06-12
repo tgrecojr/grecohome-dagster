@@ -1,9 +1,16 @@
 # grecohome-dagster
 
-A monorepo of personal **data-subject** pipelines, orchestrated by self-hosted
-[Dagster](https://dagster.io/). Each data subject (Whoop, Garmin, Lingo, Soil/USCRN) is a
-**bronze-only** code location that captures raw source data to a bronze layer — no
-transformation, no database. Silver/gold are a future phase.
+A monorepo of personal health/environment data pipelines, orchestrated by self-hosted
+[Dagster](https://dagster.io/), in three layers:
+
+- **Bronze** — per-source code locations (Whoop, Garmin, Lingo, Soil/USCRN) capture raw source
+  data to a bronze layer (the immutable source of truth).
+- **Silver** — one cross-subject code location of typed, deduplicated **Parquet** (sleep,
+  glucose, workouts, recovery), derived from bronze.
+- **Gold** — analysis marts (daily wellness) derived from silver.
+
+Silver and gold are derived and fully rebuildable (DuckDB over Parquet — no database); bronze
+stays the only source of truth.
 
 ## Why a monorepo
 
@@ -16,12 +23,14 @@ transformation, no database. Silver/gold are a future phase.
 
 ```
 packages/
-  core/    grecohome-core   — shared framework (bronze capture, rate limiter, token store, dagster helpers)
-  whoop/   grecohome-whoop  — Whoop data subject (migrated from whoopster)
-  garmin/  grecohome-garmin — Garmin data subject (ported from garmincapture)
-  lingo/   grecohome-lingo  — Lingo CGM data subject (ported from glucose-loader)
-  soil/    grecohome-soil   — NOAA USCRN soil/temp data subject (ported from soildata)
-docs/      ARCHITECTURE, BRONZE, DEPLOYMENT, ENV_TEMPLATE, adr/
+  core/    grecohome-core   — shared framework (bronze capture + checks, silver helpers, dagster plumbing)
+  whoop/   grecohome-whoop  — Whoop bronze subject (migrated from whoopster)
+  garmin/  grecohome-garmin — Garmin bronze subject (ported from garmincapture)
+  lingo/   grecohome-lingo  — Lingo CGM bronze subject (ported from glucose-loader)
+  soil/    grecohome-soil   — NOAA USCRN soil/temp bronze subject (ported from soildata)
+  silver/  grecohome-silver — silver layer (sleep, glucose, workouts, recovery)
+  gold/    grecohome-gold   — gold layer (daily wellness mart)
+docs/      ARCHITECTURE, BRONZE, SILVER, GOLD, DEPLOYMENT, ENV_TEMPLATE, VALIDATION, adr/
 ```
 
 ## Docs
@@ -38,19 +47,26 @@ root `pyproject.toml`, one `uv.lock`, one managed Python version.
 
 ## Architecture
 
-- **Bronze-only.** Subjects call their source API and write raw payloads to `BRONZE_ROOT`
-  (atomic, append-only; content-hash dedup is opt-in — on for Whoop, off for immutable Garmin).
-  Downstream silver/gold reads bronze later.
-- **Self-hosted Dagster.** The daemon + webserver run on the host. Each subject ships a
-  gRPC code-location image that registers with the host via `workspace.yaml`. Dagster
-  libraries are pinned (`dagster==1.13.8`, `dagster-*==0.29.8`) to match the host so the
-  daemon ↔ code-location gRPC contract stays in sync.
+- **Three layers.** Bronze subjects call their source API and write raw payloads to
+  `BRONZE_ROOT` (atomic, append-only; content-hash dedup opt-in — on for Whoop, off for
+  immutable Garmin). **Silver** reads bronze and writes typed, deduplicated Parquet to
+  `SILVER_ROOT`; **gold** reads silver and writes analysis marts to `GOLD_ROOT`. Silver/gold
+  are DuckDB-over-Parquet, fully rebuildable, and never write under the layer below. See
+  [`docs/SILVER.md`](docs/SILVER.md) and [`docs/GOLD.md`](docs/GOLD.md).
+- **Self-hosted Dagster.** The daemon + webserver run on the host. Each layer (every bronze
+  subject, silver, gold) ships a gRPC code-location image that registers with the host via
+  `workspace.yaml`. Dagster libraries are pinned (`dagster==1.13.8`, `dagster-*==0.29.8`) to
+  match the host so the daemon ↔ code-location gRPC contract stays in sync.
+- **Cross-layer lineage by `AssetKey`.** silver→bronze and gold→silver deps render in the UI;
+  the reads themselves are filesystem reads of the upstream root, not gRPC calls.
 - **Orchestration varies by source.** Whoop: daily UTC partitions, one hourly schedule
   re-captures the trailing 8 (rescores) + content-hash dedup. Garmin: daily capture-once over
   the trailing window (immutable, no dedup). Lingo: a Drive **sensor** + dynamic partitions
   keyed on file id (file-arrival-driven, no schedule). Soil/USCRN: daily UTC partitions where
   each stores only that day's rows sliced from the public NOAA year file, re-captured every 6h
-  with dedup. Backfill (where applicable) via `dagster backfill`.
+  with dedup. Backfill (where applicable) via `dagster backfill`. **Silver/gold** rebuild
+  whole-table on daily schedules (silver ~06:00–06:50 UTC, gold 07:30) — each a pure projection
+  of the layer below, so a rebuild is idempotent.
 
 ## Commands
 
@@ -68,6 +84,7 @@ dev; production injects values via Ansible from a secrets manager.
 
 ## Deployment
 
-Per-subject code-location images published to GHCR
-(`ghcr.io/tgrecojr/grecohome-dagster-<subject>`). See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
-for the host `workspace.yaml` and concurrency-pool wiring.
+One code-location image per layer published to GHCR
+(`ghcr.io/tgrecojr/grecohome-dagster-<name>` for `whoop`/`garmin`/`lingo`/`soil`/`silver`/`gold`).
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the host `workspace.yaml`, mounts (silver reads
+bronze read-only; gold reads silver read-only), and concurrency-pool wiring.

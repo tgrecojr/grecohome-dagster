@@ -1,7 +1,10 @@
 # ADR 0001: Bronze-only, daily UTC partitions
 
 ## Status
-Accepted.
+Accepted. **Update (2026-06):** the silver and gold layers have since been built (ADRs 0007–0011)
+— as **separate code locations reading Parquet via DuckDB**, not in-process `AutomationCondition`.
+The bronze-only *capture* decision below stands unchanged (bronze is still files-only, no
+database); silver/gold are derived, rebuildable layers downstream of it.
 
 ## Context
 The predecessor app (`whoopster`) wrote "silver" rows to Postgres and used a 15-minute
@@ -30,4 +33,6 @@ returned. Postgres is being phased out entirely; the app should do only API → 
 - Backfill is `dagster backfill` over the same assets — no separate backfill script.
 
 ## Related
-[[0002-dagster-pins]], [[0003-token-file]].
+[[0002-dagster-pins]], [[0003-token-file]]. Downstream layers:
+[[0007-silver-sleep]], [[0008-silver-glucose]], [[0009-silver-workouts]],
+[[0010-silver-recovery]], [[0011-gold-daily-wellness]].
