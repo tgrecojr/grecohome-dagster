@@ -219,9 +219,11 @@ class WhoopClient:
     ) -> dict[str, Any]:
         """Make an authenticated request to the Whoop API, with retries.
 
-        When ``collection`` is set, the raw response bytes are captured to bronze
-        (error bodies with their real status before ``raise_for_status``, and
-        successful payloads excluding empty pagination terminators).
+        When ``collection`` is set, the raw bytes of a **successful** response are
+        captured to bronze (excluding empty pagination terminators). Error
+        responses are never persisted -- only their status is logged -- so an auth
+        blip (e.g. a 401 ``Authorization was not valid`` body) can't land in bronze
+        and trip the profile content/integrity check.
 
         Raises:
             WhoopAPIError: If the request fails after retries.
@@ -237,17 +239,12 @@ class WhoopClient:
             client = self._get_client()
             response = await client.get(url, headers=headers, params=params)
 
-            # Bronze: capture before processing. Error responses with a body are
-            # captured here as diagnostic records (real HTTP status) before
-            # raise_for_status() triggers error handling.
-            capture = bool(collection) and bool(response.content)
-            if capture and response.is_error:
-                await self._capture_bronze(response, collection)
-
             response.raise_for_status()
             data = response.json()
 
-            # Capture successful payloads, skipping empty pagination terminators.
+            # Capture successful payloads only, skipping empty pagination terminators.
+            # Error responses are handled below (status logged, body never stored).
+            capture = bool(collection) and bool(response.content)
             if capture and not _is_empty_pagination_terminator(data):
                 await self._capture_bronze(response, collection)
 

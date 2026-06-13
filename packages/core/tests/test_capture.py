@@ -114,6 +114,25 @@ class TestCaptureBronze:
         assert p1 and p2 and p1 != p2
         assert len(_payloads(root)) == 2
 
+    def test_non_2xx_response_is_not_persisted(self, tmp_path):
+        # An HTTP error body (e.g. a 401 auth envelope) must never land in bronze,
+        # or it would poison a content/integrity check.
+        root = str(tmp_path / "bronze")
+        meta = {"http_status": 401, "content_type": "application/json"}
+        result = capture_bronze(
+            "whoop", "profile", b'"Authorization was not valid"', meta, bronze_root=root
+        )
+        assert result is None
+        assert _payloads(root) == []
+
+    def test_2xx_response_is_persisted(self, tmp_path):
+        # The guard only rejects non-2xx; a normal 200 is written as usual.
+        root = str(tmp_path / "bronze")
+        meta = {"http_status": 200, "content_type": "application/json"}
+        result = capture_bronze("whoop", "profile", b'{"user_id":1}', meta, bronze_root=root)
+        assert result is not None
+        assert len(_payloads(root)) == 1
+
 
 @pytest.mark.unit
 class TestContentHashDedup:

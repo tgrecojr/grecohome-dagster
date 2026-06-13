@@ -161,6 +161,21 @@ def capture_bronze(
             # Guard the core invariant: bronze stores bytes, not decoded text.
             raise TypeError(f"raw_bytes must be bytes, got {type(raw_bytes).__name__}")
 
+        # Defense in depth: bronze stores source DATA, never an HTTP error envelope.
+        # When the caller records ``http_status``, only 2xx responses are persisted,
+        # so an upstream auth/error body (e.g. a 401 "Authorization was not valid")
+        # can't land as a payload and poison a content/integrity check. Callers that
+        # don't track status (they only ever pass 200) are unaffected.
+        http_status = meta.get("http_status")
+        if isinstance(http_status, int) and not (200 <= http_status < 300):
+            logger.warning(
+                "bronze capture skipped: non-2xx response",
+                source=source,
+                collection=collection,
+                http_status=http_status,
+            )
+            return None
+
         fetched_ms = _utc_now_ms()
         fetched_dt = datetime.fromtimestamp(fetched_ms / 1000, tz=UTC)
         partition_dt = dt or fetched_dt.strftime("%Y-%m-%d")

@@ -272,7 +272,13 @@ class TestWhoopClientBronzeCapture:
         await client.aclose()
 
     @respx.mock
-    async def test_error_body_is_captured_with_real_status(self, isolate_bronze_root):
+    async def test_error_body_is_not_captured(self, isolate_bronze_root):
+        """An error response still raises, but its body never lands in bronze.
+
+        Persisting an error envelope (e.g. a 401 ``Authorization was not valid``)
+        would poison the profile content/integrity check, so non-2xx responses are
+        dropped -- only the status is logged.
+        """
         client = WhoopClient(user_id=1)
         with patch.object(
             client.token_manager, "get_valid_token", new=AsyncMock(return_value="tok")
@@ -282,11 +288,7 @@ class TestWhoopClientBronzeCapture:
             )
             with pytest.raises(WhoopAPIError):
                 await client.get_body_measurement()
-        sidecars = [f for f in _bronze_files(isolate_bronze_root) if f.endswith(".meta.json")]
-        assert len(sidecars) == 1
-        meta = json.load(open(sidecars[0]))
-        assert meta["http_status"] == 403
-        assert meta["collection"] == "body_measurement"
+        assert _bronze_files(isolate_bronze_root) == []
         await client.aclose()
 
     @respx.mock

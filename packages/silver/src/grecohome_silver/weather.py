@@ -30,33 +30,37 @@ from __future__ import annotations
 
 from grecohome_core.silver import dedup_latest_sql, text_lines_relation_sql
 
-# Sentinel "missing" values in the CRNH0203 product, mapped to NULL on type.
-_TEMP_SENTINEL = -9999.0  # air/surface/soil temperatures, precip, relative humidity
-_MOISTURE_SENTINEL = -99.0  # volumetric soil moisture (m³/m³)
-_SOLAR_SENTINEL = -99999.0  # solar radiation (W/m²)
+# Sentinel "missing"/error values in the CRNH0203 product, mapped to NULL on type.
+# Temperatures use -9999.0 for missing; the IR surface-temperature sensor additionally
+# reports 99999.0 as an error code (observed on 2011-04-14 18:00Z with SUR_TEMP_TYPE=3),
+# so both are nulled. Applying 99999.0 to all temp fields is harmless (it's physically
+# impossible) and guards any field that picks up the same error code.
+_TEMP_SENTINELS = (-9999.0, 99999.0)  # air/surface/soil temperatures, precip, RH
+_MOISTURE_SENTINELS = (-99.0,)  # volumetric soil moisture (m³/m³)
+_SOLAR_SENTINELS = (-99999.0,)  # solar radiation (W/m²)
 
-# Every numeric measurement: (output column, 1-based field index, missing sentinel).
+# Every numeric measurement: (output column, 1-based field index, missing sentinels).
 # Field positions per the product's HEADERS.txt, confirmed against live bronze.
-_FIELDS: list[tuple[str, int, float]] = [
-    ("air_temp_c", 10, _TEMP_SENTINEL),  # T_HR_AVG
-    ("air_temp_max_c", 11, _TEMP_SENTINEL),  # T_MAX
-    ("air_temp_min_c", 12, _TEMP_SENTINEL),  # T_MIN
-    ("precip_mm", 13, _TEMP_SENTINEL),  # P_CALC (hourly total)
-    ("solar_rad_wm2", 14, _SOLAR_SENTINEL),  # SOLARAD
-    ("surface_temp_c", 21, _TEMP_SENTINEL),  # SUR_TEMP
-    ("surface_temp_max_c", 23, _TEMP_SENTINEL),  # SUR_TEMP_MAX
-    ("surface_temp_min_c", 25, _TEMP_SENTINEL),  # SUR_TEMP_MIN
-    ("rh_pct", 27, _TEMP_SENTINEL),  # RH_HR_AVG
-    ("soil_moisture_5", 29, _MOISTURE_SENTINEL),  # SOIL_MOISTURE_5
-    ("soil_moisture_10", 30, _MOISTURE_SENTINEL),
-    ("soil_moisture_20", 31, _MOISTURE_SENTINEL),
-    ("soil_moisture_50", 32, _MOISTURE_SENTINEL),
-    ("soil_moisture_100", 33, _MOISTURE_SENTINEL),
-    ("soil_temp_5", 34, _TEMP_SENTINEL),  # SOIL_TEMP_5
-    ("soil_temp_10", 35, _TEMP_SENTINEL),
-    ("soil_temp_20", 36, _TEMP_SENTINEL),
-    ("soil_temp_50", 37, _TEMP_SENTINEL),
-    ("soil_temp_100", 38, _TEMP_SENTINEL),
+_FIELDS: list[tuple[str, int, tuple[float, ...]]] = [
+    ("air_temp_c", 10, _TEMP_SENTINELS),  # T_HR_AVG
+    ("air_temp_max_c", 11, _TEMP_SENTINELS),  # T_MAX
+    ("air_temp_min_c", 12, _TEMP_SENTINELS),  # T_MIN
+    ("precip_mm", 13, _TEMP_SENTINELS),  # P_CALC (hourly total)
+    ("solar_rad_wm2", 14, _SOLAR_SENTINELS),  # SOLARAD
+    ("surface_temp_c", 21, _TEMP_SENTINELS),  # SUR_TEMP
+    ("surface_temp_max_c", 23, _TEMP_SENTINELS),  # SUR_TEMP_MAX
+    ("surface_temp_min_c", 25, _TEMP_SENTINELS),  # SUR_TEMP_MIN
+    ("rh_pct", 27, _TEMP_SENTINELS),  # RH_HR_AVG
+    ("soil_moisture_5", 29, _MOISTURE_SENTINELS),  # SOIL_MOISTURE_5
+    ("soil_moisture_10", 30, _MOISTURE_SENTINELS),
+    ("soil_moisture_20", 31, _MOISTURE_SENTINELS),
+    ("soil_moisture_50", 32, _MOISTURE_SENTINELS),
+    ("soil_moisture_100", 33, _MOISTURE_SENTINELS),
+    ("soil_temp_5", 34, _TEMP_SENTINELS),  # SOIL_TEMP_5
+    ("soil_temp_10", 35, _TEMP_SENTINELS),
+    ("soil_temp_20", 36, _TEMP_SENTINELS),
+    ("soil_temp_50", 37, _TEMP_SENTINELS),
+    ("soil_temp_100", 38, _TEMP_SENTINELS),
 ]
 
 # The UTC instant of an observation = strptime(UTC_DATE || UTC_TIME). This is the
@@ -68,9 +72,12 @@ _OBS_TS_UTC = "TRY_CAST(strptime(f[2] || f[3], '%Y%m%d%H%M') AS TIMESTAMP)"
 _FETCHED_MS = r"TRY_CAST(regexp_extract(filename, '_([0-9]{13})_', 1) AS BIGINT)"
 
 
-def _num(idx: int, sentinel: float) -> str:
-    """Field ``idx`` (1-based) as DOUBLE, with its missing-sentinel mapped to NULL."""
-    return f"nullif(TRY_CAST(f[{idx}] AS DOUBLE), {sentinel})"
+def _num(idx: int, sentinels: tuple[float, ...]) -> str:
+    """Field ``idx`` (1-based) as DOUBLE, with each missing-sentinel mapped to NULL."""
+    expr = f"TRY_CAST(f[{idx}] AS DOUBLE)"
+    for sentinel in sentinels:
+        expr = f"nullif({expr}, {sentinel})"
+    return expr
 
 
 def _split_sql(files: list[str]) -> str:
@@ -92,7 +99,7 @@ def weather_sql(files: list[str], *, timezone: str) -> str:
     tz = timezone.replace("'", "''")
     obs_local = f"(({_OBS_TS_UTC}) AT TIME ZONE 'UTC') AT TIME ZONE '{tz}'"
     measurements = ",\n            ".join(
-        f"{_num(idx, sentinel)} AS {name}" for name, idx, sentinel in _FIELDS
+        f"{_num(idx, sentinels)} AS {name}" for name, idx, sentinels in _FIELDS
     )
     typed = f"""
         SELECT

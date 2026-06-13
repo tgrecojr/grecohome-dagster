@@ -119,6 +119,27 @@ def test_range_check_catches_unit_bug(materialized) -> None:
     assert not r.passed and r.severity == AssetCheckSeverity.ERROR
 
 
+def test_surface_temp_error_sentinel_nulled(tmp_path, monkeypatch) -> None:
+    """SUR_TEMP error code 99999.0 becomes NULL (not a 99999 °C reading).
+
+    Regression for a 2011-04-14 18:00Z row where the IR surface sensor reported
+    99999.0 (SUR_TEMP_TYPE=3) while air temp carried the normal -9999.0 sentinel.
+    """
+    root = str(tmp_path / "bronze")
+    write_uscrn(root, "2011-04-14", 1_700_002_000000, [
+        uscrn_row("20110414", "1800", sur=99999.0, sur_max=27.0, sur_min=21.0, solar=859.0),
+    ])
+    monkeypatch.setattr(settings, "bronze_root", root)
+    monkeypatch.setattr(settings, "silver_root", str(tmp_path / "silver"))
+    assert materialize([silver_weather]).success
+
+    path = weather_path(WEATHER_PARQUET)
+    surface = connect().execute(f"SELECT surface_temp_c FROM read_parquet('{path}')").fetchone()[0]
+    assert surface is None
+    # And nothing out-of-range leaks through to trip the range check.
+    assert checks_mod.weather_value_ranges().passed
+
+
 def test_refuses_write_under_bronze_root(weather_bronze_root, monkeypatch) -> None:
     """Guard: silver must never write inside BRONZE_ROOT."""
     monkeypatch.setattr(settings, "bronze_root", weather_bronze_root)
