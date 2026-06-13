@@ -14,6 +14,8 @@ Tables today:
   the template. See [Glucose (Lingo CGM)](#glucose-lingo-cgm) below.
 - **Workouts** — `silver_workouts` (per-activity Garmin). See
   [Workouts (Garmin activities)](#workouts-garmin-activities) below.
+- **Workout splits** — `silver_workout_splits` (per-lap Garmin detail; enriches workouts). See
+  [Workout splits (Garmin laps)](#workout-splits-garmin-laps) below.
 - **Recovery** — `silver_recovery` (per-cycle Whoop; joins to sleep). See
   [Recovery (Whoop)](#recovery-whoop) below.
 - **Weather** — `silver_weather` (per-hour NOAA USCRN soil/weather). The first
@@ -73,6 +75,7 @@ whoop_bronze_sleep  ─▶ silver_sleep_whoop  ─┘
 {SILVER_ROOT}/sleep/_whoop.parquet           # sleep source intermediate (one row per sleep id)
 {SILVER_ROOT}/glucose/silver_glucose.parquet # glucose: one row per CGM reading
 {SILVER_ROOT}/workouts/silver_workouts.parquet # workouts: one row per Garmin activity
+{SILVER_ROOT}/workout_splits/silver_workout_splits.parquet # one row per Garmin lap
 {SILVER_ROOT}/recovery/silver_recovery.parquet # recovery: one row per Whoop cycle
 {SILVER_ROOT}/weather/silver_weather.parquet # weather: one row per USCRN hourly observation
 {SILVER_ROOT}/daily/silver_daily.parquet     # daily summary: one row per local day (Garmin)
@@ -269,6 +272,33 @@ One row per activity.
 | `workouts_id_unique_nonnull` | ERROR | one row per `activity_id`; `activity_id`/`activity_date` non-null |
 | `workouts_value_ranges` | ERROR | durations/distance/calories ≥ 0 and bounded; HR 0–240 (0 = not recorded) |
 | `workouts_coverage_vs_bronze` | WARN | silver activities ≈ bronze distinct `activityId` (no silent drop) |
+
+# Workout splits (Garmin laps)
+
+`silver_workout_splits` is the per-lap breakdown `silver_workouts` doesn't have — one row
+per **lap** (`activity_id` + `lap_index`), enriching each workout with its splits.
+
+### Source & event date
+`garmin/activity_splits` is `{activityId, lapDTOs: […], eventDTOs}` per activity; `lapDTOs`
+is the array of laps. `activityId` is in the **payload** (joins `silver_workouts.activity_id`),
+so no sidecar is needed. Garmin re-pulls an activity into several files → dedup by
+**(activity_id, lap_index)** keeping the latest fetch. Profiled live: 727 activities, ~4,255
+deduped laps. Lap richness varies by activity type (distance / speed / HR near-universal;
+calories and elevation on a subset); a missing field is NULL, the lap is kept. HR *zones* are
+**not** here — they already live in `silver_workouts` (`hr_z1_sec` …).
+
+### Schema (`silver_workout_splits`)
+One row per `(activity_id, lap_index)`: `activity_id` (BIGINT), `lap_index` (INT),
+`lap_start_gmt` (TIMESTAMP), `duration_sec`, `moving_duration_sec` (DOUBLE), `distance_m`,
+`avg_speed_mps`, `max_speed_mps` (DOUBLE), `avg_hr`, `max_hr` (INT), `calories`,
+`elevation_gain_m`, `elevation_loss_m` (DOUBLE).
+
+### Asset checks
+| Check | Severity | What |
+|---|---|---|
+| `splits_lap_unique_nonnull` | ERROR | one row per `(activity_id, lap_index)`; both keys non-null |
+| `splits_value_ranges` | ERROR | durations/distance/speed ≥ 0, HR 0–240, lap_index ≥ 0 |
+| `splits_coverage_vs_bronze` | WARN | silver laps ≈ bronze distinct laps; reports distinct activities |
 
 # Recovery (Whoop)
 
@@ -517,9 +547,10 @@ One row per `snapshot_date` (DATE, key): `vo2max_running`, `vo2max_cycling` (DOU
 - `silver_strain_daily` (06:52 UTC) rebuilds `silver_strain` (Whoop cycle).
 - `silver_body_daily` (06:42 UTC) rebuilds `silver_body` (Garmin weigh-ins).
 - `silver_fitness_daily` (06:44 UTC) rebuilds `silver_fitness` (Garmin snapshot collections).
+- `silver_workout_splits_daily` (06:47 UTC) rebuilds `silver_workout_splits` (Garmin laps).
 - `silver_checks_daily` (07:00 UTC) runs **all** silver checks (sleep + glucose + workouts +
-  recovery + weather + daily + strain + body + fitness) independently, so a *stopped* silver
-  asset is still caught.
+  recovery + weather + daily + strain + body + fitness + workout-splits) independently, so a
+  *stopped* silver asset is still caught.
 
 All are off by default; enable them in the UI. Rebuild on demand (e.g. after a bronze backfill)
 with `dagster job execute --job silver_sleep_job` (or `--job silver_glucose_job`).
