@@ -64,6 +64,34 @@ def silver_root(tmp_path) -> str:
         ) AS t(reading_date, mgdl)
     """, os.path.join(root, "glucose", "silver_glucose.parquet"))
 
+    # Strain joins to the recovery cycle: 101 (2026-01-01) and 103 (2026-01-02, the kept
+    # recovery). kilojoules / 4.184 -> 2000 / 2500 kcal.
+    _copy(con, """
+        SELECT * FROM (VALUES
+            (101::BIGINT, DATE '2026-01-01', 10.0, 8368.0, 120, 160),
+            (103::BIGINT, DATE '2026-01-02', 14.0, 10460.0, 130, 170)
+        ) AS t(cycle_id, strain_date, day_strain, kilojoules, avg_heart_rate, max_heart_rate)
+    """, os.path.join(root, "strain", "silver_strain.parquet"))
+
+    # Daily activity on 2026-01-01 and 2026-01-03 (1:1 on the day).
+    _copy(con, """
+        SELECT * FROM (VALUES
+            (DATE '2026-01-01', 9000, 600.0, 6500.0, 10.0, 30, 5, 35, 95, 20),
+            (DATE '2026-01-03', 12000, 700.0, 8000.0, 12.0, 40, 10, 30, 90, 15)
+        ) AS t(activity_date, total_steps, active_kilocalories, total_distance_m,
+               floors_ascended, moderate_intensity_min, vigorous_intensity_min,
+               avg_stress_level, body_battery_high, body_battery_low)
+    """, os.path.join(root, "daily", "silver_daily.parquet"))
+
+    # Sparse weigh-ins: 2025-12-20 (80 kg, before the spine -> carries to 01-01/02) and
+    # 2026-01-03 (81 kg -> carries to 01-03/04/05).
+    _copy(con, """
+        SELECT * FROM (VALUES
+            (DATE '2025-12-20', 80.0::DOUBLE, 26.0::DOUBLE, 22.0::DOUBLE),
+            (DATE '2026-01-03', 81.0::DOUBLE, 26.3::DOUBLE, 22.5::DOUBLE)
+        ) AS t(measured_date, weight_kg, bmi, body_fat_pct)
+    """, os.path.join(root, "body", "silver_body.parquet"))
+
     return root
 
 

@@ -76,3 +76,39 @@ def test_workout_only_day(silver_root: str) -> None:
     r = _rows(silver_root)["2026-01-04"]
     assert r["has_workout"] is True and r["workout_count"] == 1
     assert r["has_sleep"] is False and r["has_recovery"] is False and r["has_glucose"] is False
+
+
+def test_strain_joined_via_recovery_cycle(silver_root: str) -> None:
+    """Strain attaches to the day's recovery cycle; kilojoules → kcal."""
+    rows = _rows(silver_root)
+    a = rows["2026-01-01"]
+    assert a["has_strain"] is True and a["day_strain"] == pytest.approx(10.0)
+    assert a["strain_kilocalories"] == pytest.approx(2000.0)  # 8368 / 4.184
+    assert a["strain_avg_hr"] == 120 and a["strain_max_hr"] == 160
+    b = rows["2026-01-02"]
+    assert b["day_strain"] == pytest.approx(14.0)
+    assert b["strain_kilocalories"] == pytest.approx(2500.0)
+    # 2026-01-03 has no recovery cycle → no strain.
+    assert rows["2026-01-03"]["has_strain"] is False
+
+
+def test_daily_activity_joined(silver_root: str) -> None:
+    r = _rows(silver_root)["2026-01-01"]
+    assert r["has_daily"] is True and r["steps"] == 9000
+    assert r["active_calories"] == pytest.approx(600.0)
+    assert r["distance_km"] == pytest.approx(6.5)
+    assert r["floors"] == pytest.approx(10.0)
+    assert r["intensity_minutes"] == 35  # 30 moderate + 5 vigorous
+    assert r["avg_stress"] == 35 and r["body_battery_high"] == 95
+    assert _rows(silver_root)["2026-01-02"]["has_daily"] is False
+
+
+def test_weight_carried_forward(silver_root: str) -> None:
+    """Sparse weigh-ins carry forward (ASOF): 80 kg until the 2026-01-03 weigh-in (81 kg)."""
+    rows = _rows(silver_root)
+    assert rows["2026-01-01"]["has_weight"] is True
+    assert rows["2026-01-01"]["weight_kg"] == pytest.approx(80.0)
+    assert rows["2026-01-01"]["weight_lb"] == pytest.approx(80.0 * 2.20462)
+    assert rows["2026-01-01"]["body_bmi"] == pytest.approx(26.0)
+    assert rows["2026-01-03"]["weight_kg"] == pytest.approx(81.0)
+    assert rows["2026-01-05"]["weight_kg"] == pytest.approx(81.0)  # carried from 01-03

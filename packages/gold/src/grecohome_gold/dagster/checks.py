@@ -63,6 +63,13 @@ def wellness_value_ranges() -> AssetCheckResult:
         "(workout_count < 0)",
         "(workout_total_min IS NOT NULL AND workout_total_min < 0)",
         "(glucose_readings IS NOT NULL AND glucose_readings <= 0)",
+        "(day_strain IS NOT NULL AND (day_strain < 0 OR day_strain > 21))",
+        "(strain_kilocalories IS NOT NULL AND strain_kilocalories < 0)",
+        "(steps IS NOT NULL AND (steps < 0 OR steps > 200000))",
+        "(active_calories IS NOT NULL AND active_calories < 0)",
+        "(avg_stress IS NOT NULL AND (avg_stress < 0 OR avg_stress > 100))",
+        "(weight_lb IS NOT NULL AND (weight_lb < 44 OR weight_lb > 660))",
+        "(body_fat_pct IS NOT NULL AND (body_fat_pct < 0 OR body_fat_pct > 70))",
     ]
     bad = _scalar(f"SELECT count(*) FROM {_src()} WHERE {' OR '.join(clauses)}")
     return AssetCheckResult(
@@ -82,7 +89,8 @@ def wellness_coverage() -> AssetCheckResult:
     total = _scalar(f"SELECT count(*) FROM {_src()}")
     any_src = _scalar(
         f"SELECT count(*) FROM {_src()} "
-        "WHERE has_sleep OR has_recovery OR has_workout OR has_glucose"
+        "WHERE has_sleep OR has_recovery OR has_strain OR has_daily "
+        "OR has_workout OR has_glucose OR has_weight"
     )
     return AssetCheckResult(
         passed=(any_src > 0),
@@ -92,8 +100,11 @@ def wellness_coverage() -> AssetCheckResult:
             "days_with_any_source": any_src,
             "days_with_sleep": _scalar(f"SELECT count(*) FROM {_src()} WHERE has_sleep"),
             "days_with_recovery": _scalar(f"SELECT count(*) FROM {_src()} WHERE has_recovery"),
+            "days_with_strain": _scalar(f"SELECT count(*) FROM {_src()} WHERE has_strain"),
+            "days_with_daily": _scalar(f"SELECT count(*) FROM {_src()} WHERE has_daily"),
             "days_with_workout": _scalar(f"SELECT count(*) FROM {_src()} WHERE has_workout"),
             "days_with_glucose": _scalar(f"SELECT count(*) FROM {_src()} WHERE has_glucose"),
+            "days_with_weight": _scalar(f"SELECT count(*) FROM {_src()} WHERE has_weight"),
         },
     )
 
