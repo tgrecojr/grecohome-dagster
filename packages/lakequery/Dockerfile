@@ -47,9 +47,12 @@ USER nonroot
 
 EXPOSE 9999
 
-# HTTP health check against /healthz (no shell/curl in distroless — use python).
+# HTTP health check against /healthz (no shell/curl in distroless — use the venv python).
 HEALTHCHECK --interval=60s --timeout=10s --start-period=15s --retries=3 \
-    CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:9999/healthz').status==200 else 1)"]
+    CMD ["/app/.venv/bin/python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:9999/healthz').status==200 else 1)"]
 
-# Chainguard ENTRYPOINT is `python`; CMD runs the server module.
+# Use the venv interpreter explicitly: the base image's default ENTRYPOINT is the
+# *system* /usr/bin/python (which lacks the workspace packages); PATH can't redirect
+# an absolute entrypoint, so point at the venv python directly.
+ENTRYPOINT ["/app/.venv/bin/python"]
 CMD ["-m", "grecohome_lakequery.server"]
