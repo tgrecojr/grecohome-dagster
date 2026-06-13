@@ -18,6 +18,7 @@ from dagster import (
     asset_check,
 )
 
+from grecohome_core.checks.alerting import alerting_check
 from grecohome_core.checks.bronze_reads import collection_dir, newest_fetch
 from grecohome_core.checks.config import CollectionCheckConfig
 from grecohome_core.logging_config import get_logger
@@ -47,6 +48,7 @@ def build_fetch_freshness_check(
             f"{tolerance:g}h ({cfg.cadence_hours:g}h cadence + {cfg.grace_hours:g}h grace)."
         ),
     )
+    @alerting_check(name=f"{cfg.check_name_prefix}_freshness", asset=cfg.asset_key)
     def _check() -> AssetCheckResult:
         try:
             coll_dir = collection_dir(bronze_root, cfg.source, cfg.collection)

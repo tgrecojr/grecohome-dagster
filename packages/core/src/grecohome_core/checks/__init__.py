@@ -19,6 +19,7 @@ Schema-drift baselines live outside ``BRONZE_ROOT`` (see ``bronze_monitor_dir``)
 
 from dagster import AssetChecksDefinition
 
+from grecohome_core.checks.alerting import alerting_check
 from grecohome_core.checks.completeness import build_event_completeness_check
 from grecohome_core.checks.config import CollectionCheckConfig
 from grecohome_core.checks.content_health import build_content_health_check
@@ -31,6 +32,7 @@ from grecohome_core.checks.schema_drift import build_schema_drift_check
 
 __all__ = [
     "CollectionCheckConfig",
+    "alerting_check",
     "build_bronze_checks_job",
     "build_bronze_checks_schedule",
     "build_checks_for",
