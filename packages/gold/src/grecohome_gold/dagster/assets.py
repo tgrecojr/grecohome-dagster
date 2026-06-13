@@ -1,6 +1,6 @@
 """Gold assets. v1: the daily wellness mart.
 
-``gold_daily_wellness`` reads the four silver tables from the filesystem and writes one
+``gold_daily_wellness`` reads the seven silver tables from the filesystem and writes one
 Parquet — one row per local day. Its silver upstreams live in the *silver* code
 location, so they are declared by ``AssetKey`` for cross-location lineage; the reads
 are filesystem reads of ``SILVER_ROOT`` via DuckDB. Whole-table rebuild, no pool.
@@ -23,6 +23,9 @@ _SILVER_DEPS = [
     AssetKey("silver_recovery"),
     AssetKey("silver_workouts"),
     AssetKey("silver_glucose"),
+    AssetKey("silver_strain"),
+    AssetKey("silver_daily"),
+    AssetKey("silver_body"),
 ]
 
 
@@ -33,7 +36,7 @@ def gold_path(filename: str) -> str:
 
 @asset(name="gold_daily_wellness", group_name=GROUP, deps=_SILVER_DEPS)
 def gold_daily_wellness(context: AssetExecutionContext) -> MaterializeResult:
-    """One row per local day: sleep + recovery + daily workout load + daily glucose."""
+    """One row/day: sleep + recovery + strain + daily activity + workouts + glucose + weight."""
     con = connect()
     sql = daily_wellness_sql(settings.silver_root)
     dest = gold_path(WELLNESS_PARQUET)

@@ -32,23 +32,65 @@ LB_PER_KG = 2.20462  # weight kg → lb
 KJ_PER_KCAL = 4.184  # Whoop kilojoules → kilocalories
 
 
-def _pq(silver_root: str, *parts: str) -> str:
-    """A ``read_parquet('<silver_root>/.../x.parquet')`` source (single-quote escaped)."""
+# Columns this mart reads from each silver table, typed to match silver. Used to
+# build a typed empty relation when a table's Parquet does not exist yet (a fresh
+# deploy, or a newly-added table not materialized), so the missing dimension degrades
+# to NULLs via the LEFT JOINs / provenance flags instead of failing the whole build.
+# Join keys must keep their exact silver type (dates -> DATE, cycle_id -> BIGINT);
+# other columns only feed SELECT/aggregates. Keep in sync with the columns referenced
+# below (they live in this file's SQL, so they change together).
+_SLEEP_COLS = {
+    "night_date": "DATE", "garmin_sleep_score": "INTEGER", "garmin_total_min": "DOUBLE",
+    "garmin_rhr": "INTEGER", "whoop_performance_pct": "DOUBLE", "whoop_efficiency_pct": "DOUBLE",
+}
+_RECOVERY_COLS = {
+    "recovery_date": "DATE", "created_at": "TIMESTAMP", "cycle_id": "BIGINT",
+    "recovery_score": "DOUBLE", "resting_heart_rate": "DOUBLE", "hrv_rmssd_milli": "DOUBLE",
+    "spo2_percentage": "DOUBLE",
+}
+_WORKOUTS_COLS = {
+    "activity_date": "DATE", "duration_sec": "DOUBLE", "distance_m": "DOUBLE", "calories": "DOUBLE",
+}
+_GLUCOSE_COLS = {"reading_date": "DATE", "mgdl": "INTEGER"}
+_STRAIN_COLS = {
+    "strain_date": "DATE", "cycle_id": "BIGINT", "day_strain": "DOUBLE", "kilojoules": "DOUBLE",
+    "avg_heart_rate": "INTEGER", "max_heart_rate": "INTEGER",
+}
+_DAILY_COLS = {
+    "activity_date": "DATE", "total_steps": "INTEGER", "active_kilocalories": "DOUBLE",
+    "total_distance_m": "DOUBLE", "floors_ascended": "DOUBLE", "moderate_intensity_min": "INTEGER",
+    "vigorous_intensity_min": "INTEGER", "avg_stress_level": "INTEGER",
+    "body_battery_high": "INTEGER", "body_battery_low": "INTEGER",
+}
+_BODY_COLS = {
+    "measured_date": "DATE", "weight_kg": "DOUBLE", "bmi": "DOUBLE", "body_fat_pct": "DOUBLE",
+}
+
+
+def _src(silver_root: str, parts: tuple[str, ...], cols: dict[str, str]) -> str:
+    """A ``read_parquet('<silver_root>/.../x.parquet')`` source, or a typed empty
+    relation (``SELECT NULL::T AS c, ... WHERE false``) when that Parquet does not
+    exist yet — so a not-yet-materialized silver table degrades to NULLs instead of
+    erroring the whole mart. ``cols`` are the columns this mart reads, typed to silver.
+    """
     path = os.path.join(silver_root, *parts)
-    return f"read_parquet('{path.replace(chr(39), chr(39) * 2)}')"
+    if os.path.exists(path):
+        return f"read_parquet('{path.replace(chr(39), chr(39) * 2)}')"
+    empty = ", ".join(f"NULL::{typ} AS {name}" for name, typ in cols.items())
+    return f"(SELECT {empty} WHERE false)"
 
 
 def daily_wellness_sql(
     silver_root: str, *, tir_low: int = TIR_LOW, tir_high: int = TIR_HIGH
 ) -> str:
     """SQL for the daily wellness mart over the silver Parquet under ``silver_root``."""
-    sleep = _pq(silver_root, "sleep", "silver_sleep.parquet")
-    recovery = _pq(silver_root, "recovery", "silver_recovery.parquet")
-    workouts = _pq(silver_root, "workouts", "silver_workouts.parquet")
-    glucose = _pq(silver_root, "glucose", "silver_glucose.parquet")
-    strain = _pq(silver_root, "strain", "silver_strain.parquet")
-    daily = _pq(silver_root, "daily", "silver_daily.parquet")
-    body = _pq(silver_root, "body", "silver_body.parquet")
+    sleep = _src(silver_root, ("sleep", "silver_sleep.parquet"), _SLEEP_COLS)
+    recovery = _src(silver_root, ("recovery", "silver_recovery.parquet"), _RECOVERY_COLS)
+    workouts = _src(silver_root, ("workouts", "silver_workouts.parquet"), _WORKOUTS_COLS)
+    glucose = _src(silver_root, ("glucose", "silver_glucose.parquet"), _GLUCOSE_COLS)
+    strain = _src(silver_root, ("strain", "silver_strain.parquet"), _STRAIN_COLS)
+    daily = _src(silver_root, ("daily", "silver_daily.parquet"), _DAILY_COLS)
+    body = _src(silver_root, ("body", "silver_body.parquet"), _BODY_COLS)
     return f"""
         WITH bounds AS (
             SELECT least(

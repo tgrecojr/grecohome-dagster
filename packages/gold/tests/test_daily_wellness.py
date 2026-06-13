@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import shutil
+
 import pytest
 
 from grecohome_core.silver import connect
@@ -112,3 +115,27 @@ def test_weight_carried_forward(silver_root: str) -> None:
     assert rows["2026-01-01"]["body_bmi"] == pytest.approx(26.0)
     assert rows["2026-01-03"]["weight_kg"] == pytest.approx(81.0)
     assert rows["2026-01-05"]["weight_kg"] == pytest.approx(81.0)  # carried from 01-03
+
+
+def test_missing_silver_tables_degrade_to_nulls(silver_root: str) -> None:
+    """A not-yet-materialized silver table must degrade to NULLs, not fail the build."""
+    for table in ("strain", "daily", "body"):
+        shutil.rmtree(os.path.join(silver_root, table))
+    rows = _rows(silver_root)
+    # Spine still spans the surviving tables' range.
+    assert sorted(rows) == [
+        "2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04", "2026-01-05",
+    ]
+    r = rows["2026-01-01"]
+    # Missing dimensions: provenance false, values null.
+    assert r["has_strain"] is False and r["day_strain"] is None
+    assert r["has_daily"] is False and r["steps"] is None
+    assert r["has_weight"] is False and r["weight_kg"] is None
+    # Surviving dimensions still populate.
+    assert r["has_sleep"] is True and r["garmin_sleep_score"] == 80
+    assert r["has_recovery"] is True
+
+
+def test_all_silver_tables_missing_yields_empty(tmp_path) -> None:
+    """With no silver Parquet at all, the mart builds to zero rows rather than erroring."""
+    assert _rows(str(tmp_path / "absent_silver")) == {}

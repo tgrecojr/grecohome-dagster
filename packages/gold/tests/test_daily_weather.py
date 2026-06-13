@@ -25,6 +25,11 @@ def test_continuous_daily_spine(weather_silver_root: str) -> None:
     assert sorted(_rows(weather_silver_root)) == ["2026-04-20", "2026-04-21", "2026-04-22"]
 
 
+def test_missing_silver_weather_yields_empty(tmp_path) -> None:
+    """A not-yet-materialized silver_weather builds to zero rows rather than erroring."""
+    assert _rows(str(tmp_path / "absent_silver")) == {}
+
+
 def test_frost_day_aggregates_imperial(weather_silver_root: str) -> None:
     """Daily max/min in °F, frost vs hard-freeze flags, precip in inches."""
     r = _rows(weather_silver_root)["2026-04-20"]

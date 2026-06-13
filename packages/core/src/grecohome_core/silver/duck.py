@@ -130,7 +130,9 @@ def write_parquet_atomic(
     Parquet where readers expect a complete one.
 
     Refuses to write anywhere under ``protected_root`` — the immutable source a layer
-    must never write into (bronze for silver; silver for gold). Returns the row count.
+    must never write into (bronze for silver; silver for gold). Returns the row count,
+    read back from the written Parquet so ``select_sql`` (often the whole multi-join
+    transform) runs exactly once, not a second time just to count.
     """
     dest_abs = os.path.abspath(dest_path)
     protected_abs = os.path.abspath(protected_root)
@@ -153,4 +155,5 @@ def write_parquet_atomic(
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
-    return int(con.execute(f"SELECT count(*) FROM ({select_sql})").fetchone()[0])
+    dest_lit = dest_abs.replace("'", "''")
+    return int(con.execute(f"SELECT count(*) FROM read_parquet('{dest_lit}')").fetchone()[0])
