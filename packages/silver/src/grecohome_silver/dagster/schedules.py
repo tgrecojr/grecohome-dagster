@@ -34,10 +34,13 @@ from grecohome_silver.dagster.weather_assets import WEATHER_ASSETS
 from grecohome_silver.dagster.weather_checks import WEATHER_CHECKS
 from grecohome_silver.dagster.workout_assets import WORKOUT_ASSETS
 from grecohome_silver.dagster.workout_checks import WORKOUT_CHECKS
+from grecohome_silver.dagster.workout_splits_assets import WORKOUT_SPLITS_ASSETS
+from grecohome_silver.dagster.workout_splits_checks import WORKOUT_SPLITS_CHECKS
 
 ALL_CHECKS = (
     SLEEP_CHECKS + GLUCOSE_CHECKS + WORKOUT_CHECKS + RECOVERY_CHECKS
     + WEATHER_CHECKS + DAILY_CHECKS + STRAIN_CHECKS + BODY_CHECKS + FITNESS_CHECKS
+    + WORKOUT_SPLITS_CHECKS
 )
 
 # Daily rebuild of the three sleep assets (source intermediates + unified table).
@@ -129,6 +132,18 @@ silver_fitness_daily = ScheduleDefinition(
     name="silver_fitness_daily",
     job=silver_fitness_job,
     cron_schedule="44 6 * * *",  # 06:44 UTC
+    execution_timezone="UTC",
+)
+
+# Daily rebuild of the workout-splits table (Garmin per-lap detail; after the daily capture).
+silver_workout_splits_job = define_asset_job(
+    "silver_workout_splits_job", selection=WORKOUT_SPLITS_ASSETS
+)
+
+silver_workout_splits_daily = ScheduleDefinition(
+    name="silver_workout_splits_daily",
+    job=silver_workout_splits_job,
+    cron_schedule="47 6 * * *",  # 06:47 UTC
     execution_timezone="UTC",
 )
 
