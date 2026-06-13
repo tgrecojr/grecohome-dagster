@@ -3,7 +3,7 @@
 # coordinator, not a package. Each data subject lives under packages/ as its
 # own member package, and they all share this single uv.lock.
 [tool.uv.workspace]
-members = ["packages/core", "packages/whoop", "packages/garmin", "packages/lingo", "packages/soil", "packages/silver", "packages/gold", "packages/lakequery"]
+members = ["packages/core", "packages/whoop", "packages/garmin", "packages/lingo", "packages/soil", "packages/silver", "packages/gold"]
 
 [tool.uv.sources]
 grecohome-core = { workspace = true }
@@ -41,7 +41,6 @@ addopts = [
     "--cov=grecohome_whoop",
     "--cov=grecohome_silver",
     "--cov=grecohome_gold",
-    "--cov=grecohome_lakequery",
     "--cov-report=term-missing",
     "--cov-report=xml",
     "--cov-branch",
@@ -63,7 +62,7 @@ env = [
 [tool.ruff]
 target-version = "py314"
 line-length = 100
-src = ["packages/core/src", "packages/whoop/src", "packages/silver/src", "packages/gold/src", "packages/lakequery/src"]
+src = ["packages/core/src", "packages/whoop/src", "packages/silver/src", "packages/gold/src"]
 # scripts/ holds standalone reference/fallback validators (verify_bronze.py,
 # sweep_streams.py) kept byte-faithful to their canonical versions maintained
 # outside this repo; they're imported by nothing, so they're not held to the

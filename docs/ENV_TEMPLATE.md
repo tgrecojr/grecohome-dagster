@@ -88,19 +88,9 @@ and `GOLD_ROOT` writable on a separate volume.
 | `GOLD_ROOT` | yes | — | Writable root for gold marts, **outside** `SILVER_ROOT` (writes there are refused) |
 | `GOLD_MONITOR_DIR` | no | — | Reserved for a future gold monitor; kept **outside** `GOLD_ROOT`. Unused today |
 
-### Lakequery (`grecohome-lakequery`) — its own container, Grafana query backend
-
-**Not** a Dagster code location — a read-only DuckDB-over-Parquet HTTP service for Grafana, so
-it needs **none** of the Dagster-instance vars below (no `DAGSTER_HOME`/Postgres). It only reads
-the lake. Mount `SILVER_ROOT` + `GOLD_ROOT` (and optionally `BRONZE_ROOT`) **read-only**.
-
-| Variable | Required | Default | Purpose |
-|---|---|---|---|
-| `SILVER_ROOT` | yes | — | Silver tree to read (mount **read-only**) |
-| `GOLD_ROOT` | yes | — | Gold tree to read (mount **read-only**) |
-| `BRONZE_ROOT` | no | — | Bronze tree to read (mount **read-only**); only if you want bronze views |
-| `LAKEQUERY_PORT` | no | `9999` | HTTP listen port |
-| `LAKEQUERY_TOKEN` | no | — | If set, requests must send `X-API-Key: <token>` |
+> **Grafana dashboards** read the lake directly via a DuckDB datasource plugin over the
+> read-only `/data/{bronze,silver,gold}` mounts — no env vars, no separate container. (The
+> earlier `grecohome-lakequery` HTTP service was retired; see [DEPLOYMENT.md](DEPLOYMENT.md#grafana-data-lake-dashboards).)
 
 ### Dagster instance (required at deploy, not for local `dagster dev`)
 
@@ -161,11 +151,6 @@ SILVER_MONITOR_DIR=/data/silver-monitor
 GOLD_ROOT=/data/gold
 # Reserved for the future gold monitor (unused today); MUST be outside GOLD_ROOT.
 GOLD_MONITOR_DIR=/data/gold-monitor
-
-# --- Lakequery (grecohome-lakequery); read-only DuckDB HTTP query backend for Grafana ---
-# Not a Dagster code location — reads SILVER_ROOT/GOLD_ROOT (read-only); no Dagster vars.
-LAKEQUERY_PORT=9999
-# LAKEQUERY_TOKEN=change-me   # optional: if set, requests need X-API-Key: <token>
 
 # --- Dagster instance (deploy only; not needed for local `dagster dev`) ---
 # Required because DefaultRunLauncher executes runs inside this container, which
