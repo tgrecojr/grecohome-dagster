@@ -10,6 +10,7 @@ import os
 
 from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 
+from grecohome_core.checks import alerting_check
 from grecohome_core.silver import connect, list_payload_files
 from grecohome_silver.config import settings
 from grecohome_silver.dagster.glucose_assets import GLUCOSE_PARQUET, glucose_path, silver_glucose
@@ -33,6 +34,7 @@ def _src(path: str) -> str:
 
 
 @asset_check(asset=silver_glucose, name="glucose_reading_unique_nonnull")
+@alerting_check
 def glucose_reading_unique_nonnull() -> AssetCheckResult:
     """One row per reading (UTC instant); ``reading_ts_utc`` and ``reading_date`` non-null."""
     path = glucose_path(GLUCOSE_PARQUET)
@@ -51,6 +53,7 @@ def glucose_reading_unique_nonnull() -> AssetCheckResult:
 
 
 @asset_check(asset=silver_glucose, name="glucose_value_range")
+@alerting_check
 def glucose_value_range() -> AssetCheckResult:
     """Non-null ``mgdl`` within a generous physiological range (10–600)."""
     path = glucose_path(GLUCOSE_PARQUET)
@@ -67,6 +70,7 @@ def glucose_value_range() -> AssetCheckResult:
 
 
 @asset_check(asset=silver_glucose, name="glucose_coverage_vs_bronze")
+@alerting_check
 def glucose_coverage_vs_bronze() -> AssetCheckResult:
     """silver readings ≈ bronze distinct readings (UTC instants) — no silent drop."""
     path = glucose_path(GLUCOSE_PARQUET)

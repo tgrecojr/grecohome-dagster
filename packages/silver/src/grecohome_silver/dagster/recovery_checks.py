@@ -10,6 +10,7 @@ import os
 
 from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 
+from grecohome_core.checks import alerting_check
 from grecohome_core.silver import connect, list_payload_files
 from grecohome_silver.config import settings
 from grecohome_silver.dagster.recovery_assets import (
@@ -46,6 +47,7 @@ def _src(path: str) -> str:
 
 
 @asset_check(asset=silver_recovery, name="recovery_cycle_unique_nonnull")
+@alerting_check
 def recovery_cycle_unique_nonnull() -> AssetCheckResult:
     """One row per ``cycle_id``; ``cycle_id`` and ``recovery_date`` non-null."""
     path = recovery_path(RECOVERY_PARQUET)
@@ -64,6 +66,7 @@ def recovery_cycle_unique_nonnull() -> AssetCheckResult:
 
 
 @asset_check(asset=silver_recovery, name="recovery_value_ranges")
+@alerting_check
 def recovery_value_ranges() -> AssetCheckResult:
     """Recovery score / RHR / HRV / SpO2 / skin temp within plausible bounds."""
     path = recovery_path(RECOVERY_PARQUET)
@@ -81,6 +84,7 @@ def recovery_value_ranges() -> AssetCheckResult:
 
 
 @asset_check(asset=silver_recovery, name="recovery_coverage_vs_bronze")
+@alerting_check
 def recovery_coverage_vs_bronze() -> AssetCheckResult:
     """silver recoveries ≈ bronze distinct ``cycle_id`` — no silent drop."""
     path = recovery_path(RECOVERY_PARQUET)
