@@ -51,15 +51,18 @@ class TestCaptureGlucose:
         for needle in ("token", "authorization", "secret", "credential", "bearer"):
             assert needle not in text
 
-    def test_dedupe_skips_identical_reupload(self, tmp_path):
+    def test_distinct_identical_files_both_captured(self, tmp_path):
+        # Two distinct Drive files (different file_id) with byte-identical content
+        # must BOTH land in bronze — content dedup is off so a distinct file is
+        # never silently dropped by a same-day collision.
         root = str(tmp_path / "bronze")
         a = capture_glucose(SAMPLE, file_id="x", file_name="g.csv", folder_id="f", bronze_root=root)
         b = capture_glucose(
             SAMPLE, file_id="y", file_name="g2.csv", folder_id="f", bronze_root=root
         )
         assert a is not None
-        assert b is None  # byte-identical content deduped
-        assert len(_payloads(root)) == 1
+        assert b is not None
+        assert len(_payloads(root)) == 2
 
     def test_changed_content_is_captured(self, tmp_path):
         root = str(tmp_path / "bronze")

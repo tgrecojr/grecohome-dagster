@@ -43,6 +43,6 @@ def lingo_bronze_glucose(context: AssetExecutionContext) -> None:
             "file_id": file_id,
             "file_name": info.get("name"),
             "bytes": len(raw),
-            "captured": path is not None,  # False => deduped (identical content)
+            "bronze_path": path,
         }
     )

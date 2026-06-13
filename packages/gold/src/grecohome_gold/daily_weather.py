@@ -33,10 +33,29 @@ FROST_F = 32
 HARD_FREEZE_F = 28
 
 
-def _pq(silver_root: str, *parts: str) -> str:
-    """A ``read_parquet('<silver_root>/.../x.parquet')`` source (single-quote escaped)."""
+# Columns this mart reads from silver_weather, typed to match silver. Used to build a
+# typed empty relation when silver_weather has not materialized yet, so the mart yields
+# an empty result instead of failing the whole build. Keep in sync with the SQL below.
+_WEATHER_COLS = {
+    "obs_date_local": "DATE", "air_temp_max_c": "DOUBLE", "air_temp_min_c": "DOUBLE",
+    "air_temp_c": "DOUBLE", "precip_mm": "DOUBLE", "solar_rad_wm2": "DOUBLE",
+    "surface_temp_max_c": "DOUBLE", "surface_temp_min_c": "DOUBLE", "rh_pct": "DOUBLE",
+    **{f"soil_temp_{d}": "DOUBLE" for d in DEPTHS},
+    **{f"soil_moisture_{d}": "DOUBLE" for d in DEPTHS},
+}
+
+
+def _src(silver_root: str, parts: tuple[str, ...], cols: dict[str, str]) -> str:
+    """A ``read_parquet('<silver_root>/.../x.parquet')`` source, or a typed empty
+    relation (``SELECT NULL::T AS c, ... WHERE false``) when that Parquet does not
+    exist yet — so a not-yet-materialized silver_weather yields an empty mart instead
+    of erroring. ``cols`` are the columns this mart reads, typed to silver.
+    """
     path = os.path.join(silver_root, *parts)
-    return f"read_parquet('{path.replace(chr(39), chr(39) * 2)}')"
+    if os.path.exists(path):
+        return f"read_parquet('{path.replace(chr(39), chr(39) * 2)}')"
+    empty = ", ".join(f"NULL::{typ} AS {name}" for name, typ in cols.items())
+    return f"(SELECT {empty} WHERE false)"
 
 
 def _f(celsius_expr: str) -> str:
@@ -52,7 +71,7 @@ def daily_weather_sql(
     hard_freeze_f: int = HARD_FREEZE_F,
 ) -> str:
     """SQL for the daily weather mart over ``silver_weather`` under ``silver_root``."""
-    weather = _pq(silver_root, "weather", "silver_weather.parquet")
+    weather = _src(silver_root, ("weather", "silver_weather.parquet"), _WEATHER_COLS)
     tmax_f = _f("max(air_temp_max_c)")
     tmin_f = _f("min(air_temp_min_c)")
     soil_temp_cols = ",\n                ".join(
