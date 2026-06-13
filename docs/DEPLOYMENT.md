@@ -434,6 +434,38 @@ Mounts (silver is **read-only** here — gold never writes under it):
 
 No concurrency pool is needed — gold makes no source calls.
 
+## Lakequery (Grafana query backend)
+
+`grecohome-lakequery` is **not** a Dagster code location — it's a tiny read-only
+DuckDB-over-Parquet HTTP service so Grafana can build dashboards directly off the lake
+(no Postgres, no per-panel mart). It is **not** registered in `workspace.yaml`.
+
+- **Image:** `ghcr.io/tgrecojr/grecohome-dagster-lakequery`, serving
+  `python -m grecohome_lakequery.server` on **:9999**. Depends only on DuckDB (stdlib
+  HTTP server).
+- **Mounts (read-only):** `SILVER_ROOT` and `GOLD_ROOT` — and optionally `BRONZE_ROOT`
+  — exactly the lake roots, nothing else. That read-only, lake-only mount is the real
+  security boundary (a query can only ever read those paths). Not on the `monitoring`
+  network's public surface; reachable by Grafana on the internal network.
+- **Env:** `SILVER_ROOT`, `GOLD_ROOT` (required); `BRONZE_ROOT`, `LAKEQUERY_PORT`
+  (default 9999), `LAKEQUERY_TOKEN` (optional — if set, requests need `X-API-Key`).
+- **Endpoints:** `GET /healthz`; `GET /query?q=<sql>`; `POST /query {"sql": "..."}` →
+  JSON rows. Registered views: `gold_daily_wellness`, `silver_sleep[_garmin|_whoop]`,
+  `silver_glucose`, `silver_workouts`, `silver_recovery` (re-read per query, so daily
+  rebuilds show up with no restart).
+
+### Grafana wiring
+Add an **Infinity** (or JSON) datasource pointing at the service, then panels POST SQL:
+
+```
+URL: http://dagster_lakequery:9999/query     (method POST, body {"sql": "..."})
+# example panel query:
+SELECT day, glucose_tir_pct, garmin_sleep_score, recovery_score FROM gold_daily_wellness
+WHERE day >= now() - INTERVAL 90 DAY ORDER BY day
+```
+
+Smoke test from the host: `curl 'http://localhost:9999/query?q=SELECT%201'`.
+
 ## Building locally
 
 ```bash
