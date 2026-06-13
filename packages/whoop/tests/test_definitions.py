@@ -63,5 +63,10 @@ class TestAssetChecks:
             assert (akey, f"whoop_{coll}_completeness") not in keys
 
     def test_total_check_count(self):
-        # 3 range collections x4 + workout x3 + 2 snapshots x2 = 19
-        assert len(self._check_keys()) == 19
+        # 3 range collections x4 + workout x3 + 2 snapshots x2 = 19 collection checks,
+        # + 1 bespoke whoop_token_health (auth health) = 20.
+        assert len(self._check_keys()) == 20
+
+    def test_token_health_check_present(self):
+        # Token-health rides on a whoop bronze asset, in the hourly checks job.
+        assert ("AssetKey(['whoop_bronze_sleep'])", "whoop_token_health") in self._check_keys()

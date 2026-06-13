@@ -122,7 +122,10 @@ span code locations, so there's one per subject rather than a single global job.
 - **Whoop** (`grecohome_whoop/dagster/checks.py`) — sleep/recovery/cycle get all four
   families; workout drops content-health (intermittent — empty windows are normal)
   and uses a wide completeness window; profile/body_measurement get schema + content
-  only (freshness disabled per the dedup caveat above). 19 checks.
+  only (freshness disabled per the dedup caveat above). Plus a bespoke
+  **`whoop_token_health`** check (reads the token file's `expires_at`; ERROR when the
+  OAuth refresh is failing; logs `whoop_token_unhealthy` for the Grafana/Loki Slack
+  alert). 20 checks.
 - **Garmin** (`grecohome_garmin/dagster/checks.py`) — configs **generated from the
   catalog**. Freshness on every collection; completeness/schema/content on the
   analytically-important daily series (`IMPORTANT`); the rest freshness-only (plus
