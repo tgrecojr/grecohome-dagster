@@ -16,6 +16,8 @@ Tables today:
   [Workouts (Garmin activities)](#workouts-garmin-activities) below.
 - **Workout splits** — `silver_workout_splits` (per-lap Garmin detail; enriches workouts). See
   [Workout splits (Garmin laps)](#workout-splits-garmin-laps) below.
+- **Whoop workouts** — `silver_whoop_workouts` (per-workout Whoop activities; the device's
+  own activity log, parallel to Garmin's). See [Whoop workouts](#whoop-workouts) below.
 - **Recovery** — `silver_recovery` (per-cycle Whoop; joins to sleep). See
   [Recovery (Whoop)](#recovery-whoop) below.
 - **Weather** — `silver_weather` (per-hour NOAA USCRN soil/weather). The first
@@ -76,6 +78,7 @@ whoop_bronze_sleep  ─▶ silver_sleep_whoop  ─┘
 {SILVER_ROOT}/glucose/silver_glucose.parquet # glucose: one row per CGM reading
 {SILVER_ROOT}/workouts/silver_workouts.parquet # workouts: one row per Garmin activity
 {SILVER_ROOT}/workout_splits/silver_workout_splits.parquet # one row per Garmin lap
+{SILVER_ROOT}/whoop_workouts/silver_whoop_workouts.parquet # one row per Whoop workout
 {SILVER_ROOT}/recovery/silver_recovery.parquet # recovery: one row per Whoop cycle
 {SILVER_ROOT}/weather/silver_weather.parquet # weather: one row per USCRN hourly observation
 {SILVER_ROOT}/daily/silver_daily.parquet     # daily summary: one row per local day (Garmin)
@@ -299,6 +302,39 @@ One row per `(activity_id, lap_index)`: `activity_id` (BIGINT), `lap_index` (INT
 | `splits_lap_unique_nonnull` | ERROR | one row per `(activity_id, lap_index)`; both keys non-null |
 | `splits_value_ranges` | ERROR | durations/distance/speed ≥ 0, HR 0–240, lap_index ≥ 0 |
 | `splits_coverage_vs_bronze` | WARN | silver laps ≈ bronze distinct laps; reports distinct activities |
+
+# Whoop workouts
+
+`silver_whoop_workouts` is Whoop's own activity log — one row per workout — kept **separate
+from `silver_workouts`** (Garmin) on purpose: two devices, neither authoritative, never
+blended (the sleep philosophy). It's where the activity story lives once Garmin's tapers off:
+since the Whoop arrived (2025-12-18) it logs strength, yard-work, walking, etc. (plus running/
+cycling that overlaps Garmin).
+
+### Source & event date
+`whoop/workout` is the same `{"records": [...]}` envelope as recovery/strain; each record has
+a UUID `id`, `start`/`end` (UTC), `timezone_offset`, `created_at`/`updated_at` (Whoop
+rescores), `sport_name`/`sport_id`, `score_state`, and a nested `score` (`strain` 0–21, avg/max
+HR, `kilojoule`, `distance_meter`, `altitude_gain_meter`, `percent_recorded`). Dedup by `id`
+keeping the latest `updated_at`. `workout_date` is the **local date of `start`** (via the
+record's `timezone_offset`, the sleep/strain idiom).
+
+### Typing & units
+Canonical to the source: `kilojoules` as Whoop reports it (gold/dashboard → kcal), distance in
+metres, strain unitless 0–21. Non-GPS sports (lifting, yard-work) have null distance — kept.
+
+### Schema (`silver_whoop_workouts`)
+One row per workout: `workout_id` (VARCHAR, key), `workout_date` (DATE), `sport_name` (VARCHAR),
+`sport_id` (INT), `start_ts`/`end_ts` (TIMESTAMP), `strain` (DOUBLE), `avg_heart_rate`/
+`max_heart_rate` (INT), `kilojoules`, `distance_m`, `altitude_gain_m`, `percent_recorded`
+(DOUBLE), `score_state` (VARCHAR).
+
+### Asset checks
+| Check | Severity | What |
+|---|---|---|
+| `whoop_workout_unique_nonnull` | ERROR | one row per `workout_id`; `workout_id`/`workout_date` non-null |
+| `whoop_workout_value_ranges` | ERROR | strain 0–21, HR 20–240, kilojoules/distance ≥ 0 |
+| `whoop_workout_coverage_vs_bronze` | WARN | silver workouts ≈ bronze distinct `id`; reports distinct sports |
 
 # Recovery (Whoop)
 
@@ -548,9 +584,10 @@ One row per `snapshot_date` (DATE, key): `vo2max_running`, `vo2max_cycling` (DOU
 - `silver_body_daily` (06:42 UTC) rebuilds `silver_body` (Garmin weigh-ins).
 - `silver_fitness_daily` (06:44 UTC) rebuilds `silver_fitness` (Garmin snapshot collections).
 - `silver_workout_splits_daily` (06:47 UTC) rebuilds `silver_workout_splits` (Garmin laps).
+- `silver_whoop_workouts_daily` (06:53 UTC) rebuilds `silver_whoop_workouts` (Whoop activities).
 - `silver_checks_daily` (07:00 UTC) runs **all** silver checks (sleep + glucose + workouts +
-  recovery + weather + daily + strain + body + fitness + workout-splits) independently, so a
-  *stopped* silver asset is still caught.
+  recovery + weather + daily + strain + body + fitness + workout-splits + whoop-workouts)
+  independently, so a *stopped* silver asset is still caught.
 
 All are off by default; enable them in the UI. Rebuild on demand (e.g. after a bronze backfill)
 with `dagster job execute --job silver_sleep_job` (or `--job silver_glucose_job`).
