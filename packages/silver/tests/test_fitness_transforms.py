@@ -82,5 +82,14 @@ def test_spine_union_across_collections(tmp_path) -> None:
     assert b["race_5k_sec"] == 1500 and b["vo2max_running"] is None
 
 
+def test_empty_recapture_does_not_clobber_vo2max(tmp_path) -> None:
+    """Most max_metrics captures are empty []; a later empty one must not null a real value."""
+    root = str(tmp_path / "bronze")
+    _write(root, "max_metrics", "2026-06-06", 1_700_000_000000, _max_metrics(vo2_run=48.0),
+           short="valued")
+    _write(root, "max_metrics", "2026-06-06", 1_700_000_999000, [], short="empty_later")
+    assert _rows(root)["2026-06-06"]["vo2max_running"] == 48.0
+
+
 def test_empty_yields_no_rows(tmp_path) -> None:
     assert _rows(str(tmp_path / "bronze")) == {}
