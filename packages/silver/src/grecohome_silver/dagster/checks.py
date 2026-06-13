@@ -13,6 +13,7 @@ import os
 
 from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 
+from grecohome_core.checks import alerting_check
 from grecohome_core.silver import (
     connect,
     json_date,
@@ -73,6 +74,7 @@ def _src(path: str) -> str:
 # Uniqueness + non-null key (ERROR) — dedup correctness
 # ---------------------------------------------------------------------------
 @asset_check(asset=silver_sleep_garmin, name="garmin_night_unique_nonnull")
+@alerting_check
 def garmin_night_unique_nonnull() -> AssetCheckResult:
     """One row per ``night_date``, never null, in silver_sleep_garmin."""
     path = silver_path(GARMIN_PARQUET)
@@ -89,6 +91,7 @@ def garmin_night_unique_nonnull() -> AssetCheckResult:
 
 
 @asset_check(asset=silver_sleep_whoop, name="whoop_id_unique_night_nonnull")
+@alerting_check
 def whoop_id_unique_night_nonnull() -> AssetCheckResult:
     """One row per ``whoop_sleep_id``; ``night_date`` never null."""
     path = silver_path(WHOOP_PARQUET)
@@ -105,6 +108,7 @@ def whoop_id_unique_night_nonnull() -> AssetCheckResult:
 
 
 @asset_check(asset=silver_sleep, name="sleep_night_unique_nonnull")
+@alerting_check
 def sleep_night_unique_nonnull() -> AssetCheckResult:
     """One row per ``night_date`` in the unified table, never null (the whole point)."""
     path = silver_path(UNIFIED_PARQUET)
@@ -124,6 +128,7 @@ def sleep_night_unique_nonnull() -> AssetCheckResult:
 # Range validity (ERROR) — catches a parsing/unit bug
 # ---------------------------------------------------------------------------
 @asset_check(asset=silver_sleep, name="sleep_value_ranges")
+@alerting_check
 def sleep_value_ranges() -> AssetCheckResult:
     """Percentages 0–100; stage minutes ≥ 0 and < 24h. A breach means a unit bug."""
     path = silver_path(UNIFIED_PARQUET)
@@ -144,6 +149,7 @@ def sleep_value_ranges() -> AssetCheckResult:
 # Join sanity (WARN) — no fully-null rows; recent single-source soft flag
 # ---------------------------------------------------------------------------
 @asset_check(asset=silver_sleep, name="sleep_join_sanity")
+@alerting_check
 def sleep_join_sanity() -> AssetCheckResult:
     """No row lacks both sources; recent single-source nights are a soft flag.
 
@@ -171,6 +177,7 @@ def sleep_join_sanity() -> AssetCheckResult:
 # Coverage split (WARN) — make the source mix visible each run
 # ---------------------------------------------------------------------------
 @asset_check(asset=silver_sleep, name="sleep_coverage_split")
+@alerting_check
 def sleep_coverage_split() -> AssetCheckResult:
     """Report garmin-only / whoop-only / both night counts (a shift signals trouble)."""
     path = silver_path(UNIFIED_PARQUET)
@@ -190,6 +197,7 @@ def sleep_coverage_split() -> AssetCheckResult:
 # Coverage vs bronze (WARN) — a big drop means dedup/filter is wrong
 # ---------------------------------------------------------------------------
 @asset_check(asset=silver_sleep_garmin, name="garmin_coverage_vs_bronze")
+@alerting_check
 def garmin_coverage_vs_bronze() -> AssetCheckResult:
     """silver_sleep_garmin nights ≈ bronze distinct ``calendarDate`` (no silent drop)."""
     path = silver_path(GARMIN_PARQUET)

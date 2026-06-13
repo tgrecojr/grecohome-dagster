@@ -10,6 +10,7 @@ import os
 
 from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 
+from grecohome_core.checks import alerting_check
 from grecohome_core.silver import connect, list_payload_files
 from grecohome_silver.config import settings
 from grecohome_silver.dagster.workout_assets import (
@@ -47,6 +48,7 @@ def _src(path: str) -> str:
 
 
 @asset_check(asset=silver_workouts, name="workouts_id_unique_nonnull")
+@alerting_check
 def workouts_id_unique_nonnull() -> AssetCheckResult:
     """One row per ``activity_id``; ``activity_id`` and ``activity_date`` non-null."""
     path = workouts_path(WORKOUTS_PARQUET)
@@ -65,6 +67,7 @@ def workouts_id_unique_nonnull() -> AssetCheckResult:
 
 
 @asset_check(asset=silver_workouts, name="workouts_value_ranges")
+@alerting_check
 def workouts_value_ranges() -> AssetCheckResult:
     """Durations/distance/calories ≥ 0 and bounded; HR within 0–240 (0 = not recorded)."""
     path = workouts_path(WORKOUTS_PARQUET)
@@ -83,6 +86,7 @@ def workouts_value_ranges() -> AssetCheckResult:
 
 
 @asset_check(asset=silver_workouts, name="workouts_coverage_vs_bronze")
+@alerting_check
 def workouts_coverage_vs_bronze() -> AssetCheckResult:
     """silver activities ≈ bronze distinct ``activityId`` — no silent drop."""
     path = workouts_path(WORKOUTS_PARQUET)

@@ -10,6 +10,7 @@ import os
 
 from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 
+from grecohome_core.checks import alerting_check
 from grecohome_core.silver import connect
 from grecohome_gold.dagster.assets import WELLNESS_PARQUET, gold_daily_wellness, gold_path
 
@@ -32,6 +33,7 @@ def _src() -> str:
 
 
 @asset_check(asset=gold_daily_wellness, name="wellness_day_unique_nonnull")
+@alerting_check
 def wellness_day_unique_nonnull() -> AssetCheckResult:
     """One row per ``day``, never null — the spine must be a clean daily grain."""
     path = gold_path(WELLNESS_PARQUET)
@@ -48,6 +50,7 @@ def wellness_day_unique_nonnull() -> AssetCheckResult:
 
 
 @asset_check(asset=gold_daily_wellness, name="wellness_value_ranges")
+@alerting_check
 def wellness_value_ranges() -> AssetCheckResult:
     """Aggregates within plausible bounds (catches a join/aggregation bug)."""
     path = gold_path(WELLNESS_PARQUET)
@@ -70,6 +73,7 @@ def wellness_value_ranges() -> AssetCheckResult:
 
 
 @asset_check(asset=gold_daily_wellness, name="wellness_coverage")
+@alerting_check
 def wellness_coverage() -> AssetCheckResult:
     """Report per-source day coverage; warn if no day has any source (empty mart)."""
     path = gold_path(WELLNESS_PARQUET)
