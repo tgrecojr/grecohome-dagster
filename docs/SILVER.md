@@ -23,6 +23,8 @@ Tables today:
   [Daily summary (Garmin)](#daily-summary-garmin) below.
 - **Strain** — `silver_strain` (per-cycle Whoop exertion; the twin of recovery). See
   [Strain (Whoop)](#strain-whoop) below.
+- **Body** — `silver_body` (per-weigh-in Garmin body composition). See
+  [Body (Garmin weigh-ins)](#body-garmin-weigh-ins) below.
 
 Later tables (fitness) are further single-source reductions.
 
@@ -74,6 +76,7 @@ whoop_bronze_sleep  ─▶ silver_sleep_whoop  ─┘
 {SILVER_ROOT}/weather/silver_weather.parquet # weather: one row per USCRN hourly observation
 {SILVER_ROOT}/daily/silver_daily.parquet     # daily summary: one row per local day (Garmin)
 {SILVER_ROOT}/strain/silver_strain.parquet   # strain: one row per Whoop cycle
+{SILVER_ROOT}/body/silver_body.parquet       # body: one row per Garmin weigh-in
 ```
 
 - **Atomic overwrite.** Each asset `COPY`s to a temp file in the destination dir and `os.replace`s
@@ -427,6 +430,37 @@ One row per cycle: `cycle_id` (BIGINT, key), `strain_date` (DATE), `start_ts`/`e
 | `strain_value_ranges` | ERROR | strain 0–21, HR 20–240, kilojoules ≥ 0 |
 | `strain_coverage_vs_bronze` | WARN | silver cycles ≈ bronze distinct `cycle_id`; reports distinct days |
 
+# Body (Garmin weigh-ins)
+
+`silver_body` is a single-source table — one row per **weigh-in** (a body measurement
+event) — restoring the body/weight view the retired InfluxDB dashboard once served.
+
+### Source & event date
+`garmin/daily_weigh_ins` is `{startDate, endDate, dateWeightList: […], totalAverage}` over
+a trailing window; `dateWeightList` is the array of weigh-in records, each with a stable
+`samplePk` (the measurement id), `calendarDate` (local date), `timestampGMT` (epoch-millis,
+the UTC instant), and body-composition metrics. The window overlaps across files so a
+weigh-in recurs → dedup by `samplePk` keeping the latest fetch. `samplePk` is the unique
+key; `measured_date` is informational (rarely two weigh-ins a day). Weigh-ins are sparse
+(not daily).
+
+### Typing & units
+Canonical **SI**: weight / bone / muscle mass in **kg** (source grams ÷ 1000), body fat /
+water as percent, BMI unitless. Gold/dashboard convert kg → lb.
+
+### Schema (`silver_body`)
+One row per weigh-in: `sample_pk` (BIGINT, key), `measured_date` (DATE), `measured_ts_utc`
+(TIMESTAMP), `weight_kg`, `bmi`, `body_fat_pct`, `body_water_pct`, `bone_mass_kg`,
+`muscle_mass_kg` (DOUBLE), `physique_rating`, `visceral_fat`, `metabolic_age` (INT),
+`weight_delta_kg` (DOUBLE), `source_type` (VARCHAR).
+
+### Asset checks
+| Check | Severity | What |
+|---|---|---|
+| `body_sample_unique_nonnull` | ERROR | one row per `sample_pk`; `sample_pk`/`measured_date` non-null |
+| `body_value_ranges` | ERROR | weight 20–300 kg, BMI 10–80, fat/water/muscle bounded (catches grams-vs-kg) |
+| `body_coverage_vs_bronze` | WARN | silver weigh-ins ≈ bronze distinct `samplePk`; reports distinct days |
+
 # Operations
 
 ## Scheduling
@@ -441,8 +475,10 @@ One row per cycle: `cycle_id` (BIGINT, key), `strain_date` (DATE), `start_ts`/`e
   a daily rebuild keeps silver a current projection).
 - `silver_daily_daily` (06:40 UTC) rebuilds `silver_daily` (after the Garmin daily capture).
 - `silver_strain_daily` (06:52 UTC) rebuilds `silver_strain` (Whoop cycle).
+- `silver_body_daily` (06:42 UTC) rebuilds `silver_body` (Garmin weigh-ins).
 - `silver_checks_daily` (07:00 UTC) runs **all** silver checks (sleep + glucose + workouts +
-  recovery + weather + daily + strain) independently, so a *stopped* silver asset is still caught.
+  recovery + weather + daily + strain + body) independently, so a *stopped* silver asset is
+  still caught.
 
 All are off by default; enable them in the UI. Rebuild on demand (e.g. after a bronze backfill)
 with `dagster job execute --job silver_sleep_job` (or `--job silver_glucose_job`).
