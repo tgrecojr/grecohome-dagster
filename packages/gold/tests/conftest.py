@@ -65,3 +65,29 @@ def silver_root(tmp_path) -> str:
     """, os.path.join(root, "glucose", "silver_glucose.parquet"))
 
     return root
+
+
+@pytest.fixture
+def weather_silver_root(tmp_path) -> str:
+    """A synthetic SILVER_ROOT with ``silver_weather``: a frost day, a warm (GDD) day, a gap.
+
+    2026-04-20 (frost, daily min −2 °C = 28.4 °F), a gap at 2026-04-21, and 2026-04-22
+    (warm, daily max 28 °C = 82.4 °F → GDD50 = 18). Two obs each so the daily max/min/avg
+    and the sums exercise real aggregation. Soil columns share one value per row.
+    """
+    root = str(tmp_path / "silver")
+    con = connect()
+    # fmt: off
+    _copy(con, """
+        SELECT * FROM (VALUES
+            (DATE '2026-04-20',  2.0,  8.0, -2.0, 5.08, 300.0, 10.0, -3.0, 70.0, 4.0,4.0,4.0,4.0,4.0, 0.40,0.40,0.40,0.40,0.40),
+            (DATE '2026-04-20', -1.0,  5.0,  1.0, 0.00, 100.0,  6.0,  0.0, 90.0, 6.0,6.0,6.0,6.0,6.0, 0.40,0.40,0.40,0.40,0.40),
+            (DATE '2026-04-22', 20.0, 28.0, 12.0, 0.00, 600.0, 30.0, 15.0, 50.0, 18.0,18.0,18.0,18.0,18.0, 0.25,0.25,0.25,0.25,0.25),
+            (DATE '2026-04-22', 18.0, 24.0, 14.0, 0.00, 800.0, 26.0, 17.0, 60.0, 20.0,20.0,20.0,20.0,20.0, 0.25,0.25,0.25,0.25,0.25)
+        ) AS t(obs_date_local, air_temp_c, air_temp_max_c, air_temp_min_c, precip_mm,
+               solar_rad_wm2, surface_temp_max_c, surface_temp_min_c, rh_pct,
+               soil_temp_5, soil_temp_10, soil_temp_20, soil_temp_50, soil_temp_100,
+               soil_moisture_5, soil_moisture_10, soil_moisture_20, soil_moisture_50, soil_moisture_100)
+    """, os.path.join(root, "weather", "silver_weather.parquet"))
+    # fmt: on
+    return root

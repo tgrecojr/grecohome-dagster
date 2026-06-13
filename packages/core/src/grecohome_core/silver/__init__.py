@@ -27,6 +27,7 @@ from grecohome_core.silver.duck import (
     csv_relation_sql,
     list_payload_files,
     payloads_relation_sql,
+    text_lines_relation_sql,
     write_parquet_atomic,
 )
 from grecohome_core.silver.transform import dedup_latest_sql, json_date, json_num, json_str
@@ -36,6 +37,7 @@ __all__ = [
     "csv_relation_sql",
     "list_payload_files",
     "payloads_relation_sql",
+    "text_lines_relation_sql",
     "write_parquet_atomic",
     "dedup_latest_sql",
     "json_date",

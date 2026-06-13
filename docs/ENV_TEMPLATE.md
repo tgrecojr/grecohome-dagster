@@ -75,6 +75,7 @@ too. Mount `BRONZE_ROOT` **read-only** and `SILVER_ROOT` writable on a separate 
 | `BRONZE_ROOT` | yes | — | Bronze tree to read (mount **read-only**; silver never writes under it) |
 | `SILVER_ROOT` | yes | — | Writable root for silver Parquet, **outside** `BRONZE_ROOT` (writes there are refused) |
 | `SILVER_MONITOR_DIR` | no | — | Reserved for the future silver monitor (mirrors `BRONZE_MONITOR_DIR`); kept **outside** `SILVER_ROOT`. Unused today; unset → future silver checks no-op |
+| `USCRN_TIMEZONE` | no | `America/New_York` | IANA tz of the USCRN station; derives `silver_weather`'s **local** observation day (DST-aware). Single-station. |
 
 ### Gold (`grecohome-gold`) — its own container, cross-layer
 
@@ -145,6 +146,8 @@ RECONCILE_WINDOW_DAYS=7
 SILVER_ROOT=/data/silver
 # Reserved for the future silver monitor (unused today); MUST be outside SILVER_ROOT.
 SILVER_MONITOR_DIR=/data/silver-monitor
+# IANA tz of the USCRN station for silver_weather's local day (optional; DST-aware).
+USCRN_TIMEZONE=America/New_York
 
 # --- Gold (grecohome-gold); analysis marts from silver, no source API/secrets ---
 # Mount SILVER_ROOT read-only here; GOLD_ROOT must be a separate path outside it.

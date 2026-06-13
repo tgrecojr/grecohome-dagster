@@ -25,5 +25,12 @@ class SilverSettings(BaseSubjectSettings):
     # turn on. Unset → future checks no-op. Mirrors bronze_monitor_dir exactly.
     silver_monitor_dir: str | None = None
 
+    # IANA timezone of the USCRN station, used to derive the **local** observation
+    # day for the weather table (the source carries UTC; local-day semantics live in
+    # silver, per the layer's contract). DST-aware via DuckDB's ICU ``AT TIME ZONE``.
+    # Single-station/single-user, so one zone suffices. Default = the configured
+    # station's zone (PA_Avondale_2_N is US Eastern).
+    uscrn_timezone: str = "America/New_York"
+
 
 settings: SilverSettings = init_settings(SilverSettings)  # type: ignore[assignment]
