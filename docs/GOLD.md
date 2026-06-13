@@ -10,6 +10,9 @@ Tables today:
 - **`gold_daily_wellness`** — one row per local day joining sleep + recovery + daily workout load +
   daily glucose summary. The spine other analyses build on. See [Daily wellness](#daily-wellness)
   below.
+- **`gold_daily_weather`** — one row per local day rolled up from `silver_weather`, with the
+  imperial + derived **gardening** metrics (°F, inches, growing-degree-days, frost flags). See
+  [Daily weather](#daily-weather) below.
 
 ## Invariants
 
@@ -31,7 +34,8 @@ Tables today:
 - **Layout** under `GOLD_ROOT`:
 
 ```
-{GOLD_ROOT}/wellness/daily_wellness.parquet   # one row per local day
+{GOLD_ROOT}/wellness/daily_wellness.parquet   # one row per local day (health)
+{GOLD_ROOT}/weather/daily_weather.parquet     # one row per local day (weather/gardening)
 ```
 
 # Daily wellness
@@ -72,15 +76,47 @@ Notes:
 | `wellness_value_ranges` | ERROR | TIR 0–100, glucose mean / recovery score / counts in bounds |
 | `wellness_coverage` | WARN | per-source day coverage; fails only if the mart is empty |
 
+# Daily weather
+
+`gold_daily_weather` is the gardening-facing mart — **one row per local day** over a **continuous
+date spine** (gaps explicit), rolled up from `silver_weather` grouped by `obs_date_local`. Where
+silver is faithful hourly **SI**, gold is the **imperial + derived** layer other applications
+(e.g. a gardening app) consume.
+
+| Metric | Derivation |
+|---|---|
+| `air_temp_max_f` / `air_temp_min_f` / `air_temp_avg_f` | daily max/min/mean of the °C columns → °F |
+| `gdd50` | growing-degree-days, base 50 °F: `max(0, (Tmax_f + Tmin_f)/2 − 50)` |
+| `frost` / `hard_freeze` | daily min ≤ 32 °F / ≤ 28 °F |
+| `precip_total_in` | daily total `precip_mm` ÷ 25.4 |
+| `solar_rad_mean_wm2` / `solar_rad_max_wm2` | daily mean / max |
+| `surface_temp_max_f` / `surface_temp_min_f` | daily surface-temp extremes → °F |
+| `rh_mean_pct` | daily mean relative humidity |
+| `soil_temp_{5,10,20,50,100}_f_mean` | daily mean soil temp per depth → °F |
+| `soil_moisture_{5,10,20,50,100}_mean` | daily mean volumetric soil moisture per depth |
+| `hours_observed` | observation count for the day (coverage) |
+| `has_weather` | provenance — false on a spine gap day |
+
+Validated against the live archive (6,009 days, 2010-present): ~47.7 in/yr precipitation, 1,676
+frost days — consistent with SE Pennsylvania.
+
+### Asset checks
+| Check | Severity | What |
+|---|---|---|
+| `weather_day_unique_nonnull` | ERROR | one row per `day`, never null |
+| `weather_value_ranges` | ERROR | imperial temps/soil/RH/precip/GDD/hours in bounds; daily max ≥ min |
+| `weather_coverage` | WARN | day coverage; reports frost days; fails only if the mart is empty |
+
 # Operations
 
 ## Scheduling
-- `gold_wellness_daily` (07:30 UTC) rebuilds the mart **after** silver's daily rebuilds (≤ 06:50)
-  and silver checks (07:00).
-- `gold_checks_daily` (08:00 UTC) runs the gold checks independently.
+- `gold_wellness_daily` (07:30 UTC) rebuilds the wellness mart **after** silver's daily rebuilds
+  (≤ 06:55) and silver checks (07:00).
+- `gold_weather_daily` (07:40 UTC) rebuilds the weather mart after `silver_weather`.
+- `gold_checks_daily` (08:00 UTC) runs **all** gold checks (wellness + weather) independently.
 
-Both off by default; enable in the UI. Rebuild on demand with
-`dagster job execute --job gold_wellness_job`.
+All off by default; enable in the UI. Rebuild on demand with
+`dagster job execute --job gold_wellness_job` (or `--job gold_weather_job`).
 
 ## Deployment
 See [DEPLOYMENT.md → Gold](DEPLOYMENT.md#gold-cross-layer-marts) and

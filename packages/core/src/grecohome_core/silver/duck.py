@@ -94,6 +94,27 @@ def csv_relation_sql(files: list[str], columns: dict[str, str]) -> str:
     )
 
 
+def text_lines_relation_sql(files: list[str]) -> str:
+    """A SQL subquery yielding ``(filename VARCHAR, line VARCHAR)`` — one row per line.
+
+    For line-oriented bronze with no header and no single field delimiter — fixed-width
+    / whitespace-delimited text such as the NOAA USCRN hourly product. Each file is read
+    with a delimiter that never occurs in the payload (ASCII Unit Separator, ``chr(31)``)
+    so every physical line lands in one ``VARCHAR`` cell, plus ``filename`` for
+    capture-recency tie-breaks. Blank lines are dropped; splitting and typing the line is
+    the caller's job. With no files, returns a correctly-typed empty relation so a
+    not-yet-captured collection yields the right columns instead of erroring on an empty
+    glob (mirrors :func:`csv_relation_sql` / :func:`payloads_relation_sql`).
+    """
+    if not files:
+        return "SELECT NULL::VARCHAR AS filename, NULL::VARCHAR AS line WHERE false"
+    return (
+        f"SELECT filename, line FROM read_csv({_sql_str_list(files)}, "
+        "delim=chr(31), header=false, columns={'line': 'VARCHAR'}, filename=true) "
+        "WHERE trim(line) <> ''"
+    )
+
+
 def write_parquet_atomic(
     con: duckdb.DuckDBPyConnection,
     select_sql: str,

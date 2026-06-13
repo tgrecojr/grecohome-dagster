@@ -21,20 +21,27 @@ from grecohome_silver.dagster.schedules import (
     silver_recovery_job,
     silver_sleep_daily,
     silver_sleep_job,
+    silver_weather_daily,
+    silver_weather_job,
     silver_workouts_daily,
     silver_workouts_job,
 )
+from grecohome_silver.dagster.weather_assets import WEATHER_ASSETS
+from grecohome_silver.dagster.weather_checks import WEATHER_CHECKS
 from grecohome_silver.dagster.workout_assets import WORKOUT_ASSETS
 from grecohome_silver.dagster.workout_checks import WORKOUT_CHECKS
 
 defs = Definitions(
-    assets=SLEEP_ASSETS + GLUCOSE_ASSETS + WORKOUT_ASSETS + RECOVERY_ASSETS,
-    asset_checks=SLEEP_CHECKS + GLUCOSE_CHECKS + WORKOUT_CHECKS + RECOVERY_CHECKS,
+    assets=SLEEP_ASSETS + GLUCOSE_ASSETS + WORKOUT_ASSETS + RECOVERY_ASSETS + WEATHER_ASSETS,
+    asset_checks=(
+        SLEEP_CHECKS + GLUCOSE_CHECKS + WORKOUT_CHECKS + RECOVERY_CHECKS + WEATHER_CHECKS
+    ),
     jobs=[
         silver_sleep_job,
         silver_glucose_job,
         silver_workouts_job,
         silver_recovery_job,
+        silver_weather_job,
         silver_checks_job,
     ],
     schedules=[
@@ -42,6 +49,7 @@ defs = Definitions(
         silver_glucose_daily,
         silver_workouts_daily,
         silver_recovery_daily,
+        silver_weather_daily,
         silver_checks_schedule,
     ],
 )

@@ -22,10 +22,12 @@ from grecohome_silver.dagster.glucose_assets import GLUCOSE_ASSETS
 from grecohome_silver.dagster.glucose_checks import GLUCOSE_CHECKS
 from grecohome_silver.dagster.recovery_assets import RECOVERY_ASSETS
 from grecohome_silver.dagster.recovery_checks import RECOVERY_CHECKS
+from grecohome_silver.dagster.weather_assets import WEATHER_ASSETS
+from grecohome_silver.dagster.weather_checks import WEATHER_CHECKS
 from grecohome_silver.dagster.workout_assets import WORKOUT_ASSETS
 from grecohome_silver.dagster.workout_checks import WORKOUT_CHECKS
 
-ALL_CHECKS = SLEEP_CHECKS + GLUCOSE_CHECKS + WORKOUT_CHECKS + RECOVERY_CHECKS
+ALL_CHECKS = SLEEP_CHECKS + GLUCOSE_CHECKS + WORKOUT_CHECKS + RECOVERY_CHECKS + WEATHER_CHECKS
 
 # Daily rebuild of the three sleep assets (source intermediates + unified table).
 silver_sleep_job = define_asset_job("silver_sleep_job", selection=SLEEP_ASSETS)
@@ -65,6 +67,17 @@ silver_recovery_daily = ScheduleDefinition(
     name="silver_recovery_daily",
     job=silver_recovery_job,
     cron_schedule="50 6 * * *",  # 06:50 UTC
+    execution_timezone="UTC",
+)
+
+# Daily rebuild of the weather table (USCRN hourly; bronze captured a few times a day,
+# a daily rebuild keeps silver a current projection without chasing each capture).
+silver_weather_job = define_asset_job("silver_weather_job", selection=WEATHER_ASSETS)
+
+silver_weather_daily = ScheduleDefinition(
+    name="silver_weather_daily",
+    job=silver_weather_job,
+    cron_schedule="55 6 * * *",  # 06:55 UTC
     execution_timezone="UTC",
 )
 

@@ -16,6 +16,9 @@ Tables today:
   [Workouts (Garmin activities)](#workouts-garmin-activities) below.
 - **Recovery** — `silver_recovery` (per-cycle Whoop; joins to sleep). See
   [Recovery (Whoop)](#recovery-whoop) below.
+- **Weather** — `silver_weather` (per-hour NOAA USCRN soil/weather). The first
+  **line-oriented** (fixed-width text) source. See [Weather (NOAA USCRN)](#weather-noaa-uscrn)
+  below.
 
 Later tables (fitness) are further single-source reductions.
 
@@ -64,6 +67,7 @@ whoop_bronze_sleep  ─▶ silver_sleep_whoop  ─┘
 {SILVER_ROOT}/glucose/silver_glucose.parquet # glucose: one row per CGM reading
 {SILVER_ROOT}/workouts/silver_workouts.parquet # workouts: one row per Garmin activity
 {SILVER_ROOT}/recovery/silver_recovery.parquet # recovery: one row per Whoop cycle
+{SILVER_ROOT}/weather/silver_weather.parquet # weather: one row per USCRN hourly observation
 ```
 
 - **Atomic overwrite.** Each asset `COPY`s to a temp file in the destination dir and `os.replace`s
@@ -292,6 +296,62 @@ One row per cycle.
 | `recovery_value_ranges` | ERROR | score 0–100, RHR 20–120, HRV 0–500, SpO2 50–100, skin 20–45 |
 | `recovery_coverage_vs_bronze` | WARN | silver recoveries ≈ bronze distinct `cycle_id` (no silent drop) |
 
+# Weather (NOAA USCRN)
+
+`silver_weather` is a single-source table — one row per hourly observation — and the first
+**line-oriented** source (fixed-width text, not JSON or CSV-with-header).
+
+### Source & event date
+USCRN bronze (`uscrn/hourly`) is the CRNH0203 "hourly02" product: **headerless,
+whitespace-delimited** text, exactly **38 fields** per line (profiled against live bronze:
+2010-present, ~144k rows, one station — WBANNO 03761, PA_Avondale_2_N). The generic
+`grecohome_core.silver.text_lines_relation_sql` reads each line whole (delimiter = ASCII Unit
+Separator, which never occurs); the **field mapping** lives in `grecohome_silver.weather`, which
+`regexp_split_to_array`s the line and picks fields by position. An observation's identity is its
+**UTC instant** — `strptime(UTC_DATE || UTC_TIME)`.
+
+The **local day is derived here**, not trusted from the file: `obs_ts_local` is the UTC instant
+converted through the station timezone (`USCRN_TIMEZONE`, default `America/New_York`), **DST-aware**
+via DuckDB's ICU `AT TIME ZONE`. So `obs_date_local` can differ from `obs_date_utc` (a 02:00 UTC
+reading is the previous local evening). The gold daily mart groups by `obs_date_local`.
+
+### Deduplication
+A filling day is re-captured a few times, so the same hour appears in several files (~169 duplicate
+rows across the archive). Dedup keys on **`obs_ts_utc`**, latest capture winning (the 13-digit
+fetch-millis in the bronze filename). Identical re-captures carry identical values, so dedup is
+lossless. NUL-byte corruption (seen on 2 DST-transition rows) is stripped before the split.
+
+### Typing & units — canonical SI
+Sentinels become NULL: **−9999** (temps/precip/RH), **−99** (soil moisture), **−99999** (solar).
+Units stay **canonical SI** (°C, mm, W/m², m³/m³, %) — silver is a faithful typed projection; the
+imperial + derived gardening metrics (°F, inches, growing-degree-days) live in the gold daily mart.
+A fully-sentinel observation is kept with every measurement null (never dropped).
+
+### Schema (`silver_weather`)
+One row per hourly observation.
+
+| Column | Type | Note |
+|---|---|---|
+| `obs_ts_utc` | TIMESTAMP | UTC instant — the dedup key / canonical identity |
+| `obs_date_utc` | DATE | UTC date |
+| `obs_ts_local` | TIMESTAMP | local wall-clock (station tz, DST-aware) |
+| `obs_date_local` | DATE | local date (the gardener's day; gold groups by this) |
+| `wbanno` | VARCHAR | station id |
+| `air_temp_c` / `air_temp_max_c` / `air_temp_min_c` | DOUBLE | `T_HR_AVG` / `T_MAX` / `T_MIN` |
+| `precip_mm` | DOUBLE | `P_CALC` (hourly total) |
+| `solar_rad_wm2` | DOUBLE | `SOLARAD` |
+| `surface_temp_c` / `surface_temp_max_c` / `surface_temp_min_c` | DOUBLE | infrared surface temp |
+| `rh_pct` | DOUBLE | `RH_HR_AVG` |
+| `soil_moisture_5` … `soil_moisture_100` | DOUBLE | volumetric (m³/m³) at 5/10/20/50/100 cm |
+| `soil_temp_5` … `soil_temp_100` | DOUBLE | °C at 5/10/20/50/100 cm |
+
+### Asset checks
+| Check | Severity | What |
+|---|---|---|
+| `weather_obs_unique_nonnull` | ERROR | one row per `obs_ts_utc`; UTC + local day keys non-null |
+| `weather_value_ranges` | ERROR | temps −60…60 °C, soil moisture 0–1, RH 0–100, precip ≥ 0, solar 0–2000 |
+| `weather_coverage_vs_bronze` | WARN | silver obs ≈ bronze distinct instants; reports distinct local days |
+
 # Operations
 
 ## Scheduling
@@ -302,8 +362,10 @@ One row per cycle.
   rebuild keeps silver a current projection without chasing each upload).
 - `silver_workouts_daily` (06:45 UTC) rebuilds `silver_workouts` (after the Garmin daily capture).
 - `silver_recovery_daily` (06:50 UTC) rebuilds `silver_recovery` (Whoop hourly capture).
+- `silver_weather_daily` (06:55 UTC) rebuilds `silver_weather` (USCRN captured a few times a day;
+  a daily rebuild keeps silver a current projection).
 - `silver_checks_daily` (07:00 UTC) runs **all** silver checks (sleep + glucose + workouts +
-  recovery) independently, so a *stopped* silver asset is still caught.
+  recovery + weather) independently, so a *stopped* silver asset is still caught.
 
 All are off by default; enable them in the UI. Rebuild on demand (e.g. after a bronze backfill)
 with `dagster job execute --job silver_sleep_job` (or `--job silver_glucose_job`).
