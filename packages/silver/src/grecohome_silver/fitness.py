@@ -45,7 +45,12 @@ def _dedup_day(typed_sql: str) -> str:
 
 
 def _max_metrics_rel(files: list[str]) -> str:
-    """One row per snapshot day: running + cycling VO2max (from the first array element)."""
+    """One row per snapshot day: running + cycling VO2max (from the first array element).
+
+    Most ``max_metrics`` captures are empty arrays (the endpoint only returns VO2max on
+    run/ride days), so we keep only **value-bearing** captures before dedup — otherwise a
+    later empty re-capture of the same ``dt`` would null out a value an earlier capture had.
+    """
     typed = f"""
         SELECT {_DT} AS snapshot_date,
             TRY_CAST(json_extract_string(j -> 0 -> 'generic', '$.vo2MaxValue') AS DOUBLE)
@@ -56,7 +61,11 @@ def _max_metrics_rel(files: list[str]) -> str:
         FROM ({payloads_relation_sql(files)})
         WHERE {_DT} IS NOT NULL
     """
-    return _dedup_day(typed)
+    valued = (
+        f"SELECT * FROM ({typed}) "
+        "WHERE vo2max_running IS NOT NULL OR vo2max_cycling IS NOT NULL"
+    )
+    return _dedup_day(valued)
 
 
 def _training_status_rel(files: list[str]) -> str:
