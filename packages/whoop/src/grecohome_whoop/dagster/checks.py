@@ -31,6 +31,7 @@ from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 
 from grecohome_core.checks import (
     CollectionCheckConfig,
+    alerting_check,
     build_bronze_checks_job,
     build_bronze_checks_schedule,
     build_collection_checks,
@@ -79,6 +80,7 @@ def evaluate_token_health(data: dict | None, now: datetime) -> tuple[bool, dict]
 
 
 @asset_check(asset=bronze_sleep, name="whoop_token_health")
+@alerting_check
 def whoop_token_health() -> AssetCheckResult:
     """ERROR if the Whoop OAuth token is stale — i.e. refresh is failing.
 

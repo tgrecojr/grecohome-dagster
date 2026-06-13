@@ -24,6 +24,7 @@ from dagster import (
     asset_check,
 )
 
+from grecohome_core.checks.alerting import alerting_check
 from grecohome_core.checks.bronze_reads import (
     DATA_CLASSES,
     EMPTY_CLASSES,
@@ -62,6 +63,7 @@ def build_content_health_check(
             f"Recent {cfg.source}/{cfg.collection} payloads carry data and are intact."
         ),
     )
+    @alerting_check(name=f"{cfg.check_name_prefix}_content_health", asset=cfg.asset_key)
     def _check() -> AssetCheckResult:
         try:
             coll_dir = collection_dir(bronze_root, cfg.source, cfg.collection)
