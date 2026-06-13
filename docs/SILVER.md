@@ -25,8 +25,9 @@ Tables today:
   [Strain (Whoop)](#strain-whoop) below.
 - **Body** — `silver_body` (per-weigh-in Garmin body composition). See
   [Body (Garmin weigh-ins)](#body-garmin-weigh-ins) below.
-
-Later tables (fitness) are further single-source reductions.
+- **Fitness** — `silver_fitness` (per-snapshot-day Garmin VO2max / training status / race
+  predictions; the first **multi-collection** table). See [Fitness (Garmin)](#fitness-garmin)
+  below.
 
 ## Invariants
 
@@ -77,6 +78,7 @@ whoop_bronze_sleep  ─▶ silver_sleep_whoop  ─┘
 {SILVER_ROOT}/daily/silver_daily.parquet     # daily summary: one row per local day (Garmin)
 {SILVER_ROOT}/strain/silver_strain.parquet   # strain: one row per Whoop cycle
 {SILVER_ROOT}/body/silver_body.parquet       # body: one row per Garmin weigh-in
+{SILVER_ROOT}/fitness/silver_fitness.parquet # fitness: one row per Garmin snapshot day
 ```
 
 - **Atomic overwrite.** Each asset `COPY`s to a temp file in the destination dir and `os.replace`s
@@ -461,6 +463,44 @@ One row per weigh-in: `sample_pk` (BIGINT, key), `measured_date` (DATE), `measur
 | `body_value_ranges` | ERROR | weight 20–300 kg, BMI 10–80, fat/water/muscle bounded (catches grams-vs-kg) |
 | `body_coverage_vs_bronze` | WARN | silver weigh-ins ≈ bronze distinct `samplePk`; reports distinct days |
 
+# Fitness (Garmin)
+
+`silver_fitness` is the first **multi-collection** table — one row per **snapshot day**,
+joining three Garmin *current-state snapshot* collections.
+
+### Sources & event date
+| Collection | Fields |
+|---|---|
+| `garmin/max_metrics` | VO2max `generic.vo2MaxValue` (running) + `cycling.vo2MaxValue` |
+| `garmin/training_status` | the device-keyed `latestTrainingStatusData` map → `trainingStatus` (int code), `weeklyTrainingLoad`, feedback phrase |
+| `garmin/race_predictions` | `time5K` / `time10K` / `timeHalfMarathon` / `timeMarathon` (seconds) |
+
+**Date = the snapshot day = the bronze `dt` partition.** Unlike the event-based tables, these
+are *current-value-carried-until-it-changes* snapshot endpoints — the payload carries no deep
+history (`max_metrics` has no date; `race_predictions`' `calendarDate` only moves when the
+prediction changes), so the meaningful day is **when the snapshot was taken** (`dt`). This is
+the one deliberate exception to "`dt` ≠ event date" — justified because the value *is* a daily
+state. Each collection is deduped to the **latest capture per `dt`**, then the three are
+spine-joined on the day (a day in any collection yields a row; the others null).
+
+### Coverage (sparse, growing)
+The Garmin capture began **2026-06-03** and these endpoints don't backfill, so history starts
+there and grows ~1 day/day; VO2max only changes on run/ride days. Silver is rebuildable, so a
+later rebuild reprocesses all of bronze. `endurance_score` / `hill_score` are omitted (their
+values sit in nested windowed DTO lists with the accessible top-level fields null).
+
+### Schema (`silver_fitness`)
+One row per `snapshot_date` (DATE, key): `vo2max_running`, `vo2max_cycling` (DOUBLE),
+`training_status_code` (INT), `weekly_training_load` (INT), `training_status_phrase` (VARCHAR),
+`race_5k_sec`, `race_10k_sec`, `race_half_marathon_sec`, `race_marathon_sec` (INT).
+
+### Asset checks
+| Check | Severity | What |
+|---|---|---|
+| `fitness_day_unique_nonnull` | ERROR | one row per `snapshot_date`, never null |
+| `fitness_value_ranges` | ERROR | VO2max 10–90, weekly load ≥ 0, race times > 0 |
+| `fitness_coverage` | WARN | per-metric coverage (sparse expected); fails only if the table is empty |
+
 # Operations
 
 ## Scheduling
@@ -476,9 +516,10 @@ One row per weigh-in: `sample_pk` (BIGINT, key), `measured_date` (DATE), `measur
 - `silver_daily_daily` (06:40 UTC) rebuilds `silver_daily` (after the Garmin daily capture).
 - `silver_strain_daily` (06:52 UTC) rebuilds `silver_strain` (Whoop cycle).
 - `silver_body_daily` (06:42 UTC) rebuilds `silver_body` (Garmin weigh-ins).
+- `silver_fitness_daily` (06:44 UTC) rebuilds `silver_fitness` (Garmin snapshot collections).
 - `silver_checks_daily` (07:00 UTC) runs **all** silver checks (sleep + glucose + workouts +
-  recovery + weather + daily + strain + body) independently, so a *stopped* silver asset is
-  still caught.
+  recovery + weather + daily + strain + body + fitness) independently, so a *stopped* silver
+  asset is still caught.
 
 All are off by default; enable them in the UI. Rebuild on demand (e.g. after a bronze backfill)
 with `dagster job execute --job silver_sleep_job` (or `--job silver_glucose_job`).
