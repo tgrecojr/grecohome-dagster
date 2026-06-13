@@ -19,6 +19,10 @@ Tables today:
 - **Weather** — `silver_weather` (per-hour NOAA USCRN soil/weather). The first
   **line-oriented** (fixed-width text) source. See [Weather (NOAA USCRN)](#weather-noaa-uscrn)
   below.
+- **Daily** — `silver_daily` (per local day Garmin movement + wellness rollup). See
+  [Daily summary (Garmin)](#daily-summary-garmin) below.
+- **Strain** — `silver_strain` (per-cycle Whoop exertion; the twin of recovery). See
+  [Strain (Whoop)](#strain-whoop) below.
 
 Later tables (fitness) are further single-source reductions.
 
@@ -68,6 +72,8 @@ whoop_bronze_sleep  ─▶ silver_sleep_whoop  ─┘
 {SILVER_ROOT}/workouts/silver_workouts.parquet # workouts: one row per Garmin activity
 {SILVER_ROOT}/recovery/silver_recovery.parquet # recovery: one row per Whoop cycle
 {SILVER_ROOT}/weather/silver_weather.parquet # weather: one row per USCRN hourly observation
+{SILVER_ROOT}/daily/silver_daily.parquet     # daily summary: one row per local day (Garmin)
+{SILVER_ROOT}/strain/silver_strain.parquet   # strain: one row per Whoop cycle
 ```
 
 - **Atomic overwrite.** Each asset `COPY`s to a temp file in the destination dir and `os.replace`s
@@ -352,6 +358,75 @@ One row per hourly observation.
 | `weather_value_ranges` | ERROR | temps −60…60 °C, soil moisture 0–1, RH 0–100, precip ≥ 0, solar 0–2000 |
 | `weather_coverage_vs_bronze` | WARN | silver obs ≈ bronze distinct instants; reports distinct local days |
 
+# Daily summary (Garmin)
+
+`silver_daily` is a single-source table — one typed row per **local day** — the daily
+movement-and-wellness rollup.
+
+### Source & event date
+`garmin/user_summary` is a flat daily **super-object**: one record already carries steps,
+distance, every calorie type, floors, intensity minutes, resting/min/max HR, the full
+stress breakdown, body-battery, SpO2, and respiration. So this one table subsumes the
+standalone per-metric daily collections (`daily_steps`, `floors`, `intensity_minutes`,
+`resting_heart_rate`, daily `stress`/`spo2`/`respiration`/`body_battery`) — those remain
+only for *intraday* detail. The event date is `calendarDate` (authoritative, already
+local). Garmin re-pulls a day into several files → dedup by `calendarDate` keeping the
+latest fetch (the 13-digit `fetched_ms`), the Garmin sleep idiom.
+
+### Typing & units
+Canonical to the source: distance in metres, calories in kilocalories, durations in
+seconds, intensity in minutes. Garmin's `-1`/`-2` "no-data" sentinels on the stress
+*levels* become NULL. Coverage varies by day (older days predate some sensors); a missing
+field is NULL, the day is kept.
+
+### Schema (`silver_daily`) — selected columns
+One row per `activity_date` (DATE, key). Movement: `total_steps`, `step_goal`,
+`total_distance_m`, `total_kilocalories`, `active_kilocalories`, `bmr_kilocalories`,
+`floors_ascended`/`_descended`, `moderate_intensity_min`, `vigorous_intensity_min`. Heart:
+`min_heart_rate`, `max_heart_rate`, `resting_heart_rate`, `avg7d_resting_heart_rate`.
+Stress: `avg_stress_level`, `max_stress_level`, `rest/low/medium/high_stress_duration`.
+Body battery: `body_battery_high`/`_low`/`_charged`/`_drained`. Vitals: `avg_spo2`,
+`lowest_spo2`, `avg_waking_respiration`, `highest`/`lowest_respiration`. Time-in-state:
+`highly_active`/`active`/`sedentary`/`sleeping_seconds`.
+
+### Asset checks
+| Check | Severity | What |
+|---|---|---|
+| `daily_date_unique_nonnull` | ERROR | one row per `activity_date`, never null |
+| `daily_value_ranges` | ERROR | steps/calories/HR/stress/SpO2/body-battery within generous bounds |
+| `daily_coverage_vs_bronze` | WARN | silver days ≈ bronze distinct `calendarDate`; reports days-with-steps |
+
+# Strain (Whoop)
+
+`silver_strain` is a single-source table — one row per Whoop **cycle** — the exertion
+**twin of `silver_recovery`** (same `{records:[…]}` envelope, same dedup idiom).
+
+### Source & event date
+`whoop/cycle` records carry a numeric `id` (the cycle id), `start`/`end` (UTC),
+`timezone_offset`, `created_at`/`updated_at` (Whoop rescores), `score_state`, and a nested
+`score` (`strain` 0–21, `kilojoule`, `average_heart_rate`, `max_heart_rate`). Dedup by
+`cycle_id` keeping the latest `updated_at`. `cycle_id` is the join key into
+`silver_recovery.cycle_id` and `silver_sleep.whoop_cycle_id`, so gold can put strain next
+to recovery for the day. `strain_date` is the **local date of `start`** (a cycle begins at
+wake), derived via the record's `timezone_offset` like the sleep wake date — informational
+(a day can hold two short cycles); uniqueness is on `cycle_id`.
+
+### Typing & units
+`kilojoules` kept as Whoop reports it (gold converts to kcal); `day_strain` is the unitless
+0–21 Whoop scale. An unscored cycle (`score_state` ≠ SCORED) is kept with null metrics.
+
+### Schema (`silver_strain`)
+One row per cycle: `cycle_id` (BIGINT, key), `strain_date` (DATE), `start_ts`/`end_ts`
+(TIMESTAMP), `day_strain` (DOUBLE), `kilojoules` (DOUBLE), `avg_heart_rate`/
+`max_heart_rate` (INT), `score_state` (VARCHAR).
+
+### Asset checks
+| Check | Severity | What |
+|---|---|---|
+| `strain_cycle_unique_nonnull` | ERROR | one row per `cycle_id`; `cycle_id`/`strain_date` non-null |
+| `strain_value_ranges` | ERROR | strain 0–21, HR 20–240, kilojoules ≥ 0 |
+| `strain_coverage_vs_bronze` | WARN | silver cycles ≈ bronze distinct `cycle_id`; reports distinct days |
+
 # Operations
 
 ## Scheduling
@@ -364,8 +439,10 @@ One row per hourly observation.
 - `silver_recovery_daily` (06:50 UTC) rebuilds `silver_recovery` (Whoop hourly capture).
 - `silver_weather_daily` (06:55 UTC) rebuilds `silver_weather` (USCRN captured a few times a day;
   a daily rebuild keeps silver a current projection).
+- `silver_daily_daily` (06:40 UTC) rebuilds `silver_daily` (after the Garmin daily capture).
+- `silver_strain_daily` (06:52 UTC) rebuilds `silver_strain` (Whoop cycle).
 - `silver_checks_daily` (07:00 UTC) runs **all** silver checks (sleep + glucose + workouts +
-  recovery + weather) independently, so a *stopped* silver asset is still caught.
+  recovery + weather + daily + strain) independently, so a *stopped* silver asset is still caught.
 
 All are off by default; enable them in the UI. Rebuild on demand (e.g. after a bronze backfill)
 with `dagster job execute --job silver_sleep_job` (or `--job silver_glucose_job`).

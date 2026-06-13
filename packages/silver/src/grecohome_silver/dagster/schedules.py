@@ -18,16 +18,23 @@ from dagster import ScheduleDefinition, define_asset_job
 from grecohome_core.checks import build_bronze_checks_job, build_bronze_checks_schedule
 from grecohome_silver.dagster.assets import SLEEP_ASSETS
 from grecohome_silver.dagster.checks import SLEEP_CHECKS
+from grecohome_silver.dagster.daily_assets import DAILY_ASSETS
+from grecohome_silver.dagster.daily_checks import DAILY_CHECKS
 from grecohome_silver.dagster.glucose_assets import GLUCOSE_ASSETS
 from grecohome_silver.dagster.glucose_checks import GLUCOSE_CHECKS
 from grecohome_silver.dagster.recovery_assets import RECOVERY_ASSETS
 from grecohome_silver.dagster.recovery_checks import RECOVERY_CHECKS
+from grecohome_silver.dagster.strain_assets import STRAIN_ASSETS
+from grecohome_silver.dagster.strain_checks import STRAIN_CHECKS
 from grecohome_silver.dagster.weather_assets import WEATHER_ASSETS
 from grecohome_silver.dagster.weather_checks import WEATHER_CHECKS
 from grecohome_silver.dagster.workout_assets import WORKOUT_ASSETS
 from grecohome_silver.dagster.workout_checks import WORKOUT_CHECKS
 
-ALL_CHECKS = SLEEP_CHECKS + GLUCOSE_CHECKS + WORKOUT_CHECKS + RECOVERY_CHECKS + WEATHER_CHECKS
+ALL_CHECKS = (
+    SLEEP_CHECKS + GLUCOSE_CHECKS + WORKOUT_CHECKS + RECOVERY_CHECKS
+    + WEATHER_CHECKS + DAILY_CHECKS + STRAIN_CHECKS
+)
 
 # Daily rebuild of the three sleep assets (source intermediates + unified table).
 silver_sleep_job = define_asset_job("silver_sleep_job", selection=SLEEP_ASSETS)
@@ -67,6 +74,26 @@ silver_recovery_daily = ScheduleDefinition(
     name="silver_recovery_daily",
     job=silver_recovery_job,
     cron_schedule="50 6 * * *",  # 06:50 UTC
+    execution_timezone="UTC",
+)
+
+# Daily rebuild of the daily-summary table (Garmin user_summary; after the daily capture).
+silver_daily_job = define_asset_job("silver_daily_job", selection=DAILY_ASSETS)
+
+silver_daily_daily = ScheduleDefinition(
+    name="silver_daily_daily",
+    job=silver_daily_job,
+    cron_schedule="40 6 * * *",  # 06:40 UTC
+    execution_timezone="UTC",
+)
+
+# Daily rebuild of the strain table (Whoop cycle; after the Whoop hourly capture).
+silver_strain_job = define_asset_job("silver_strain_job", selection=STRAIN_ASSETS)
+
+silver_strain_daily = ScheduleDefinition(
+    name="silver_strain_daily",
+    job=silver_strain_job,
+    cron_schedule="52 6 * * *",  # 06:52 UTC
     execution_timezone="UTC",
 )
 
