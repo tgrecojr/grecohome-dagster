@@ -32,6 +32,8 @@ from grecohome_silver.dagster.strain_assets import STRAIN_ASSETS
 from grecohome_silver.dagster.strain_checks import STRAIN_CHECKS
 from grecohome_silver.dagster.weather_assets import WEATHER_ASSETS
 from grecohome_silver.dagster.weather_checks import WEATHER_CHECKS
+from grecohome_silver.dagster.whoop_workouts_assets import WHOOP_WORKOUTS_ASSETS
+from grecohome_silver.dagster.whoop_workouts_checks import WHOOP_WORKOUTS_CHECKS
 from grecohome_silver.dagster.workout_assets import WORKOUT_ASSETS
 from grecohome_silver.dagster.workout_checks import WORKOUT_CHECKS
 from grecohome_silver.dagster.workout_splits_assets import WORKOUT_SPLITS_ASSETS
@@ -40,7 +42,7 @@ from grecohome_silver.dagster.workout_splits_checks import WORKOUT_SPLITS_CHECKS
 ALL_CHECKS = (
     SLEEP_CHECKS + GLUCOSE_CHECKS + WORKOUT_CHECKS + RECOVERY_CHECKS
     + WEATHER_CHECKS + DAILY_CHECKS + STRAIN_CHECKS + BODY_CHECKS + FITNESS_CHECKS
-    + WORKOUT_SPLITS_CHECKS
+    + WORKOUT_SPLITS_CHECKS + WHOOP_WORKOUTS_CHECKS
 )
 
 # Daily rebuild of the three sleep assets (source intermediates + unified table).
@@ -144,6 +146,18 @@ silver_workout_splits_daily = ScheduleDefinition(
     name="silver_workout_splits_daily",
     job=silver_workout_splits_job,
     cron_schedule="47 6 * * *",  # 06:47 UTC
+    execution_timezone="UTC",
+)
+
+# Daily rebuild of the Whoop-workouts table (Whoop activities; after the Whoop hourly capture).
+silver_whoop_workouts_job = define_asset_job(
+    "silver_whoop_workouts_job", selection=WHOOP_WORKOUTS_ASSETS
+)
+
+silver_whoop_workouts_daily = ScheduleDefinition(
+    name="silver_whoop_workouts_daily",
+    job=silver_whoop_workouts_job,
+    cron_schedule="53 6 * * *",  # 06:53 UTC
     execution_timezone="UTC",
 )
 
