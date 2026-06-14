@@ -72,3 +72,17 @@ class TestAssetChecks:
         assert defs.resolve_job_def("garmin_bronze_checks_job") is not None
         s = defs.get_schedule_def("garmin_bronze_checks_hourly")
         assert s.cron_schedule == "0 * * * *"
+
+    def test_excluded_endpoints_get_no_checks(self, monkeypatch):
+        # A collection turned off via FETCH_EXCLUDE never writes again, so it must
+        # not get a (freshness) check that would inevitably age out and page.
+        from grecohome_garmin.dagster import checks as checks_mod
+
+        class _Sel:
+            def is_selected(self, name: str) -> bool:
+                return name != "menstrual_calendar"
+
+        monkeypatch.setattr(checks_mod, "settings", _Sel())
+        assert checks_mod._config_for(catalog.get("menstrual_calendar")) is None
+        # Selected collections are unaffected.
+        assert checks_mod._config_for(catalog.get("sleep")) is not None
