@@ -20,6 +20,12 @@ Policy (kept lightweight given the collection count):
 Reference/unpartitioned collections have no event timeline → ``event_date_source``
 is ``"none"`` (completeness skipped). Garmin captures with ``dedupe=False``, so
 every scheduled run writes — sidecar freshness is reliable here.
+
+* **Excluded endpoints get no checks.** A collection turned off via
+  ``FETCH_EXCLUDE`` / ``FETCH_SELECTION`` never writes again, so a freshness check
+  on it would inevitably age past tolerance and page. :func:`_config_for` gates on
+  :meth:`settings.is_selected`, the same predicate that drives capture — if we
+  don't pull it, we don't check it.
 """
 
 from __future__ import annotations
@@ -79,9 +85,18 @@ EMPIRICALLY_EMPTY: frozenset[str] = frozenset(
 
 
 def _config_for(ep: catalog.Endpoint) -> CollectionCheckConfig | None:
-    """Derive a check config for one catalog endpoint, or None if it has no asset."""
+    """Derive a check config for one catalog endpoint, or None if it has no asset
+    or the endpoint is excluded from capture."""
     asset = ASSET_BY_COLLECTION.get(ep.collection)
     if asset is None:
+        return None
+
+    # Don't check what we don't capture. An endpoint excluded via FETCH_EXCLUDE /
+    # FETCH_SELECTION never writes again, so its freshness check is guaranteed to
+    # eventually age past tolerance and page (ERROR) for data we *deliberately*
+    # stopped pulling -- exactly how a quiet female-health/pregnancy exclusion
+    # turns into a nightly critical alert. Gate on the same predicate as capture.
+    if not settings.is_selected(ep.name):
         return None
 
     is_daily = ep.kind in _DAILY_KINDS
