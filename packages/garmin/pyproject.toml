@@ -11,6 +11,7 @@ dependencies = [
     # latest to follow Garmin's auth/API drift, so it is pinned >= (a data dep,
     # like tzdata), not ==.
     "garminconnect>=0.3.5",
+    "tenacity==9.1.4",
     "pydantic==2.13.4",
     "pydantic-settings==2.14.1",
     "structlog==26.1.0",
