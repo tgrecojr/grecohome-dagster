@@ -19,8 +19,11 @@ Whoop specifics worth knowing:
   for snapshots; schema + content health still apply. They share one asset
   (``whoop_bronze_snapshots``); two configs attach to it, one per collection.
 * **Workouts** are intermittent (the user had a real multi-week gap), so the
-  completeness window is wide and WARN-only, and content health is skipped (empty
-  capture windows are normal and would otherwise cry wolf).
+  completeness window is wide and WARN-only, content health is skipped, and
+  *freshness is disabled*. A bronze file is written only when a fetch returns
+  records, so sidecar-freshness for workouts tracks "time since the last workout",
+  not "is the poller alive" — it would ERROR on any normal no-workout gap. Whole-
+  pipeline poll-liveness is already covered by sleep/recovery/cycle freshness.
 """
 
 from __future__ import annotations
@@ -135,8 +138,13 @@ WHOOP_CHECK_CONFIGS: list[CollectionCheckConfig] = [
         cadence_hours=26.0,
         cadence_days=2,
     ),
-    # Workouts are intermittent: wide completeness window, WARN-only, and no
-    # content-health (empty fetch windows are normal, not a problem).
+    # Workouts are intermittent: wide completeness window, WARN-only, no
+    # content-health, and *no freshness*. Whoop writes a bronze file only when a
+    # fetch returns records, so sidecar-freshness for workouts measures "time since
+    # the last workout" — not "is the poller alive" — and ERROR-fires on any normal
+    # multi-day no-workout gap (a real multi-week gap has happened). Poll-liveness for
+    # the whole Whoop pipeline is already covered by sleep/recovery/cycle freshness,
+    # which materialize daily; completeness (WARN, 14d) still surfaces long gaps.
     CollectionCheckConfig(
         source="whoop",
         collection="workout",
@@ -147,7 +155,7 @@ WHOOP_CHECK_CONFIGS: list[CollectionCheckConfig] = [
         event_date_field="start",
         cadence_hours=26.0,
         cadence_days=14,
-        enabled_checks=frozenset({"freshness", "completeness", "schema"}),
+        enabled_checks=frozenset({"completeness", "schema"}),
     ),
     # Snapshots: current-only, dedup'd -> freshness disabled (see module docstring).
     CollectionCheckConfig(

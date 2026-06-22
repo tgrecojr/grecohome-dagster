@@ -18,6 +18,8 @@ _FIELD_POS = {
     "sm5": 29, "sm10": 30, "sm20": 31, "sm50": 32, "sm100": 33,
     "st5": 34, "st10": 35, "st20": 36, "st50": 37, "st100": 38,
 }  # fmt: skip
+# 1-based QC-flag field index for each flagged measurement (good = "0").
+_FLAG_POS = {"solar": 15, "sur": 22, "sur_max": 24, "sur_min": 26, "rh": 28}
 
 
 def _uscrn_row(utc_date: str, utc_time: str, *, wbanno: str = "03761", **vals) -> str:
@@ -31,6 +33,8 @@ def _uscrn_row(utc_date: str, utc_time: str, *, wbanno: str = "03761", **vals) -
     f[13] = "-99999.0"  # SOLARAD sentinel
     for i in range(28, 33):  # soil-moisture sentinels (0-based 28..32 = fields 29..33)
         f[i] = "-99.0"
+    for pos in _FLAG_POS.values():  # valid QC flags by default
+        f[pos - 1] = "0"
     for name, value in vals.items():
         f[_FIELD_POS[name] - 1] = str(value)
     return " ".join(f)
