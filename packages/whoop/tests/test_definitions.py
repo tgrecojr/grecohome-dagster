@@ -44,12 +44,15 @@ class TestAssetChecks:
             for family in ("freshness", "completeness", "schema_drift", "content_health"):
                 assert (f"AssetKey(['{asset}'])", f"whoop_{coll}_{family}") in keys
 
-    def test_workout_skips_content_health(self):
+    def test_workout_skips_freshness_and_content_health(self):
         keys = self._check_keys()
         akey = "AssetKey(['whoop_bronze_workout'])"
-        assert (akey, "whoop_workout_freshness") in keys
         assert (akey, "whoop_workout_completeness") in keys
-        assert (akey, "whoop_workout_content_health") not in keys  # intermittent
+        assert (akey, "whoop_workout_schema_drift") in keys
+        # Intermittent: write-on-data only, so sidecar-freshness tracks the user's
+        # workout cadence, not poll-liveness; content-health would cry wolf on empty.
+        assert (akey, "whoop_workout_freshness") not in keys
+        assert (akey, "whoop_workout_content_health") not in keys
 
     def test_snapshots_have_schema_and_content_no_freshness(self):
         keys = self._check_keys()
@@ -63,9 +66,9 @@ class TestAssetChecks:
             assert (akey, f"whoop_{coll}_completeness") not in keys
 
     def test_total_check_count(self):
-        # 3 range collections x4 + workout x3 + 2 snapshots x2 = 19 collection checks,
-        # + 1 bespoke whoop_token_health (auth health) = 20.
-        assert len(self._check_keys()) == 20
+        # 3 range collections x4 + workout x2 (completeness+schema) + 2 snapshots x2
+        # = 18 collection checks, + 1 bespoke whoop_token_health (auth health) = 19.
+        assert len(self._check_keys()) == 19
 
     def test_token_health_check_present(self):
         # Token-health rides on a whoop bronze asset, in the hourly checks job.

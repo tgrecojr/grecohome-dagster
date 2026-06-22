@@ -24,18 +24,30 @@ _FIELD_POS = {
     "sur": 21, "sur_max": 23, "sur_min": 25, "rh": 27,
     "sm5": 29, "st5": 34,
 }  # fmt: skip
+# 1-based QC-flag field index for each flagged measurement (good = "0").
+_FLAG_POS = {"solar": 15, "sur": 22, "sur_max": 24, "sur_min": 26, "rh": 28}
 
 
-def uscrn_row(utc_date: str, utc_time: str, *, wbanno: str = "03761", **vals) -> str:
-    """Build one 38-field whitespace USCRN line; unset measurements stay sentinels."""
+def uscrn_row(
+    utc_date: str, utc_time: str, *, wbanno: str = "03761", flags: dict | None = None, **vals
+) -> str:
+    """Build one 38-field whitespace USCRN line; unset measurements stay sentinels.
+
+    Flagged fields default to a good flag ("0"); pass ``flags={"solar": 3}`` to mark a
+    measurement as failed-QC (the parser then NULLs its value).
+    """
     f = ["-9999.0"] * 38
     f[0], f[1], f[2], f[3], f[4] = wbanno, utc_date, utc_time, utc_date, utc_time
     f[5], f[6], f[7] = "2.623", "-75.79", "39.86"
     f[13] = "-99999.0"  # SOLARAD sentinel
     for i in range(28, 33):  # soil-moisture sentinels (fields 29..33)
         f[i] = "-99.0"
+    for pos in _FLAG_POS.values():  # valid QC flags by default
+        f[pos - 1] = "0"
     for name, value in vals.items():
         f[_FIELD_POS[name] - 1] = str(value)
+    for name, flag in (flags or {}).items():
+        f[_FLAG_POS[name] - 1] = str(flag)
     return " ".join(f)
 
 
@@ -136,6 +148,28 @@ def test_surface_temp_error_sentinel_nulled(tmp_path, monkeypatch) -> None:
     path = weather_path(WEATHER_PARQUET)
     surface = connect().execute(f"SELECT surface_temp_c FROM read_parquet('{path}')").fetchone()[0]
     assert surface is None
+    # And nothing out-of-range leaks through to trip the range check.
+    assert checks_mod.weather_value_ranges().passed
+
+
+def test_qc_flagged_value_nulled(tmp_path, monkeypatch) -> None:
+    """A failed-QC SOLARAD value becomes NULL (not a -13107 W/m² reading).
+
+    Regression for 2026-06-19 15:00Z, where USCRN reported SOLARAD = -13107 with
+    flag 3 — not a documented sentinel, so it leaked into silver and tripped the
+    range check. A non-zero QC flag now NULLs the value.
+    """
+    root = str(tmp_path / "bronze")
+    write_uscrn(root, "2026-06-19", 1_700_003_000000, [
+        uscrn_row("20260619", "1500", solar=-13107.0, flags={"solar": 3}),
+    ])
+    monkeypatch.setattr(settings, "bronze_root", root)
+    monkeypatch.setattr(settings, "silver_root", str(tmp_path / "silver"))
+    assert materialize([silver_weather]).success
+
+    path = weather_path(WEATHER_PARQUET)
+    solar = connect().execute(f"SELECT solar_rad_wm2 FROM read_parquet('{path}')").fetchone()[0]
+    assert solar is None
     # And nothing out-of-range leaks through to trip the range check.
     assert checks_mod.weather_value_ranges().passed
 

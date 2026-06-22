@@ -24,6 +24,14 @@ projection. Imperial + derived gardening metrics (°F, inches, growing-degree-da
 in the gold daily mart. Sentinels (``-9999`` temps/precip/RH, ``-99`` soil moisture,
 ``-99999`` solar) become NULL. Leading NUL-byte corruption (seen on 2 DST-transition
 rows) is stripped before the whitespace split.
+
+**Per-field QC flags are honored.** The flagged measurements (SOLARAD, SUR_TEMP and its
+max/min, RH_HR_AVG) each carry an adjacent flag field; ``0`` means good, any non-zero
+value means the datum failed QC. A failed-QC value is *not* a sentinel — on 2026-06-19
+15:00Z USCRN reported ``SOLARAD = -13107`` with flag ``3`` — so it would otherwise leak a
+physically-impossible reading into silver (and trip the value-range check). We therefore
+NULL any flagged value whose flag is non-zero. Fields without a flag column in this
+product (air temp, precip, soil moisture/temp) keep sentinel-only handling.
 """
 
 from __future__ import annotations
@@ -39,28 +47,30 @@ _TEMP_SENTINELS = (-9999.0, 99999.0)  # air/surface/soil temperatures, precip, R
 _MOISTURE_SENTINELS = (-99.0,)  # volumetric soil moisture (m³/m³)
 _SOLAR_SENTINELS = (-99999.0,)  # solar radiation (W/m²)
 
-# Every numeric measurement: (output column, 1-based field index, missing sentinels).
-# Field positions per the product's HEADERS.txt, confirmed against live bronze.
-_FIELDS: list[tuple[str, int, tuple[float, ...]]] = [
-    ("air_temp_c", 10, _TEMP_SENTINELS),  # T_HR_AVG
-    ("air_temp_max_c", 11, _TEMP_SENTINELS),  # T_MAX
-    ("air_temp_min_c", 12, _TEMP_SENTINELS),  # T_MIN
-    ("precip_mm", 13, _TEMP_SENTINELS),  # P_CALC (hourly total)
-    ("solar_rad_wm2", 14, _SOLAR_SENTINELS),  # SOLARAD
-    ("surface_temp_c", 21, _TEMP_SENTINELS),  # SUR_TEMP
-    ("surface_temp_max_c", 23, _TEMP_SENTINELS),  # SUR_TEMP_MAX
-    ("surface_temp_min_c", 25, _TEMP_SENTINELS),  # SUR_TEMP_MIN
-    ("rh_pct", 27, _TEMP_SENTINELS),  # RH_HR_AVG
-    ("soil_moisture_5", 29, _MOISTURE_SENTINELS),  # SOIL_MOISTURE_5
-    ("soil_moisture_10", 30, _MOISTURE_SENTINELS),
-    ("soil_moisture_20", 31, _MOISTURE_SENTINELS),
-    ("soil_moisture_50", 32, _MOISTURE_SENTINELS),
-    ("soil_moisture_100", 33, _MOISTURE_SENTINELS),
-    ("soil_temp_5", 34, _TEMP_SENTINELS),  # SOIL_TEMP_5
-    ("soil_temp_10", 35, _TEMP_SENTINELS),
-    ("soil_temp_20", 36, _TEMP_SENTINELS),
-    ("soil_temp_50", 37, _TEMP_SENTINELS),
-    ("soil_temp_100", 38, _TEMP_SENTINELS),
+# Every numeric measurement: (output column, 1-based field index, missing sentinels,
+# 1-based QC-flag field index or None). Positions per the product's HEADERS.txt,
+# confirmed against live bronze. Only SOLARAD, SUR_TEMP{,_MAX,_MIN} and RH_HR_AVG carry
+# a flag in the hourly product; a non-zero flag nulls the value (see module docstring).
+_FIELDS: list[tuple[str, int, tuple[float, ...], int | None]] = [
+    ("air_temp_c", 10, _TEMP_SENTINELS, None),  # T_HR_AVG
+    ("air_temp_max_c", 11, _TEMP_SENTINELS, None),  # T_MAX
+    ("air_temp_min_c", 12, _TEMP_SENTINELS, None),  # T_MIN
+    ("precip_mm", 13, _TEMP_SENTINELS, None),  # P_CALC (hourly total)
+    ("solar_rad_wm2", 14, _SOLAR_SENTINELS, 15),  # SOLARAD (+ SOLARAD_FLAG)
+    ("surface_temp_c", 21, _TEMP_SENTINELS, 22),  # SUR_TEMP (+ SUR_TEMP_FLAG)
+    ("surface_temp_max_c", 23, _TEMP_SENTINELS, 24),  # SUR_TEMP_MAX (+ flag)
+    ("surface_temp_min_c", 25, _TEMP_SENTINELS, 26),  # SUR_TEMP_MIN (+ flag)
+    ("rh_pct", 27, _TEMP_SENTINELS, 28),  # RH_HR_AVG (+ RH_HR_AVG_FLAG)
+    ("soil_moisture_5", 29, _MOISTURE_SENTINELS, None),  # SOIL_MOISTURE_5
+    ("soil_moisture_10", 30, _MOISTURE_SENTINELS, None),
+    ("soil_moisture_20", 31, _MOISTURE_SENTINELS, None),
+    ("soil_moisture_50", 32, _MOISTURE_SENTINELS, None),
+    ("soil_moisture_100", 33, _MOISTURE_SENTINELS, None),
+    ("soil_temp_5", 34, _TEMP_SENTINELS, None),  # SOIL_TEMP_5
+    ("soil_temp_10", 35, _TEMP_SENTINELS, None),
+    ("soil_temp_20", 36, _TEMP_SENTINELS, None),
+    ("soil_temp_50", 37, _TEMP_SENTINELS, None),
+    ("soil_temp_100", 38, _TEMP_SENTINELS, None),
 ]
 
 # The UTC instant of an observation = strptime(UTC_DATE || UTC_TIME). This is the
@@ -72,11 +82,15 @@ _OBS_TS_UTC = "TRY_CAST(strptime(f[2] || f[3], '%Y%m%d%H%M') AS TIMESTAMP)"
 _FETCHED_MS = r"TRY_CAST(regexp_extract(filename, '_([0-9]{13})_', 1) AS BIGINT)"
 
 
-def _num(idx: int, sentinels: tuple[float, ...]) -> str:
-    """Field ``idx`` (1-based) as DOUBLE, with each missing-sentinel mapped to NULL."""
+def _num(idx: int, sentinels: tuple[float, ...], flag_idx: int | None = None) -> str:
+    """Field ``idx`` (1-based) as DOUBLE: missing-sentinels -> NULL, and (when the field
+    carries a QC flag at ``flag_idx``) any non-zero flag -> NULL (failed-QC datum)."""
     expr = f"TRY_CAST(f[{idx}] AS DOUBLE)"
     for sentinel in sentinels:
         expr = f"nullif({expr}, {sentinel})"
+    if flag_idx is not None:
+        # USCRN QC flag: 0 = good; any non-zero (or unparseable) flag fails QC.
+        expr = f"CASE WHEN TRY_CAST(f[{flag_idx}] AS INTEGER) = 0 THEN {expr} END"
     return expr
 
 
@@ -99,7 +113,8 @@ def weather_sql(files: list[str], *, timezone: str) -> str:
     tz = timezone.replace("'", "''")
     obs_local = f"(({_OBS_TS_UTC}) AT TIME ZONE 'UTC') AT TIME ZONE '{tz}'"
     measurements = ",\n            ".join(
-        f"{_num(idx, sentinels)} AS {name}" for name, idx, sentinels in _FIELDS
+        f"{_num(idx, sentinels, flag_idx)} AS {name}"
+        for name, idx, sentinels, flag_idx in _FIELDS
     )
     typed = f"""
         SELECT
