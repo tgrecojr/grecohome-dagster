@@ -10,7 +10,7 @@ dependencies = [
     # container) write to the host instance's Postgres event/run/schedule storage.
     "dagster-postgres==0.29.8",
     "pydantic==2.13.4",
-    "pydantic-settings==2.14.1",
+    "pydantic-settings==2.14.2",
     "structlog==26.1.0",
     "python-json-logger==4.1.0",
     "python-dotenv==1.2.2",
