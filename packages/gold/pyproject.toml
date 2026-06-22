@@ -9,7 +9,7 @@ dependencies = [
     "dagster==1.13.8",
     "duckdb==1.5.3",
     "pydantic==2.13.4",
-    "pydantic-settings==2.14.1",
+    "pydantic-settings==2.14.2",
     "structlog==26.1.0",
     "python-json-logger==4.1.0",
     "python-dotenv==1.2.2",
