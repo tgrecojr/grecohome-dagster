@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "grecohome-core",
-    "dagster==1.13.8",
+    "dagster==1.13.10",
     # DuckDB is silver's transform + Parquet engine; it lives only in this image,
     # never in the bronze capture images (which need no query engine).
     "duckdb==1.5.4",

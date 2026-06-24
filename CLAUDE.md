@@ -55,7 +55,7 @@ can be dropped and regenerated); bronze is the only source of truth.
 
 ## Hard constraints
 
-- **Pins:** `dagster==1.13.8` and all `dagster-*==0.29.8` (must match the host so the
+- **Pins:** `dagster==1.13.10` and all `dagster-*==0.29.10` (must match the host so the
   daemon ↔ code-location gRPC protocol stays in sync). Other libs pinned `==`; pure-data
   deps (`tzdata`) use `>=`. DuckDB (silver/gold) is pinned `==`.
 - **No transactional database.** Bronze is files; silver/gold are Parquet via DuckDB. No

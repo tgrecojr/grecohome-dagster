@@ -322,7 +322,7 @@ wheels = [
 
 [[package]]
 name = "dagster"
-version = "1.13.8"
+version = "1.13.10"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "alembic" },
@@ -354,36 +354,36 @@ dependencies = [
     { name = "universal-pathlib" },
     { name = "watchdog" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/fa/d6/d4771305b16a6c596bf3eb335f67a14345c0c7dd45d67ba361b433de3054/dagster-1.13.8.tar.gz", hash = "sha256:26dd957b58bba3683675ffd4840e64b9b812bcdb7bd584f495fc4353b565f9bd", size = 3459965, upload-time = "2026-06-04T17:11:04.601Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/4c/c6/745b4d571b59cd3f65ff51845c81e0e1d57235cd3f873fe2d01ca17c3a1d/dagster-1.13.10.tar.gz", hash = "sha256:1d76ca1b40250132c5913797adc7121c6de05f287cd4d4dea5d4122ea9cf5514", size = 3562689, upload-time = "2026-06-18T18:33:31.239Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/86/23/718b8ae5f61a37eb41129a97e7091cf2ff179a84b2f7f04cb282953d25cb/dagster-1.13.8-py3-none-any.whl", hash = "sha256:91fb06f0246360b6a1c3820d66ae1f41094e6f5fb781e660653ca85258cf16c2", size = 1997084, upload-time = "2026-06-04T17:11:01.337Z" },
+    { url = "https://files.pythonhosted.org/packages/e4/26/c8c8e839cf79eef3911d25d8f82894ef2104cbc4d6348aaef25b36d47093/dagster-1.13.10-py3-none-any.whl", hash = "sha256:2a5f1f05979a50c82606c6b6468f2a12e5d54646c14ba4a23cd423f85b133a3a", size = 2000249, upload-time = "2026-06-18T18:33:28.765Z" },
 ]
 
 [[package]]
 name = "dagster-pipes"
-version = "1.13.8"
+version = "1.13.10"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/12/56/d1cd4c250f4794e6060aa276c63ede7effb16b9fc61e8c5ecbe5a129569c/dagster_pipes-1.13.8.tar.gz", hash = "sha256:7ea9db46b3278a7888901d0de8d6b7364cf72ac4871a272a814d79ae7f7b7b19", size = 149657, upload-time = "2026-06-04T17:11:34.692Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/85/ac/21deab022989000da16a404a5983f78196e7a7ffac16eb63d1fffab8ec83/dagster_pipes-1.13.10.tar.gz", hash = "sha256:92bac2e89233cc0ddeee38b4b79e6d30d63c7f00b4e213a235b777caab48ecc4", size = 149680, upload-time = "2026-06-18T18:33:59.972Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/24/93/2e4e5eb11a58d5e63915003f5670a6b2ab7b372e2eb5e28bffa178c06cb5/dagster_pipes-1.13.8-py3-none-any.whl", hash = "sha256:7a9ff74c1278caf0c9dc8cecfddff9dbacb660a727e020f26bb832d8261da506", size = 20221, upload-time = "2026-06-04T17:11:33.275Z" },
+    { url = "https://files.pythonhosted.org/packages/02/2b/b7b1c4bc1a5c9561412c38dd524e3106bf3921f87999ffc3660fd0a76b3a/dagster_pipes-1.13.10-py3-none-any.whl", hash = "sha256:99977d01a0e8f65e4093b9cfd48acb0ca4e2656ffc5c131f40175df5a00b26e9", size = 20244, upload-time = "2026-06-18T18:33:58.846Z" },
 ]
 
 [[package]]
 name = "dagster-postgres"
-version = "0.29.8"
+version = "0.29.10"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "dagster" },
     { name = "psycopg2-binary" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3f/f0/e5b27120dab5766a84d8a3e5c34f8aaab6c49aeaf116221931cea9fba0de/dagster_postgres-0.29.8.tar.gz", hash = "sha256:078ec25455172d85a2ff8ac8ba393ab61bf90017e5a9b04325892ea891b12d26", size = 405632, upload-time = "2026-06-04T17:20:18.374Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/20/68/255c48396691e09bf15ae228d4410042aa0cdf4a29a3f1b0832da4446957/dagster_postgres-0.29.10.tar.gz", hash = "sha256:f6344376a195645f4917691a43e69ed6f4e3885d4caa8ea14c442de101a73cdb", size = 406286, upload-time = "2026-06-18T18:47:03.731Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/65/01/a46436eb65bc4450c687f0566f4916eee05be7d17f903257ac6a7aaa0789/dagster_postgres-0.29.8-py3-none-any.whl", hash = "sha256:487ba26cbb66ada82fb4ea3c434f75c795e1b353d64bc8e80f7d73686406e47e", size = 25490, upload-time = "2026-06-04T17:20:16.481Z" },
+    { url = "https://files.pythonhosted.org/packages/7b/1a/578d4b3e066ea5aeb7d821090748ac82c18df3f8a3caf44c0a098e096243/dagster_postgres-0.29.10-py3-none-any.whl", hash = "sha256:d35d5bc3a68698a3ef596c04974f73f219d0112647985572d8538e49b56813e1", size = 25504, upload-time = "2026-06-18T18:47:02.561Z" },
 ]
 
 [[package]]
 name = "dagster-shared"
-version = "1.13.8"
+version = "1.13.10"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "packaging" },
@@ -393,9 +393,9 @@ dependencies = [
     { name = "tomlkit" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f4/bb/fcba5d6493e86482483e7744b910cbe286ac67292d56b92d5cceb0850ac1/dagster_shared-1.13.8.tar.gz", hash = "sha256:b5493531001a73bffa95961109e701346e3fbf56c7df8bbac56a6b67c7644093", size = 122814, upload-time = "2026-06-04T17:22:04.307Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c6/c9/3aadcd3e950d1794f05dae78dec97ba612c8d784b2c631afeb3d3be85b93/dagster_shared-1.13.10.tar.gz", hash = "sha256:4a2fcdfcd0de225f8cb95f7896afc696f895778e5c6717cc13863472d1fbd7c5", size = 123699, upload-time = "2026-06-18T18:52:16.912Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9e/51/bd7fc8261b68358864d1d02fc4a40bdb02953c7cff85563710c809afd3fa/dagster_shared-1.13.8-py3-none-any.whl", hash = "sha256:0d6da0818bba61fed4b394bf35a1e9e065154e5e3f3e73af9366d588052e7fd4", size = 95530, upload-time = "2026-06-04T17:22:03.234Z" },
+    { url = "https://files.pythonhosted.org/packages/7a/b2/1e9ab122e090f4c95dcbef2e55206b64fbd2585cb0e58e18984e7e2038d7/dagster_shared-1.13.10-py3-none-any.whl", hash = "sha256:a66dda9ec1d8373c0dfcc9d0fcb133f098677949fd8ee08443421717d8a27e2e", size = 95992, upload-time = "2026-06-18T18:52:15.89Z" },
 ]
 
 [[package]]
@@ -553,8 +553,8 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dagster", specifier = "==1.13.8" },
-    { name = "dagster-postgres", specifier = "==0.29.8" },
+    { name = "dagster", specifier = "==1.13.10" },
+    { name = "dagster-postgres", specifier = "==0.29.10" },
     { name = "pydantic", specifier = "==2.13.4" },
     { name = "pydantic-settings", specifier = "==2.14.2" },
     { name = "python-dotenv", specifier = "==1.2.2" },
@@ -582,7 +582,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dagster", specifier = "==1.13.8" },
+    { name = "dagster", specifier = "==1.13.10" },
     { name = "garminconnect", specifier = ">=0.3.5" },
     { name = "grecohome-core", editable = "packages/core" },
     { name = "pydantic", specifier = "==2.13.4" },
@@ -612,7 +612,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dagster", specifier = "==1.13.8" },
+    { name = "dagster", specifier = "==1.13.10" },
     { name = "duckdb", specifier = "==1.5.4" },
     { name = "grecohome-core", editable = "packages/core" },
     { name = "pydantic", specifier = "==2.13.4" },
@@ -643,7 +643,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dagster", specifier = "==1.13.8" },
+    { name = "dagster", specifier = "==1.13.10" },
     { name = "google-api-python-client", specifier = ">=2.0.0" },
     { name = "google-auth", specifier = ">=2.0.0" },
     { name = "google-auth-httplib2", specifier = ">=0.2.0" },
@@ -674,7 +674,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dagster", specifier = "==1.13.8" },
+    { name = "dagster", specifier = "==1.13.10" },
     { name = "duckdb", specifier = "==1.5.4" },
     { name = "grecohome-core", editable = "packages/core" },
     { name = "pydantic", specifier = "==2.13.4" },
@@ -703,7 +703,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "dagster", specifier = "==1.13.8" },
+    { name = "dagster", specifier = "==1.13.10" },
     { name = "grecohome-core", editable = "packages/core" },
     { name = "httpx", specifier = "==0.28.1" },
     { name = "pydantic", specifier = "==2.13.4" },
@@ -735,7 +735,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "authlib", specifier = "==1.7.2" },
-    { name = "dagster", specifier = "==1.13.8" },
+    { name = "dagster", specifier = "==1.13.10" },
     { name = "grecohome-core", editable = "packages/core" },
     { name = "httpx", specifier = "==0.28.1" },
     { name = "pydantic", specifier = "==2.13.4" },

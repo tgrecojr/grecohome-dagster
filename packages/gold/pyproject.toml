@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "grecohome-core",
-    "dagster==1.13.8",
+    "dagster==1.13.10",
     "duckdb==1.5.4",
     "pydantic==2.13.4",
     "pydantic-settings==2.14.2",

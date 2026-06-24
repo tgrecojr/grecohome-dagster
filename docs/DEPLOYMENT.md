@@ -22,7 +22,7 @@ provenance attestation.
 
 ## Pins (hard requirement)
 
-`dagster==1.13.8` and all `dagster-*==0.29.8` must match the host daemon/webserver so the
+`dagster==1.13.10` and all `dagster-*==0.29.10` must match the host daemon/webserver so the
 daemon ↔ code-location gRPC protocol stays in sync. A mismatch fails code-location loading
 with opaque gRPC errors. Renovate is configured **not** to bump these; update them
 deliberately, in lockstep with the host.
@@ -51,7 +51,7 @@ enforced by the host instance (stored in its Postgres), not the image.** Set it 
 hourly tick and any backfill cannot collectively exceed the API budget (and only one run
 holds the OAuth token at a time, avoiding the refresh-token rotation race).
 
-In Dagster 1.13.8 a **per-pool limit is set in the instance DB via the CLI**, not in
+In Dagster 1.13.10 a **per-pool limit is set in the instance DB via the CLI**, not in
 `dagster.yaml`. (The `concurrency.pools` block in `dagster.yaml` only accepts
 `default_limit` / `granularity` / `op_granularity_run_buffer` — naming a pool there, e.g.
 `pools: { whoop_api: { max_concurrent: 1 } }`, is invalid and crashes the daemon at instance

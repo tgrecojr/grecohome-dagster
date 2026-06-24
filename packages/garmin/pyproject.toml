@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "grecohome-core",
-    "dagster==1.13.8",
+    "dagster==1.13.10",
     # Garmin Connect access is fully delegated to this library; it must track the
     # latest to follow Garmin's auth/API drift, so it is pinned >= (a data dep,
     # like tzdata), not ==.

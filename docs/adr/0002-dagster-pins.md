@@ -9,7 +9,7 @@ separate gRPC server the host connects to. The daemon/webserver ↔ code-locatio
 version-coupled.
 
 ## Decision
-- **Pin `dagster==1.13.8` and all `dagster-*==0.29.8`** to match the host exactly, so the gRPC
+- **Pin `dagster==1.13.10` and all `dagster-*==0.29.10`** to match the host exactly, so the gRPC
   protocol contract stays in sync. A patch mismatch fails code-location loading with opaque
   gRPC errors. Renovate is configured to **not** bump these; they change deliberately, in
   lockstep with the host.
@@ -19,7 +19,7 @@ version-coupled.
   webserver, or `dagster.yaml`.
 - **Host owns concurrency.** The shared `whoop_api` pool's limit is set on the host instance
   via `dagster instance concurrency set whoop_api 1` (stored in the instance Postgres), not in
-  the image. In 1.13.8 a per-pool limit can't be named in `dagster.yaml` (its `concurrency.pools`
+  the image. In 1.13.10 a per-pool limit can't be named in `dagster.yaml` (its `concurrency.pools`
   only takes `default_limit`/`granularity`); the asset just tags the pool.
 
 ## Consequences
