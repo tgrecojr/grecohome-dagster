@@ -93,6 +93,7 @@
       "security"
     ]
   },
+  "osvVulnerabilityAlerts": true,
   "lockFileMaintenance": {
     "enabled": true,
     "schedule": [
