@@ -5,10 +5,10 @@ description = "Shared framework for grecohome data-subject pipelines (bronze cap
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "dagster==1.13.8",
+    "dagster==1.13.10",
     # Lets a run worker (DefaultRunLauncher runs execute inside the code-location
     # container) write to the host instance's Postgres event/run/schedule storage.
-    "dagster-postgres==0.29.8",
+    "dagster-postgres==0.29.10",
     "pydantic==2.13.4",
     "pydantic-settings==2.14.2",
     "structlog==26.1.0",
