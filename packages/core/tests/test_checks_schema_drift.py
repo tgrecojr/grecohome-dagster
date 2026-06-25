@@ -61,6 +61,37 @@ class TestSchemaDrift:
         assert res.severity == AssetCheckSeverity.ERROR
         assert res.metadata["status"].value == "drift"
 
+    def test_sparse_stub_on_newest_day_does_not_drift(self, capture, bronze_root, monitor_dir):
+        # A full day defines the baseline...
+        full = {"dailySleepDTO": {}, "remSleepData": True, "sleepHeartRate": [],
+                "wellnessEpochSPO2DataDTOList": []}
+        capture("garmin", "sleep", full, dt="2024-12-01")
+        check = build_schema_drift_check(_cfg(), bronze_root, monitor_dir)
+        check()  # baseline = the 4 full-day keys
+        # ...then the newest partition is a not-yet-synced stub missing the optional
+        # sensor sections (and carrying a thin-day-only field). The signature must be
+        # taken from the richer earlier day, so this does NOT page.
+        capture("garmin", "sleep", {"dailySleepDTO": {}, "displayName": "x"},
+                dt="2024-12-02")
+        res = check()
+        assert res.passed
+        assert res.metadata["status"].value == "ok"
+
+    def test_real_added_field_still_drifts(self, capture, bronze_root, monitor_dir):
+        # Guard the other direction: a genuinely richer payload (new contract field)
+        # must still be caught — the richest representative is the new shape.
+        capture("garmin", "sleep", {"dailySleepDTO": {}, "remSleepData": True},
+                dt="2024-12-01")
+        check = build_schema_drift_check(_cfg(), bronze_root, monitor_dir)
+        check()  # baseline = 2 keys
+        capture("garmin", "sleep",
+                {"dailySleepDTO": {}, "remSleepData": True, "newContractField": 1},
+                dt="2024-12-02")
+        res = check()
+        assert not res.passed
+        assert res.severity == AssetCheckSeverity.ERROR
+        assert res.metadata["status"].value == "drift"
+
     def test_disabled_without_monitor_dir(self, capture, bronze_root):
         capture("garmin", "sleep", {"dailySleepDTO": {}}, dt="2024-12-01")
         check = build_schema_drift_check(_cfg(), bronze_root, None)
