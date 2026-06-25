@@ -294,36 +294,16 @@ def find_gaps(dates: list[date], cadence_days: int) -> list[tuple[date, date, in
 # ---------------------------------------------------------------------------
 # Schema signature
 # ---------------------------------------------------------------------------
-def newest_payload(coll_dir: str, recent_partitions: int | None) -> str | None:
-    """Path to the most recent payload file (sidecars excluded), or None."""
-    for _dt, pdir in reversed(trailing_partition_dirs(coll_dir, recent_partitions)):
-        payloads = iter_payloads(pdir)
-        if payloads:
-            return payloads[-1]
-    return None
-
-
-def schema_signature(
-    coll_dir: str,
-    *,
-    reader: str,
-    unnest_records: bool,
-    recent_partitions: int | None,
-) -> list[str] | None:
-    """A stable top-level signature of the payload shape, from **one** exact file.
+def _payload_signature(payload: str, *, reader: str, unnest_records: bool) -> list[str] | None:
+    """The top-level signature of **one** exact payload file (None if unreadable).
 
     * JSON ``{"records": [...]}`` (``unnest_records``): sorted keys of one record.
     * Flat JSON object: sorted top-level keys (hive ``dt`` is not in the payload).
     * CSV: sorted column names.
-    * txt: the field count of the first row (USCRN-style fixed-width/space rows),
-      returned as a single ``"fields=<n>"`` token.
+    * txt: the field count of the first non-empty row, as a ``"fields=<n>"`` token.
 
-    Returns None when there is no payload to read yet. Reading one exact file (never
-    a glob) is what keeps sidecar fields out of the signature.
+    Reading one exact file (never a glob) is what keeps sidecar fields out.
     """
-    payload = newest_payload(coll_dir, recent_partitions)
-    if payload is None:
-        return None
     try:
         if reader == "json":
             with open(payload, "rb") as fh:
@@ -348,6 +328,42 @@ def schema_signature(
         return ["fields=0"]
     except (OSError, json.JSONDecodeError):
         return None
+
+
+def schema_signature(
+    coll_dir: str,
+    *,
+    reader: str,
+    unnest_records: bool,
+    recent_partitions: int | None,
+) -> list[str] | None:
+    """A stable top-level signature of the payload shape, from the **richest**
+    representative payload across the trailing partitions.
+
+    Picking the *single newest* file would let a data-sparse "stub" define the
+    schema: sources like Garmin emit a thin payload for the most recent day before
+    it finishes syncing — whole optional sections are absent, and a thin-day-only
+    field occasionally appears — which trips drift every run until the day fills in.
+    Optional sections only exist when data does, so the fullest recent payload (the
+    most top-level tokens; ties resolved to the newest) is the best sample of the
+    source's true contract. A real schema change still moves this signature: an
+    added field makes the richest payload richer; a field dropped across *all*
+    recent days lowers every candidate.
+
+    Returns None when there is no payload to read yet.
+    """
+    best: list[str] | None = None
+    # Newest partition first, so an equal-richness tie keeps the newer payload.
+    for _dt, pdir in reversed(trailing_partition_dirs(coll_dir, recent_partitions)):
+        payloads = iter_payloads(pdir)
+        if not payloads:
+            continue
+        sig = _payload_signature(payloads[-1], reader=reader, unnest_records=unnest_records)
+        if sig is None:
+            continue
+        if best is None or len(sig) > len(best):
+            best = sig
+    return best
 
 
 # ---------------------------------------------------------------------------
