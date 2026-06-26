@@ -148,9 +148,10 @@ class TokenManager:
             try:
                 token_data = await self.oauth_client.refresh_access_token(state.refresh_token)
             except Exception as e:
-                logger.error(
-                    "Failed to refresh token", user_id=user_id, error=str(e), exc_info=True
-                )
+                # No exc_info: the exception's locals (the access/refresh tokens)
+                # would otherwise be rendered into logs. str(e) is the safe
+                # status-only message; the oauth client logs the specific cause.
+                logger.error("Failed to refresh token", user_id=user_id, error=str(e))
                 raise
 
             # Validate before mutating stored state, so a malformed 200 can't
@@ -177,11 +178,18 @@ class TokenManager:
         """Persist a refreshed token atomically and return the new access token."""
         new_access_token = token_data["access_token"]
         expires_at = datetime.now(UTC) + timedelta(seconds=token_data["expires_in"])
+        rotated_refresh_token = token_data.get("refresh_token")
+        if not rotated_refresh_token:
+            # Whoop rotates the refresh token on every refresh, so a 200 without
+            # one is anomalous. Keep the current token (don't drop the grant), but
+            # surface it loudly — silently re-persisting a possibly-consumed token
+            # is exactly how a refresh failure turns into a silent multi-hour outage.
+            logger.warning("whoop_token_no_rotation")
         self.store.write_atomic(
             {
                 "access_token": new_access_token,
                 # Whoop rotates the refresh token; fall back to the current one if absent.
-                "refresh_token": token_data.get("refresh_token", current.refresh_token),
+                "refresh_token": rotated_refresh_token or current.refresh_token,
                 "token_type": token_data.get("token_type", current.token_type),
                 "expires_at": expires_at.isoformat(),
                 "scopes": current.scopes,

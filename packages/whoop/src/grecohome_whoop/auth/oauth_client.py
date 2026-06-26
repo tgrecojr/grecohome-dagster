@@ -11,11 +11,50 @@ from urllib.parse import urlencode
 
 import httpx
 from authlib.oauth2.rfc7636 import create_s256_code_challenge
+from tenacity import (
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from grecohome_core.logging_config import get_logger
 from grecohome_whoop.config import settings
 
 logger = get_logger(__name__)
+
+# Transient token-endpoint failures worth a brief retry. 4xx (esp. 400
+# invalid_grant / 401) are terminal: the refresh token is consumed or revoked and
+# only re-auth recovers it, so retrying just hammers the endpoint with a dead grant.
+_RETRYABLE_TOKEN_STATUS = frozenset({429, 500, 502, 503, 504})
+_TOKEN_EXP_WAIT = wait_exponential(multiplier=1, min=1, max=8)
+
+
+def _parse_retry_after(value: str | None) -> float | None:
+    """Parse a Retry-After header (delta-seconds form). HTTP-date form -> None."""
+    if not value:
+        return None
+    try:
+        return max(0.0, float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_retryable_token_error(exc: BaseException) -> bool:
+    """True for transient token-endpoint failures (5xx/429, network) — never 4xx."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in _RETRYABLE_TOKEN_STATUS
+    return isinstance(exc, httpx.TransportError)
+
+
+def _token_retry_wait(retry_state) -> float:
+    """Honor a server Retry-After on transient failures, else exponential backoff."""
+    exc = retry_state.outcome.exception() if retry_state.outcome else None
+    if isinstance(exc, httpx.HTTPStatusError):
+        retry_after = _parse_retry_after(exc.response.headers.get("Retry-After"))
+        if retry_after is not None:
+            return min(retry_after, 30.0)
+    return _TOKEN_EXP_WAIT(retry_state)
 
 
 class WhoopOAuthClient:
@@ -136,11 +175,22 @@ class WhoopOAuthClient:
             logger.error("Unexpected error during token exchange", error=str(e), exc_info=True)
             raise
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=_token_retry_wait,
+        retry=retry_if_exception(_is_retryable_token_error),
+        reraise=True,
+    )
     async def refresh_access_token(
         self,
         refresh_token: str,
     ) -> dict[str, Any]:
         """Refresh an expired access token.
+
+        Transient failures (5xx / 429 / network) are retried up to 3 times with
+        backoff; a 4xx (400 invalid_grant / 401) is terminal and re-raised
+        immediately — the refresh token is consumed or revoked and only re-auth
+        (``python -m grecohome_whoop.oauth_setup``) recovers it.
 
         Raises:
             httpx.HTTPStatusError: If the refresh fails (token expired/revoked).
@@ -169,7 +219,14 @@ class WhoopOAuthClient:
                 return token_data
         except httpx.HTTPStatusError as e:
             # Log status only -- the body / exc_info carries secrets.
-            logger.error("Token refresh failed", status_code=e.response.status_code)
+            status = e.response.status_code
+            if status in (400, 401):
+                # Terminal: the refresh token is dead. Emit a distinct, greppable
+                # event so alerting can page for re-auth immediately, instead of
+                # waiting out the token-health check's grace window.
+                logger.error("whoop_token_invalid_grant", status_code=status)
+            else:
+                logger.error("Token refresh failed", status_code=status)
             raise
         except Exception as e:
             logger.error("Unexpected error during token refresh", error=str(e), exc_info=True)

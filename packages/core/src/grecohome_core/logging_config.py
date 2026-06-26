@@ -38,6 +38,19 @@ def configure_logging(log_level: str = "INFO", environment: str = "development")
     console_handler.setFormatter(json_formatter)
     root_logger.addHandler(console_handler)
 
+    # Never render frame-local variables in tracebacks. Secrets (e.g. the Whoop
+    # OAuth access/refresh tokens) live in locals on the refresh path, and the
+    # dev rich-traceback formatter defaults to dumping them verbatim into logs.
+    # Forcing show_locals=False keeps any stray exc_info=True from leaking them.
+    renderer = (
+        structlog.processors.JSONRenderer()
+        if environment == "production"
+        else structlog.dev.ConsoleRenderer(
+            colors=True,
+            exception_formatter=structlog.dev.RichTracebackFormatter(show_locals=False),
+        )
+    )
+
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,
@@ -45,9 +58,7 @@ def configure_logging(log_level: str = "INFO", environment: str = "development")
             structlog.processors.StackInfoRenderer(),
             structlog.dev.set_exc_info,
             structlog.processors.TimeStamper(fmt="iso", utc=True),
-            structlog.processors.JSONRenderer()
-            if environment == "production"
-            else structlog.dev.ConsoleRenderer(colors=True),
+            renderer,
         ],
         wrapper_class=structlog.make_filtering_bound_logger(level),
         context_class=dict,

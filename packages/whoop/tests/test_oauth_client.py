@@ -126,6 +126,48 @@ class TestWhoopOAuthClientAsync:
             await client.refresh_access_token("invalid_refresh_token")
 
     @respx.mock
+    async def test_refresh_does_not_retry_on_400(self):
+        # 400 invalid_grant is terminal: the refresh token is dead, so retrying
+        # would only hammer Whoop with a known-bad grant. Must be a single call.
+        client = WhoopOAuthClient()
+        respx.post(client.token_url).mock(
+            return_value=httpx.Response(400, json={"error": "invalid_grant"})
+        )
+        with pytest.raises(httpx.HTTPStatusError):
+            await client.refresh_access_token("dead_refresh_token")
+        assert respx.calls.call_count == 1
+
+    @respx.mock
+    async def test_refresh_retries_on_503_then_succeeds(self):
+        # Retry-After: 0 keeps the test instant while exercising the retry path.
+        client = WhoopOAuthClient()
+        route = respx.post(client.token_url)
+        route.side_effect = [
+            httpx.Response(503, headers={"Retry-After": "0"}, json={}),
+            httpx.Response(
+                200,
+                json={
+                    "access_token": "new_access_token",
+                    "refresh_token": "new_refresh_token",
+                    "expires_in": 3600,
+                },
+            ),
+        ]
+        token_data = await client.refresh_access_token("old_refresh_token")
+        assert token_data["access_token"] == "new_access_token"
+        assert route.call_count == 2
+
+    @respx.mock
+    async def test_refresh_gives_up_after_retries_on_503(self):
+        client = WhoopOAuthClient()
+        respx.post(client.token_url).mock(
+            return_value=httpx.Response(503, headers={"Retry-After": "0"}, json={})
+        )
+        with pytest.raises(httpx.HTTPStatusError):
+            await client.refresh_access_token("old_refresh_token")
+        assert respx.calls.call_count == 3  # stop_after_attempt(3)
+
+    @respx.mock
     async def test_exchange_code_network_error(self):
         client = WhoopOAuthClient()
         respx.post(client.token_url).mock(side_effect=httpx.NetworkError)
