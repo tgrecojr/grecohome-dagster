@@ -79,6 +79,22 @@ class TestGetValidToken:
         assert await mgr.get_valid_token() == "new_access"
         assert store.read()["refresh_token"] == "old_refresh"  # preserved
 
+    async def test_missing_rotation_logs_warning(self, store):
+        # A 200 without a rotated refresh token must not pass silently — it's how
+        # a refresh failure becomes a silent outage.
+        from structlog.testing import capture_logs
+
+        oauth = Mock()
+        oauth.refresh_access_token = AsyncMock(
+            return_value={"access_token": "new_access", "expires_in": 3600}  # no refresh_token
+        )
+        mgr = _manager(store, oauth)
+        mgr.save_token("old_access", "old_refresh", expires_in=60)
+
+        with capture_logs() as logs:
+            await mgr.get_valid_token()
+        assert any(e.get("event") == "whoop_token_no_rotation" for e in logs)
+
     async def test_malformed_refresh_raises_and_leaves_file_unchanged(self, store):
         oauth = Mock()
         oauth.refresh_access_token = AsyncMock(return_value={"unexpected": "shape"})
