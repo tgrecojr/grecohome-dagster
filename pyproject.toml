@@ -2,6 +2,20 @@
 # This file has no [project] table on purpose: the root is a uv workspace
 # coordinator, not a package. Each data subject lives under packages/ as its
 # own member package, and they all share this single uv.lock.
+# Pin the grpc stack (transitive via dagster) to match the host gRPC contract and,
+# critically, to keep grpcio-health-checking's bundled protobuf gencode compatible
+# with the protobuf *runtime* dagster locks (protobuf 6.x, capped below 7).
+# grpcio-health-checking 1.82.0 regenerated grpc_health/v1/health_pb2.py with protoc
+# gencode 7.35.0, which the runtime guard requires be paired with protobuf>=7.35.0 —
+# but dagster holds protobuf at 6.x, so 1.82.0 crashes every code location on startup
+# ("VersionError: gencode 7.35.0 runtime 6.33.6"). Keep grpc* on 1.81.1 until dagster
+# moves to protobuf 7. See renovate.json (grpc bumps are disabled to prevent recurrence).
+[tool.uv]
+constraint-dependencies = [
+    "grpcio==1.81.1",
+    "grpcio-health-checking==1.81.1",
+]
+
 [tool.uv.workspace]
 members = ["packages/core", "packages/whoop", "packages/garmin", "packages/lingo", "packages/soil", "packages/silver", "packages/gold"]
 
