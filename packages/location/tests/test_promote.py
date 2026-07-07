@@ -11,6 +11,7 @@ from grecohome_location.promote import (
     load_promoted_set,
     parse_received_ms,
     promote_stream,
+    scan_staging,
     unpromoted_staging,
     window_dates,
 )
@@ -134,6 +135,49 @@ class TestJunkAndParsing:
         dates = window_dates(NOW, 3)
         assert dates == ["2026-07-05", "2026-07-06", "2026-07-07"]
         assert window_dates(NOW, 0) == ["2026-07-07"]  # clamped to >=1
+
+
+@pytest.mark.unit
+class TestScanDiagnostics:
+    """A scanned=0 run must be self-explaining: missing vs denied vs empty."""
+
+    def test_missing_root(self, tmp_path):
+        cap, _, _ = _dirs(tmp_path)  # relay dir never created
+        scan = scan_staging(cap, "overland", [DT])
+        assert scan.root_status == "missing"
+        assert scan.files == []
+        assert scan.partitions_present == 0
+
+    def test_ok_but_empty_window(self, tmp_path):
+        cap, _, _ = _dirs(tmp_path)
+        (Path(cap) / "overland" / f"dt={DT}").mkdir(parents=True)  # present but empty
+        scan = scan_staging(cap, "overland", [DT])
+        assert scan.root_status == "ok"
+        assert scan.partitions_present == 1
+        assert scan.files == []
+
+    def test_permission_denied(self, tmp_path, monkeypatch):
+        cap, _, _ = _dirs(tmp_path)
+        (Path(cap) / "overland").mkdir(parents=True)
+        real = os.listdir
+
+        def fake(path):
+            if str(path).startswith(cap):
+                raise PermissionError(13, "Permission denied")
+            return real(path)
+
+        monkeypatch.setattr("grecohome_location.promote.os.listdir", fake)
+        scan = scan_staging(cap, "overland", [DT])
+        assert scan.root_status == "denied"  # loud signal: container not uid 1000
+        assert scan.files == []
+        assert scan.unreadable == 1
+
+    def test_promote_report_carries_root_status(self, tmp_path):
+        cap, bronze, state = _dirs(tmp_path)  # relay dir never created
+        report = _promote(cap, bronze, state, "owntracks")
+        assert report.scanned == 0
+        assert report.root_status == "missing"
+        assert report.partitions_present == 0
 
 
 @pytest.mark.unit

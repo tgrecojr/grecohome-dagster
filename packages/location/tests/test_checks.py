@@ -53,11 +53,12 @@ class TestPromoteLag:
 
 @pytest.mark.unit
 class TestReceiptFreshness:
-    def test_errors_with_no_captures(self, capture_dir, bronze_root, state_dir):
+    def test_unused_stream_passes_not_errors(self, capture_dir, bronze_root, state_dir):
+        """A stream that has never captured is unused, not broken — pass (green), no page."""
         evals = _run_checks()
         fresh = evals["location_owntracks_receipt_freshness"]
-        assert not fresh.passed
-        assert fresh.severity == AssetCheckSeverity.ERROR
+        assert fresh.passed
+        assert fresh.severity == AssetCheckSeverity.WARN
 
     def test_passes_with_recent_receipt(self, capture_dir, bronze_root, state_dir):
         recent_ms = int((time.time() - 1800) * 1000)  # 30 min ago

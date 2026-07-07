@@ -57,7 +57,10 @@ BRONZE_ROOT/location/{overland|owntracks}/dt=YYYY-MM-DD/{collection}_{fetched_ms
 - **Receipt freshness** (WARN → ERROR) — hours since the newest `received_unix_ms` in bronze. WARN
   wide (`LOCATION_FRESHNESS_WARN_HOURS`, default 24h), ERROR only past a long gap
   (`LOCATION_FRESHNESS_ERROR_HOURS`, default 168h). Location is event-driven, so most gaps are
-  legitimate (phone off / travel / stationary batching).
+  legitimate (phone off / travel / stationary batching). A stream that has **never** captured (e.g.
+  only OwnTracks is configured, so Overland has no receipts) is treated as *unused, not stale* — it
+  passes green until data first flows, so an inactive stream never pages (a genuinely mis-mounted
+  stream is caught by promote-lag, not freshness).
 - **Promote lag** (ERROR) — no staging file older than `LOCATION_PROMOTE_LAG_HOURS` (default 6h)
   remains un-promoted; the early guardrail that the promoter keeps up before relay retention prunes
   staging.

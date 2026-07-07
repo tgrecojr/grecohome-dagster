@@ -36,6 +36,10 @@ def _report_metadata(report: PromoteReport) -> dict:
         "already_promoted": report.already,
         "bytes_promoted": report.bytes_promoted,
         "failed": report.failed,
+        # Staging visibility — makes a scanned=0 run self-explaining in the UI.
+        "root_status": report.root_status,
+        "partitions_present": report.partitions_present,
+        "unreadable_partitions": report.unreadable,
     }
     if report.oldest_received_ms is not None:
         md["oldest_received_at"] = iso_from_ms(report.oldest_received_ms)

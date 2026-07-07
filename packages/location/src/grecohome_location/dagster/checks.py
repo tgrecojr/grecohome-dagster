@@ -11,8 +11,11 @@ mix differs from the API-polling subjects:
   polymorphic (``_type`` = location/transition/lwt, plus optional keys), so the
   richest-payload signature would churn false ERRORs — schema drift is skipped there.
 * **Receipt freshness** (custom, WARN→ERROR) — hours since the newest
-  ``received_unix_ms`` in bronze. WARN wide; ERROR only past a very long gap. Core
-  freshness is ERROR-only and measures *promote* time, so it can't express this.
+  ``received_unix_ms`` in bronze. WARN wide; ERROR only past a very long gap. A stream
+  that has *never* captured (e.g. only OwnTracks is configured on the phone, so
+  Overland has no receipts) is treated as **unused, not stale** — it passes green
+  until data first flows, so an inactive stream never pages. Core freshness is
+  ERROR-only and measures *promote* time, so it can't express any of this.
 * **Promote lag** (custom, ERROR) — no staging file older than the threshold remains
   un-promoted, proving the promoter keeps up before relay retention prunes staging.
 
@@ -137,10 +140,19 @@ def build_receipt_freshness_check(stream: str) -> AssetChecksDefinition:
             if newest is None:
                 # No captures in the window at all: past even the ERROR horizon.
                 return AssetCheckResult(
-                    passed=False,
-                    severity=AssetCheckSeverity.ERROR,
+                    # A stream that has NEVER captured is an unused stream, not a
+                    # failure — e.g. only OwnTracks is configured on the phone, so
+                    # Overland legitimately has no receipts. Freshness only means
+                    # something once data has actually flowed; pass (green) until then.
+                    # A genuinely mis-mounted stream is caught by promote-lag (staging
+                    # files present but unpromoted), not by freshness.
+                    passed=True,
+                    severity=AssetCheckSeverity.WARN,
                     metadata={"last_received": "none", "hours_since": -1.0},
-                    description="No location receipts in the recent window.",
+                    description=(
+                        "No receipts yet — stream not in use; "
+                        "freshness applies once data arrives."
+                    ),
                 )
             hours = (datetime.now(UTC).timestamp() * 1000 - newest) / 3_600_000
             if hours > err_h:
