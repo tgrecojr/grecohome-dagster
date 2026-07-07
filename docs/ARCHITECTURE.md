@@ -16,6 +16,7 @@ packages/
   garmin/  grecohome-garmin — Garmin bronze subject (ported from garmincapture)
   lingo/   grecohome-lingo  — Lingo CGM bronze subject (ported from glucose-loader)
   soil/    grecohome-soil   — NOAA USCRN soil/temp bronze subject (ported from soildata)
+  location/grecohome-location— phone location bronze subject (promotes locationrelay staging files)
   silver/  grecohome-silver — silver layer (sleep, glucose, workouts, recovery)
   gold/    grecohome-gold   — gold layer (daily wellness mart)
 ```
@@ -150,6 +151,46 @@ How Soil differs (it reuses core too):
   every past year is on the server.
 - **Single station** (env-configurable; default `PA_Avondale_2_N`), consistent with the single-user
   constraint — the station is recorded in the sidecar, not the path.
+
+## `grecohome-location` — a fifth data subject
+
+```
+grecohome_location/
+  config.py          LocationSettings(BaseSubjectSettings) — RELAY_CAPTURE_DIR / LOCATION_STATE_DIR
+  capture.py         adapter over core capture_bronze (location/{overland,owntracks}, dedupe=False, ext=json, raw)
+  promote.py         staging discovery, per-stream promoted-set, staging_file sidecar backstop
+  dagster/
+    assets.py        location_bronze_overland / _owntracks (unpartitioned, single-slot pool)
+    schedules.py     few-minute promote schedule + the promote job
+    checks.py        content (both), schema drift (overland only), receipt-freshness, promote-lag
+    definitions.py   the gRPC code-location target
+```
+
+How Location differs (it reuses core too):
+- **Promote-only, no source API.** The internet-facing `locationrelay` service (separate Rust
+  repo/container) receives Overland/OwnTracks phone POSTs and writes each accepted body **verbatim**
+  to a staging dir; it also forwards to Dawarich in real time. This subject only *promotes* those
+  staging files into bronze, so **Python stays the lake's sole writer** and the bronze contract stays
+  single-sourced in core. The promoter mounts `RELAY_CAPTURE_DIR` **read-only** and never writes
+  under it (the relay's retention janitor is the sole cleaner); the relay never writes the lake.
+- **Byte-exact `raw` capture.** The bronze payload is byte-identical to the staged POST body
+  (`sha256(bronze) == sha256(staging)`, `capture_mode="raw"`); an Overland batch of N points stays
+  one `{"locations":[…]}` object. `dt` is the **receipt** date (Lingo-style); the true receipt time
+  (`received_at`/`received_unix_ms`) and the `staging_file` basename live in the sidecar, while
+  `fetched_at` is the *promote* time and event time is inside each record.
+- **Idempotency on the filename, not content** (`dedupe=False`). A per-stream promoted-set in
+  `LOCATION_STATE_DIR` (kept **outside** `BRONZE_ROOT`) is the capture-once guard, backstopped by the
+  `staging_file` recorded in each bronze sidecar — so promotion is exactly-once in bronze across
+  crashes and a lost promoted-set rebuilds from bronze, while two distinct byte-identical POSTs
+  (e.g. a re-sent OwnTracks ping) both land.
+- **Schedule-driven, single-slot pool.** A few-minute schedule promotes the trailing
+  `LOCATION_PROMOTE_WINDOW_DAYS` of staging; a single-slot pool stops overlapping runs double-promoting.
+- **Runs as uid 1000 at runtime.** The image builds like every other subject (runs as `nonroot`);
+  the deployment sets the runtime user (e.g. compose `user: "1000:998"`). Staging files are `0600`
+  owned by uid 1000, so only uid 1000 can read them (see [DEPLOYMENT](DEPLOYMENT.md)).
+- **v1 non-goals:** no `silver_location` and no Dagster→Dawarich forwarder (the relay forwards in
+  real time; bronze is the durable audit/replay copy). See
+  [packages/location/docs/LOCATION.md](../packages/location/docs/LOCATION.md).
 
 ## `grecohome-silver` — the silver layer
 

@@ -17,7 +17,7 @@ constraint-dependencies = [
 ]
 
 [tool.uv.workspace]
-members = ["packages/core", "packages/whoop", "packages/garmin", "packages/lingo", "packages/soil", "packages/silver", "packages/gold"]
+members = ["packages/core", "packages/whoop", "packages/garmin", "packages/lingo", "packages/soil", "packages/location", "packages/silver", "packages/gold"]
 
 [tool.uv.sources]
 grecohome-core = { workspace = true }
@@ -69,6 +69,8 @@ env = [
     "WHOOP_CLIENT_SECRET=test_client_secret",
     "WHOOP_REDIRECT_URI=http://localhost:8000/callback",
     "WHOOP_TOKEN_PATH=/tmp/grecohome-test-token.json",
+    "RELAY_CAPTURE_DIR=/tmp/grecohome-test-location-capture",
+    "LOCATION_STATE_DIR=/tmp/grecohome-test-location-state",
     "LOG_LEVEL=DEBUG",
     "ENVIRONMENT=test",
 ]

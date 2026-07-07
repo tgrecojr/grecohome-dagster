@@ -4,8 +4,8 @@
 
 A monorepo of personal data pipelines orchestrated by self-hosted Dagster, in three layers:
 
-- **Bronze** — per-source code locations (Whoop, Garmin, Lingo, Soil/USCRN) that capture raw
-  source responses to a bronze layer (the immutable source of truth).
+- **Bronze** — per-source code locations (Whoop, Garmin, Lingo, Soil/USCRN, Location) that capture
+  raw source responses to a bronze layer (the immutable source of truth).
 - **Silver** — one cross-subject code location of derived, typed, deduplicated Parquet
   (sleep, glucose, workouts, recovery), read from bronze.
 - **Gold** — one code location of analysis marts (daily wellness), read from silver.
@@ -38,10 +38,14 @@ can be dropped and regenerated); bronze is the only source of truth.
   window keys, async bridge), bronze asset-check builders, and the **silver helpers**
   (`grecohome_core.silver`: DuckDB connection, sidecar-safe bronze reading, dedup idiom,
   atomic Parquet write guarded by `protected_root`).
-- **Bronze subjects** — `packages/{whoop,garmin,lingo,soil}`. Each is a code location that
+- **Bronze subjects** — `packages/{whoop,garmin,lingo,soil,location}`. Each is a code location that
   captures one source to bronze: Whoop (OAuth, hourly trailing-window + dedup), Garmin
   (delegated auth, daily capture-once, no dedup), Lingo (Drive service-account, sensor +
-  dynamic partitions), Soil/USCRN (public file, daily row-slice + dedup).
+  dynamic partitions), Soil/USCRN (public file, daily row-slice + dedup), Location (no source API —
+  *promotes* the external `locationrelay` service's raw staging files (Overland + OwnTracks POST
+  bodies) into bronze byte-for-byte on a few-minute schedule; `dt`=receipt date, `dedupe`-off,
+  idempotent via a per-stream promoted-set keyed on the staging **filename** + a `staging_file`
+  sidecar backstop).
 - `packages/silver` (`grecohome_silver`) — one cross-subject code location: typed, deduped
   Parquet tables — `silver_sleep` (Garmin+Whoop FULL OUTER JOIN), `silver_glucose`,
   `silver_workouts`, `silver_recovery` — plus their asset checks. Reads `BRONZE_ROOT`,
@@ -70,12 +74,19 @@ can be dropped and regenerated); bronze is the only source of truth.
 - **Bronze partitions are UTC fetch-slices, not local days.** Local-day / event-date
   semantics live in silver (e.g. sleep night = local wake date), applied at read time over
   bronze's raw UTC timestamps — never by trusting the partition folder.
+- **Location = promote-only, single-writer lake.** The internet-facing `locationrelay` (separate
+  Rust repo/container) stages raw POST bodies; the `location` subject only *promotes* them to
+  bronze. Python stays the lake's sole writer: the promoter never writes/deletes under
+  `RELAY_CAPTURE_DIR` (relay is its sole cleaner), and the relay never writes the lake. Don't add a
+  Dagster→Dawarich forwarder (the relay forwards in real time) or `silver_location` in v1.
 
 ## Environment Variables
 
 See `docs/ENV_TEMPLATE.md` (and `.env.example`). Per layer:
 - **bronze subjects** — `BRONZE_ROOT` (+ per-subject auth: e.g. Whoop `WHOOP_CLIENT_ID` /
   `WHOOP_CLIENT_SECRET` / `WHOOP_TOKEN_PATH`; Garmin `GARMINCONNECT_*`; Lingo `GDRIVE_*`;
-  Soil `USCRN_*`).
+  Soil `USCRN_*`; Location `RELAY_CAPTURE_DIR` (mount **read-only**) / `LOCATION_STATE_DIR`
+  (outside `BRONZE_ROOT`) — no secret; image builds as `nonroot` like the others but must run **at
+  runtime as uid 1000** (e.g. `user: "1000:998"`) to read the `0600` staging files).
 - **silver** — `BRONZE_ROOT` (read-only), `SILVER_ROOT` (+ reserved `SILVER_MONITOR_DIR`).
 - **gold** — `SILVER_ROOT` (read-only), `GOLD_ROOT` (+ reserved `GOLD_MONITOR_DIR`).
