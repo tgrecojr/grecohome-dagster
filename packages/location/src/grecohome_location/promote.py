@@ -54,6 +54,23 @@ class StagingFile:
 
 
 @dataclass
+class StagingScan:
+    """The outcome of listing a stream's staging window — files plus diagnostics.
+
+    ``root_status`` disambiguates the common ``scanned == 0`` cases at a glance:
+    ``"missing"`` (wrong mount / path), ``"denied"`` (container not uid 1000, can't
+    traverse the ``0700`` dirs), ``"error"`` (other OSError), or ``"ok"``. With
+    ``"ok"`` and ``partitions_present == 0`` there is simply no data in the window
+    yet; ``partitions_present > 0`` with no files means the ``dt=`` folders are empty.
+    """
+
+    files: list[StagingFile]
+    root_status: str = "ok"
+    partitions_present: int = 0
+    unreadable: int = 0
+
+
+@dataclass
 class PromoteReport:
     """What one stream's promote run did (surfaced as Dagster run metadata)."""
 
@@ -65,6 +82,10 @@ class PromoteReport:
     failed: int = 0
     oldest_received_ms: int | None = None
     newest_received_ms: int | None = None
+    # Staging-visibility diagnostics (make a 0-file run self-explaining).
+    root_status: str = "ok"
+    partitions_present: int = 0
+    unreadable: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -83,24 +104,64 @@ def parse_received_ms(basename: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
-def list_staging_files(capture_dir: str, stream: str, dates: list[str]) -> list[StagingFile]:
-    """Every matching staging file for ``stream`` across ``dates`` (missing dirs skipped)."""
-    out: list[StagingFile] = []
+def _root_status(capture_dir: str, stream: str) -> str:
+    """Classify the stream's staging root: ``ok`` / ``missing`` / ``denied`` / ``error``.
+
+    A missing root is almost always a wrong mount/``RELAY_CAPTURE_DIR``; a denied root
+    is almost always the container not running as uid 1000 (the relay's dirs are
+    ``0700``). Logged loudly so a 0-file run is never a silent mystery.
+    """
+    root = os.path.join(capture_dir, stream)
+    try:
+        os.listdir(root)
+        return "ok"
+    except FileNotFoundError:
+        logger.warning("staging stream root missing", stream=stream, dir=root)
+        return "missing"
+    except PermissionError as e:
+        logger.warning("staging stream root not readable (uid 1000?)", stream=stream, dir=root,
+                       error=str(e))
+        return "denied"
+    except OSError as e:
+        logger.warning("staging stream root unreadable", stream=stream, dir=root, error=str(e))
+        return "error"
+
+
+def scan_staging(capture_dir: str, stream: str, dates: list[str]) -> StagingScan:
+    """List a stream's staging window, distinguishing missing / denied / empty.
+
+    A truly-missing ``dt=`` partition is normal (skipped quietly); a *permission*
+    error on one is not (logged + counted in ``unreadable``). The stream-root status
+    and partition count make a ``scanned == 0`` run self-explaining.
+    """
+    scan = StagingScan(files=[], root_status=_root_status(capture_dir, stream))
     for dt in dates:
         pdir = os.path.join(capture_dir, stream, f"dt={dt}")
         try:
             names = os.listdir(pdir)
-        except OSError:
+        except FileNotFoundError:
             continue  # partition not present (yet) or pruned — not an error
+        except OSError as e:
+            scan.unreadable += 1
+            logger.warning("staging partition unreadable", stream=stream, dir=pdir, error=str(e))
+            continue
+        scan.partitions_present += 1
         for name in names:
             received_ms = parse_received_ms(name)
             if received_ms is None:
                 continue  # .tmp* / junk
             path = os.path.join(pdir, name)
             if os.path.isfile(path):
-                out.append(StagingFile(basename=name, path=path, dt=dt, received_ms=received_ms))
-    out.sort(key=lambda f: (f.received_ms, f.basename))
-    return out
+                scan.files.append(
+                    StagingFile(basename=name, path=path, dt=dt, received_ms=received_ms)
+                )
+    scan.files.sort(key=lambda f: (f.received_ms, f.basename))
+    return scan
+
+
+def list_staging_files(capture_dir: str, stream: str, dates: list[str]) -> list[StagingFile]:
+    """Every matching staging file for ``stream`` across ``dates`` (missing dirs skipped)."""
+    return scan_staging(capture_dir, stream, dates).files
 
 
 # ---------------------------------------------------------------------------
@@ -224,14 +285,21 @@ def promote_stream(
     """Promote every new staging file for one stream and advance the promoted-set."""
     now = now or datetime.now(UTC)
     dates = window_dates(now, window_days)
-    staging = list_staging_files(capture_dir, stream, dates)
+    scan = scan_staging(capture_dir, stream, dates)
+    staging = scan.files
     staging_basenames = {f.basename for f in staging}
     todo, effective = _resolve_todo(
         staging, load_promoted_set(state_dir, stream),
         bronze_root=bronze_root, stream=stream, dates=dates,
     )
 
-    report = PromoteReport(stream=stream, scanned=len(staging))
+    report = PromoteReport(
+        stream=stream,
+        scanned=len(staging),
+        root_status=scan.root_status,
+        partitions_present=scan.partitions_present,
+        unreadable=scan.unreadable,
+    )
     report.already = len(staging) - len(todo)
     receipts: list[int] = []
     for f in todo:
