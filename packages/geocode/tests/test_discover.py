@@ -63,28 +63,48 @@ class TestObservedCells:
         assert discover.observed_cells(root, scan_days=3, now=NOW) == set()
 
 
+KEY = "r=0.5;l=10;lang=en"
+
+
 class TestCachedAndNew:
-    def _cache(self, root, lat, lon):
+    def _cache(self, root, lat, lon, *, radius_km=0.5, limit=10, language="en"):
         la, lo = cell_key(lat, lon)
         capture_reverse(
             b'{"type":"FeatureCollection","features":[]}',
             lat_e4=la, lon_e4=lo, query_lat=lat, query_lon=lon,
-            radius_km=0.05, language="en", dt="2026-07-07", bronze_root=root,
+            radius_km=radius_km, limit=limit, language=language,
+            dt="2026-07-07", bronze_root=root,
         )
 
     def test_cached_cells_from_sidecars(self, tmp_path):
         root = str(tmp_path / "bronze")
         self._cache(root, 39.8, -75.1)
-        assert discover.cached_cells(root) == {cell_key(39.8, -75.1)}
+        assert discover.cached_cells(root, params_key=KEY) == {cell_key(39.8, -75.1)}
 
     def test_new_cells_is_observed_minus_cached(self, tmp_path):
         root = str(tmp_path / "bronze")
         _overland(root, "2026-07-07", [(39.8, -75.1), (39.9, -75.2)])
         self._cache(root, 39.8, -75.1)  # first one already cached
-        assert discover.new_cells(root, scan_days=3, now=NOW) == [cell_key(39.9, -75.2)]
+        assert discover.new_cells(root, scan_days=3, params_key=KEY, now=NOW) == [
+            cell_key(39.9, -75.2)
+        ]
 
     def test_new_cells_empty_when_all_cached(self, tmp_path):
         root = str(tmp_path / "bronze")
         _overland(root, "2026-07-07", [(39.8, -75.1)])
         self._cache(root, 39.8, -75.1)
-        assert discover.new_cells(root, scan_days=3, now=NOW) == []
+        assert discover.new_cells(root, scan_days=3, params_key=KEY, now=NOW) == []
+
+    def test_params_change_reinvalidates_cache(self, tmp_path):
+        """A cell cached under different params (e.g. old radius) is re-looked-up."""
+        root = str(tmp_path / "bronze")
+        _overland(root, "2026-07-07", [(39.8, -75.1)])
+        self._cache(root, 39.8, -75.1, radius_km=0.05)  # cached under OLD 50 m radius
+        # Under the current params it is NOT cached -> queued for re-lookup.
+        assert discover.new_cells(root, scan_days=3, params_key=KEY, now=NOW) == [
+            cell_key(39.8, -75.1)
+        ]
+        # ...but under its own (old) params_key it is cached.
+        assert discover.cached_cells(root, params_key="r=0.05;l=10;lang=en") == {
+            cell_key(39.8, -75.1)
+        }

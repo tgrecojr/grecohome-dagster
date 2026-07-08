@@ -15,6 +15,7 @@ pytestmark = pytest.mark.unit
 
 NOW = datetime(2026, 7, 7, 12, 0, tzinfo=UTC)
 RESP = b'{"type":"FeatureCollection","features":[{"type":"Feature","properties":{"name":"X"}}]}'
+KEY = "r=0.5;l=10;lang=en"
 
 
 def _overland(root: str, points: list[tuple[float, float]]) -> None:
@@ -36,7 +37,8 @@ def _run(root, **kw):
         max_lookups=2000,
         timeout=30.0,
         language="en",
-        radius_km=0.05,
+        radius_km=0.5,
+        limit=10,
         now=NOW,
     )
     defaults.update(kw)
@@ -53,7 +55,10 @@ class TestGeocodeCells:
         assert report.new_cells == 2
         assert report.captured == 2
         assert report.failed == 0
-        assert cached_cells(root) == {cell_key(39.8, -75.1), cell_key(39.9, -75.2)}
+        assert cached_cells(root, params_key=KEY) == {
+            cell_key(39.8, -75.1),
+            cell_key(39.9, -75.2),
+        }
 
     def test_second_run_is_noop(self, tmp_path, monkeypatch):
         root = str(tmp_path / "bronze")
@@ -85,4 +90,14 @@ class TestGeocodeCells:
         report = _run(root)
         assert report.failed == 1
         assert report.captured == 0
-        assert cached_cells(root) == set()  # nothing cached -> retried next run
+        assert cached_cells(root, params_key=KEY) == set()  # nothing cached -> retried next run
+
+    def test_radius_change_reprocesses(self, tmp_path, monkeypatch):
+        """Bumping the radius re-looks-up already-cached cells (params-aware cache)."""
+        root = str(tmp_path / "bronze")
+        _overland(root, [(39.8, -75.1)])
+        monkeypatch.setattr(fetch, "reverse_geocode", lambda *a, **k: RESP)
+        _run(root, radius_km=0.05)  # cache the cell under the old 50 m radius
+        report = _run(root, radius_km=0.5)  # now 500 m -> the cell is looked up again
+        assert report.new_cells == 1
+        assert report.captured == 1

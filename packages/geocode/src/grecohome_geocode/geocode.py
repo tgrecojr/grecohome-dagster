@@ -16,7 +16,7 @@ import httpx
 
 from grecohome_core.logging_config import get_logger
 from grecohome_geocode import fetch
-from grecohome_geocode.capture import capture_reverse
+from grecohome_geocode.capture import capture_reverse, params_signature
 from grecohome_geocode.cells import cell_center
 from grecohome_geocode.discover import new_cells
 
@@ -43,12 +43,16 @@ def geocode_cells(
     timeout: float,
     language: str,
     radius_km: float | None,
+    limit: int,
     now: datetime | None = None,
 ) -> GeocodeReport:
     """Look up and cache every not-yet-cached cell observed in the trailing window."""
     now = now or datetime.now(UTC)
     dt = now.strftime("%Y-%m-%d")
-    todo = new_cells(bronze_root, scan_days=scan_days, now=now)
+    params_key = params_signature(radius_km=radius_km, limit=limit, language=language)
+    todo = new_cells(
+        bronze_root, scan_days=scan_days, params_key=params_key, now=now
+    )
 
     report = GeocodeReport(new_cells=len(todo))
     if len(todo) > max_lookups:
@@ -71,6 +75,7 @@ def geocode_cells(
                 timeout=timeout,
                 language=language,
                 radius_km=radius_km,
+                limit=limit,
             )
         except (httpx.HTTPError, OSError) as e:
             report.failed += 1
@@ -88,6 +93,7 @@ def geocode_cells(
             query_lat=query_lat,
             query_lon=query_lon,
             radius_km=radius_km,
+            limit=limit,
             language=language,
             dt=dt,
             bronze_root=bronze_root,

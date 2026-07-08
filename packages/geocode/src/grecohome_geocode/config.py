@@ -26,10 +26,16 @@ class GeocodeSettings(BaseSubjectSettings):
     # Language for Photon's ``lang`` param (localizes place names).
     photon_language: str = "en"
 
-    # Photon ``/reverse`` search radius (km). Small so we anchor on the nearest object,
-    # but non-zero so the full FeatureCollection of nearby candidates is returned and
-    # cached raw — future silver logic can pick among candidates without re-querying.
-    photon_radius_km: float = 0.05  # ~50 m
+    # Photon ``/reverse`` search radius (km). 0.5 km (500 m) matches Dawarich's
+    # Places::NearbySearch default; small enough to stay local, large enough that a fix
+    # mid-block still resolves (a 50 m radius left ~half of cells with no OSM object
+    # within range). The nearest match can now be up to this far away.
+    photon_radius_km: float = 0.5  # 500 m
+
+    # Photon ``/reverse`` result limit — how many nearby candidates to fetch and cache
+    # (nearest first). 10 matches Dawarich; silver flattens the nearest (features[0]) but
+    # the rest stay raw in bronze for smarter attribution later without re-querying.
+    photon_limit: int = 10
 
     # Trailing window (UTC days, incl. today) of location bronze the discovery step
     # scans each run for observed cells. Keep comfortably larger than worst-case geocode

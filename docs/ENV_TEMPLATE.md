@@ -100,7 +100,8 @@ writes `geocode/**`).
 | `PHOTON_BASE_URL` | yes | — | Base URL of the self-hosted Photon, e.g. `http://photon:2322`. Do **not** append `/api` (the subject appends `/reverse`) |
 | `PHOTON_TIMEOUT` | no | `30` | Per-request timeout (seconds) for the Photon call |
 | `PHOTON_LANGUAGE` | no | `en` | Photon `lang` param (localizes place names) |
-| `PHOTON_RADIUS_KM` | no | `0.05` | Photon `/reverse` search radius (km); small, but non-zero so nearby candidates are returned and cached raw |
+| `PHOTON_RADIUS_KM` | no | `0.5` | Photon `/reverse` search radius (km); 500 m, matching Dawarich. Larger resolves more fixes but the nearest match can be farther away. Changing this re-geocodes affected cells |
+| `PHOTON_LIMIT` | no | `10` | Photon `/reverse` result limit — nearest N candidates cached raw (silver uses the nearest). Changing this re-geocodes affected cells |
 | `GEOCODE_SCAN_DAYS` | no | `7` | Trailing window of `location` bronze scanned for observed cells. Widen for a one-time cache backfill over all history |
 | `GEOCODE_MAX_LOOKUPS_PER_RUN` | no | `2000` | Safety cap on new-cell lookups per run (remainder picked up next run; logged when hit) |
 | `GEOCODE_RECENT_PARTITIONS` | no | `14` | Trailing bronze partitions the checks inspect |
