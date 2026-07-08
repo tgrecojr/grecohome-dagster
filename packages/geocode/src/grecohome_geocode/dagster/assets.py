@@ -44,5 +44,6 @@ def geocode_bronze_reverse(context: AssetExecutionContext) -> None:
         timeout=settings.photon_timeout,
         language=settings.photon_language,
         radius_km=settings.photon_radius_km,
+        limit=settings.photon_limit,
     )
     context.add_output_metadata(_report_metadata(report))

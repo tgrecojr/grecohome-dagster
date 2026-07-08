@@ -7,9 +7,23 @@ import os
 
 import pytest
 
-from grecohome_geocode.capture import capture_reverse
+from grecohome_geocode.capture import capture_reverse, params_signature
 
 pytestmark = pytest.mark.unit
+
+
+class TestParamsSignature:
+    def test_stable_shape(self):
+        assert params_signature(radius_km=0.5, limit=10, language="en") == "r=0.5;l=10;lang=en"
+
+    def test_none_radius(self):
+        assert params_signature(radius_km=None, limit=5, language="de") == "r=none;l=5;lang=de"
+
+    def test_changes_with_each_param(self):
+        base = params_signature(radius_km=0.5, limit=10, language="en")
+        assert params_signature(radius_km=0.2, limit=10, language="en") != base
+        assert params_signature(radius_km=0.5, limit=5, language="en") != base
+        assert params_signature(radius_km=0.5, limit=10, language="fr") != base
 
 RESP = (
     b'{"type":"FeatureCollection","features":[{"type":"Feature",'
@@ -24,7 +38,8 @@ def _capture(root, **kw):
         lon_e4=-751000,
         query_lat=39.8,
         query_lon=-75.1,
-        radius_km=0.05,
+        radius_km=0.5,
+        limit=10,
         language="en",
         dt="2026-07-07",
         bronze_root=root,
@@ -60,7 +75,9 @@ class TestCaptureReverse:
         assert sc["query_lat"] == 39.8
         assert sc["query_lon"] == -75.1
         assert sc["cell_precision"] == 4
-        assert sc["request_params"]["radius"] == 0.05
+        assert sc["request_params"]["radius"] == 0.5
+        assert sc["request_params"]["limit"] == 10
+        assert sc["params_key"] == "r=0.5;l=10;lang=en"
 
     def test_distinct_cells_identical_response_both_land(self, tmp_path):
         """dedupe=False: two distinct cells with identical bytes must BOTH be cached.

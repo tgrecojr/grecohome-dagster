@@ -51,7 +51,12 @@ idempotency key and `silver_location`'s join key.
 | `ext` | `json` |
 | `dedupe` | `False` — idempotency is cell-based, not content-based (see below) |
 | `capture_mode` | `raw` |
-| sidecar extras | `lat_e4`, `lon_e4`, `query_lat`, `query_lon`, `cell_precision` |
+| sidecar extras | `lat_e4`, `lon_e4`, `query_lat`, `query_lon`, `cell_precision`, `params_key`, `request_params` (`radius`, `limit`, `lang`) |
+
+The Photon query uses `radius`, `limit`, and `distance_sort=true` (nearest first), mirroring
+Dawarich's `Places::NearbySearch` (`radius=0.5 km`, `limit=10`). We store the **whole**
+FeatureCollection raw (the nearest `PHOTON_LIMIT` candidates); `silver_location` flattens
+`features[0]` (the nearest) but the rest stay in bronze for smarter attribution later.
 
 **`dedupe=False` is deliberate.** Two *distinct* cells legitimately return identical
 responses (e.g. both an empty `{"...","features":[]}` "no result"). Content-hash dedup would
@@ -59,12 +64,21 @@ drop the second and leave that cell un-cached — re-looked-up on every run, for
 discovery already guarantees one lookup per new cell, each capture is a genuine new cell and
 must land.
 
-## Idempotency
+## Idempotency (params-aware)
 
 No state dir. The "already cached" set is derived from the geocode bronze **sidecars**
-themselves (every cell records `lat_e4`/`lon_e4`), scanned across all partitions — so a cell
-cached long ago is never re-queried, and the cache is its own durable ledger. Discovery each
-run looks up only `observed(trailing window) − cached(all history)`.
+themselves — a cell counts as cached only if a sidecar records its `(lat_e4, lon_e4)` **and**
+a `params_key` matching the *current* lookup params (`r=<radius>;l=<limit>;lang=<lang>`),
+scanned across all partitions. So:
+
+- a cell cached under the current params is never re-queried (the cache is its own durable
+  ledger), and
+- **changing `PHOTON_RADIUS_KM`, `PHOTON_LIMIT`, or `PHOTON_LANGUAGE` re-looks-up every
+  affected cell on the next run** — the old-params sidecars no longer count as done. The new
+  captures land beside the old ones (`dedupe=False`), and `silver_location` picks the latest
+  per cell, so silver automatically prefers the new answer.
+
+Discovery each run looks up only `observed(trailing window) − cached-under-current-params(all history)`.
 
 ## Checks
 
@@ -87,11 +101,22 @@ run looks up only `observed(trailing window) − cached(all history)`.
   (`-m grecohome_geocode.dagster.definitions`), and add a `photon` single-slot pool so
   overlapping runs never double-look-up.
 
-## Changing resolution / reprocessing
+## Changing params / resolution / reprocessing
 
-Bronze keeps the raw points and raw Photon responses, so nothing is lost. To change the cell
-size: bump `CELL_PRECISION` in `cells.py`, run the cache once with a wide `GEOCODE_SCAN_DAYS`
-to backfill every historical cell at the new resolution, then rebuild `silver_location`.
+Bronze keeps the raw points and raw Photon responses, so nothing is lost.
+
+- **Change the lookup params** (`PHOTON_RADIUS_KM` / `PHOTON_LIMIT` / `PHOTON_LANGUAGE`): just
+  update the env and let the next run re-geocode — the params-aware cache treats every cell as
+  new under the changed `params_key`. Widen `GEOCODE_SCAN_DAYS` for one run to sweep all
+  history, then rebuild `silver_location`. (The old-params captures remain in bronze as an
+  audit trail; silver prefers the newest per cell.)
+- **Change the cell size** (`CELL_PRECISION` in `cells.py`): a code change — different cells
+  are computed, so every cell is "new"; run the cache with a wide `GEOCODE_SCAN_DAYS`, then
+  rebuild `silver_location`.
+- **Clean slate** (start the cache over): `geocode/` is a *derived, rebuildable* cache, so
+  deleting `BRONZE_ROOT/geocode/reverse/` is safe — the next run repopulates it from the
+  location bronze. (Do **not** delete anything else under `BRONZE_ROOT` — the rest is the
+  source of truth.)
 
 ## Deferrals (v1 non-goals)
 

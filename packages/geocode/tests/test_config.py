@@ -20,6 +20,7 @@ class TestGeocodeSettings:
             "PHOTON_TIMEOUT",
             "PHOTON_LANGUAGE",
             "PHOTON_RADIUS_KM",
+            "PHOTON_LIMIT",
             "GEOCODE_SCAN_DAYS",
             "GEOCODE_MAX_LOOKUPS_PER_RUN",
             "GEOCODE_RECENT_PARTITIONS",
@@ -28,7 +29,8 @@ class TestGeocodeSettings:
         s = GeocodeSettings()
         assert s.photon_timeout == 30.0
         assert s.photon_language == "en"
-        assert s.photon_radius_km == 0.05
+        assert s.photon_radius_km == 0.5
+        assert s.photon_limit == 10
         assert s.geocode_scan_days == 7
         assert s.geocode_max_lookups_per_run == 2000
         assert s.geocode_recent_partitions == 14

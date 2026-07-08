@@ -6,8 +6,11 @@ core bronze checks) rather than DuckDB:
 * **observed cells** — snap every point in the ``location`` bronze streams over a trailing
   window (Overland ``geometry.coordinates`` = ``[lon, lat]``; OwnTracks flat ``lat``/
   ``lon``) to its ``(lat_e4, lon_e4)`` cell.
-* **cached cells** — the ``(lat_e4, lon_e4)`` already recorded in *any* geocode bronze
-  sidecar (scanned across all partitions, so a cell cached long ago is never re-queried).
+* **cached cells** — the ``(lat_e4, lon_e4)`` recorded in a geocode bronze sidecar whose
+  ``params_key`` matches the *current* lookup params (scanned across all partitions). Keying
+  on the params too means a cell cached long ago is never re-queried, yet bumping the
+  radius/limit/language re-looks-up every cell cleanly (old-params sidecars no longer count
+  as done).
 
 The work list is ``observed − cached``, sorted for determinism. Nothing here writes,
 moves, or deletes under any bronze root.
@@ -101,13 +104,20 @@ def observed_cells(bronze_root: str, *, scan_days: int, now: datetime | None = N
     return out
 
 
-def cached_cells(bronze_root: str) -> set[Cell]:
-    """Cells already in the geocode cache — from every geocode bronze sidecar."""
+def cached_cells(bronze_root: str, *, params_key: str) -> set[Cell]:
+    """Cells cached under ``params_key`` — from every matching geocode bronze sidecar.
+
+    A sidecar counts only if its ``params_key`` equals the current one, so a radius/limit/
+    language change leaves every cell "not cached" and it is re-looked-up. Sidecars written
+    before ``params_key`` existed never match, so they too re-look-up (superseded).
+    """
     coll = collection_dir(bronze_root, GEOCODE_SOURCE, GEOCODE_COLLECTION)
     out: set[Cell] = set()
     for _dt, pdir in list_partition_dirs(coll):
         for payload in iter_payloads(pdir):
             sc = read_sidecar(payload) or {}
+            if sc.get("params_key") != params_key:
+                continue
             lat_e4, lon_e4 = sc.get("lat_e4"), sc.get("lon_e4")
             if isinstance(lat_e4, int) and isinstance(lon_e4, int):
                 out.add((lat_e4, lon_e4))
@@ -115,9 +125,9 @@ def cached_cells(bronze_root: str) -> set[Cell]:
 
 
 def new_cells(
-    bronze_root: str, *, scan_days: int, now: datetime | None = None
+    bronze_root: str, *, scan_days: int, params_key: str, now: datetime | None = None
 ) -> list[Cell]:
     """Observed-minus-cached cells to look up, sorted for a deterministic run order."""
     observed = observed_cells(bronze_root, scan_days=scan_days, now=now)
-    cached = cached_cells(bronze_root)
+    cached = cached_cells(bronze_root, params_key=params_key)
     return sorted(observed - cached)

@@ -47,16 +47,24 @@ def reverse_geocode(
     base_url: str,
     timeout: float = 30.0,
     language: str = "en",
-    radius_km: float | None = 0.05,
+    radius_km: float | None = 0.5,
+    limit: int | None = 10,
+    distance_sort: bool = True,
 ) -> bytes:
     """Reverse-geocode a coordinate; return the raw GeoJSON response **bytes**.
 
-    Raises ``httpx.HTTPStatusError`` on a non-2xx response (the caller leaves that cell
-    un-cached and retries it next run). Transient transport errors are retried.
+    ``limit`` fetches the nearest N candidates (all cached raw; silver uses the nearest);
+    ``distance_sort`` keeps them ordered nearest-first (Photon's reverse default, sent
+    explicitly to match Dawarich and guard against a default change). Raises
+    ``httpx.HTTPStatusError`` on a non-2xx response (the caller leaves that cell un-cached
+    and retries it next run). Transient transport errors are retried.
     """
     params: dict[str, object] = {"lat": lat, "lon": lon, "lang": language}
     if radius_km:
         params["radius"] = radius_km
+    if limit:
+        params["limit"] = limit
+    params["distance_sort"] = distance_sort  # httpx serializes bool -> "true"/"false"
     with httpx.Client(timeout=timeout, headers={"User-Agent": _USER_AGENT}) as client:
         resp = client.get(reverse_url(base_url), params=params)
     resp.raise_for_status()
