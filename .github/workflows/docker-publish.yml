@@ -22,7 +22,7 @@ jobs:
       matrix:
         # One gRPC code-location image per data subject, plus the cross-subject
         # silver and gold layers.
-        subject: [whoop, garmin, lingo, soil, location, silver, gold]
+        subject: [whoop, garmin, lingo, soil, location, geocode, silver, gold]
     permissions:
       contents: read
       packages: write

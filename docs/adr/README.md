@@ -13,3 +13,4 @@ Short records of the load-bearing decisions behind `grecohome-dagster`.
 - [0009 — Silver workouts: per-activity grain, dedup on activityId](0009-silver-workouts.md)
 - [0010 — Silver recovery: per-cycle grain, dedup on cycle_id, joins to sleep](0010-silver-recovery.md)
 - [0011 — Gold layer: daily wellness mart as the spine](0011-gold-daily-wellness.md)
+- [0012 — Reverse-geocode enrichment: a bronze Photon cache + silver_location](0012-geocode-cache-silver-location.md)

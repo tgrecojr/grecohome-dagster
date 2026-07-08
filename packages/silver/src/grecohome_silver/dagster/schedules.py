@@ -26,6 +26,8 @@ from grecohome_silver.dagster.fitness_assets import FITNESS_ASSETS
 from grecohome_silver.dagster.fitness_checks import FITNESS_CHECKS
 from grecohome_silver.dagster.glucose_assets import GLUCOSE_ASSETS
 from grecohome_silver.dagster.glucose_checks import GLUCOSE_CHECKS
+from grecohome_silver.dagster.location_assets import LOCATION_ASSETS
+from grecohome_silver.dagster.location_checks import LOCATION_CHECKS
 from grecohome_silver.dagster.recovery_assets import RECOVERY_ASSETS
 from grecohome_silver.dagster.recovery_checks import RECOVERY_CHECKS
 from grecohome_silver.dagster.strain_assets import STRAIN_ASSETS
@@ -42,7 +44,7 @@ from grecohome_silver.dagster.workout_splits_checks import WORKOUT_SPLITS_CHECKS
 ALL_CHECKS = (
     SLEEP_CHECKS + GLUCOSE_CHECKS + WORKOUT_CHECKS + RECOVERY_CHECKS
     + WEATHER_CHECKS + DAILY_CHECKS + STRAIN_CHECKS + BODY_CHECKS + FITNESS_CHECKS
-    + WORKOUT_SPLITS_CHECKS + WHOOP_WORKOUTS_CHECKS
+    + WORKOUT_SPLITS_CHECKS + WHOOP_WORKOUTS_CHECKS + LOCATION_CHECKS
 )
 
 # Daily rebuild of the three sleep assets (source intermediates + unified table).
@@ -158,6 +160,18 @@ silver_whoop_workouts_daily = ScheduleDefinition(
     name="silver_whoop_workouts_daily",
     job=silver_whoop_workouts_job,
     cron_schedule="53 6 * * *",  # 06:53 UTC
+    execution_timezone="UTC",
+)
+
+# Daily rebuild of the location table (location bronze promoted every ~5 min + the
+# geocode cache refreshed every 30 min; a daily rebuild keeps silver a current projection
+# without chasing each fix).
+silver_location_job = define_asset_job("silver_location_job", selection=LOCATION_ASSETS)
+
+silver_location_daily = ScheduleDefinition(
+    name="silver_location_daily",
+    job=silver_location_job,
+    cron_schedule="56 6 * * *",  # 06:56 UTC
     execution_timezone="UTC",
 )
 

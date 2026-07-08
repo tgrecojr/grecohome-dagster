@@ -4,10 +4,12 @@
 
 A monorepo of personal data pipelines orchestrated by self-hosted Dagster, in three layers:
 
-- **Bronze** — per-source code locations (Whoop, Garmin, Lingo, Soil/USCRN, Location) that capture
-  raw source responses to a bronze layer (the immutable source of truth).
+- **Bronze** — per-source code locations (Whoop, Garmin, Lingo, Soil/USCRN, Location, Geocode) that
+  capture raw source responses to a bronze layer (the immutable source of truth). Geocode is a
+  *derived* bronze cache: it reverse-geocodes the Location points via self-hosted Photon and caches
+  the raw responses (append-only, immutable) so Silver can enrich offline.
 - **Silver** — one cross-subject code location of derived, typed, deduplicated Parquet
-  (sleep, glucose, workouts, recovery), read from bronze.
+  (sleep, glucose, workouts, recovery, location), read from bronze.
 - **Gold** — one code location of analysis marts (daily wellness), read from silver.
 
 Each layer = its own gRPC code-location image. Silver/gold are *derived and rebuildable* (they
@@ -38,18 +40,22 @@ can be dropped and regenerated); bronze is the only source of truth.
   window keys, async bridge), bronze asset-check builders, and the **silver helpers**
   (`grecohome_core.silver`: DuckDB connection, sidecar-safe bronze reading, dedup idiom,
   atomic Parquet write guarded by `protected_root`).
-- **Bronze subjects** — `packages/{whoop,garmin,lingo,soil,location}`. Each is a code location that
-  captures one source to bronze: Whoop (OAuth, hourly trailing-window + dedup), Garmin
+- **Bronze subjects** — `packages/{whoop,garmin,lingo,soil,location,geocode}`. Each is a code
+  location that captures one source to bronze: Whoop (OAuth, hourly trailing-window + dedup), Garmin
   (delegated auth, daily capture-once, no dedup), Lingo (Drive service-account, sensor +
   dynamic partitions), Soil/USCRN (public file, daily row-slice + dedup), Location (no source API —
   *promotes* the external `locationrelay` service's raw staging files (Overland + OwnTracks POST
   bodies) into bronze byte-for-byte on a few-minute schedule; `dt`=receipt date, `dedupe`-off,
   idempotent via a per-stream promoted-set keyed on the staging **filename** + a `staging_file`
-  sidecar backstop).
+  sidecar backstop), Geocode (no external source — reverse-geocodes the Location points via
+  self-hosted **Photon** `/reverse` and caches the raw GeoJSON to `geocode/reverse` bronze;
+  `dedupe`-off, idempotent via a per-cell key `(lat_e4,lon_e4)` recorded in each sidecar; no state
+  dir; `deps` on the two Location bronze assets). See `packages/geocode/docs/GEOCODE.md`.
 - `packages/silver` (`grecohome_silver`) — one cross-subject code location: typed, deduped
   Parquet tables — `silver_sleep` (Garmin+Whoop FULL OUTER JOIN), `silver_glucose`,
-  `silver_workouts`, `silver_recovery` — plus their asset checks. Reads `BRONZE_ROOT`,
-  writes `SILVER_ROOT`.
+  `silver_workouts`, `silver_recovery`, `silver_location` (Location points LEFT JOINed to the
+  geocode cache on the ~11 m cell key — a pure offline enrichment join), and the other
+  derived tables — plus their asset checks. Reads `BRONZE_ROOT`, writes `SILVER_ROOT`.
 - `packages/gold` (`grecohome_gold`) — analysis marts: `gold_daily_wellness` (one row per
   local day joining the four silver tables). Reads `SILVER_ROOT`, writes `GOLD_ROOT`.
 - Cross-layer lineage is declared by `AssetKey` (silver→bronze, gold→silver); the reads are
@@ -76,9 +82,19 @@ can be dropped and regenerated); bronze is the only source of truth.
   bronze's raw UTC timestamps — never by trusting the partition folder.
 - **Location = promote-only, single-writer lake.** The internet-facing `locationrelay` (separate
   Rust repo/container) stages raw POST bodies; the `location` subject only *promotes* them to
-  bronze. Python stays the lake's sole writer: the promoter never writes/deletes under
-  `RELAY_CAPTURE_DIR` (relay is its sole cleaner), and the relay never writes the lake. Don't add a
-  Dagster→Dawarich forwarder (the relay forwards in real time) or `silver_location` in v1.
+  bronze — it makes **no source-API calls** and holds no secret. Python stays the lake's sole
+  writer: the promoter never writes/deletes under `RELAY_CAPTURE_DIR` (relay is its sole cleaner),
+  and the relay never writes the lake. Don't add a Dagster→Dawarich forwarder (the relay forwards
+  in real time). Location enrichment lives in the **separate `geocode` subject**, not here, so the
+  promoter stays pure.
+- **Geocode = derived bronze cache, offline enrichment.** Reverse geocoding is a per-coordinate
+  network call, so it must NOT live in the `silver_location` transform (silver is a pure, offline,
+  cheap-to-rebuild projection). The `geocode` subject caches Photon `/reverse` responses to bronze
+  (append-only, `dedupe`-off, cell-keyed idempotency in the sidecar); `silver_location` then joins
+  points to that cache with a pure DuckDB filesystem read. Photon is self-hosted/auth-less
+  (`PHOTON_BASE_URL`, no secret). The v1 "no `silver_location`" deferral is **superseded** by this
+  work — `silver_location` and `geocode` now exist; gold place marts (time-at-place, home/away)
+  remain deferred.
 
 ## Environment Variables
 
@@ -87,6 +103,8 @@ See `docs/ENV_TEMPLATE.md` (and `.env.example`). Per layer:
   `WHOOP_CLIENT_SECRET` / `WHOOP_TOKEN_PATH`; Garmin `GARMINCONNECT_*`; Lingo `GDRIVE_*`;
   Soil `USCRN_*`; Location `RELAY_CAPTURE_DIR` (mount **read-only**) / `LOCATION_STATE_DIR`
   (outside `BRONZE_ROOT`) — no secret; image builds as `nonroot` like the others but must run **at
-  runtime as uid 1000** (e.g. `user: "1000:998"`) to read the `0600` staging files).
+  runtime as uid 1000** (e.g. `user: "1000:998"`) to read the `0600` staging files; Geocode
+  `PHOTON_BASE_URL` — no secret, no state dir; also runs **at runtime as uid 1000** to read the
+  Location bronze it enriches).
 - **silver** — `BRONZE_ROOT` (read-only), `SILVER_ROOT` (+ reserved `SILVER_MONITOR_DIR`).
 - **gold** — `SILVER_ROOT` (read-only), `GOLD_ROOT` (+ reserved `GOLD_MONITOR_DIR`).
