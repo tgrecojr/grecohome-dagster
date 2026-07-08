@@ -337,6 +337,62 @@ Enable `uscrn_schedule` in the UI (schedules, like sensors, are off by default).
 capture the recent partitions; backfill the station's history with
 `dagster backfill --partition-range 2010-01-01...<today> --job uscrn_capture_job`.
 
+## Location (fifth subject)
+
+Location makes **no source-API call** and holds **no secret**: it *promotes* the external
+`locationrelay` service's raw staging files into bronze. Full design in
+[packages/location/docs/LOCATION.md](../packages/location/docs/LOCATION.md).
+
+- **Image:** `ghcr.io/tgrecojr/grecohome-dagster-location`, serving
+  `grecohome_location.dagster.definitions`.
+- **Run as uid 1000 at runtime.** The image builds `nonroot` like every subject, but the relay's
+  staging files are `0600` owned by uid 1000, so the container must run as that uid
+  (compose `user: "1000:998"`) to read them.
+- **Mounts/env:** the shared `dagster.yaml` (`DAGSTER_HOME`) + `DAGSTER_POSTGRES_*`; `BRONZE_ROOT`
+  (writes `location/`); `RELAY_CAPTURE_DIR` mounted **read-only** (the relay is its sole cleaner);
+  `LOCATION_STATE_DIR` writable and **outside** `BRONZE_ROOT`. See
+  [ENV_TEMPLATE.md](ENV_TEMPLATE.md).
+
+```yaml
+# workspace.yaml
+  - grpc_server: { host: dagster_location, port: 4000, location_name: location }
+```
+
+```bash
+dagster instance concurrency set location 1   # single-slot: no double-promote
+```
+
+## Geocode (sixth subject — reverse-geocode cache)
+
+Geocode reverse-geocodes the Location points against a **self-hosted Photon**
+(`tuszik/photon-docker`) and caches the raw responses to bronze (`geocode/reverse`), so
+`silver_location` can enrich **offline**. **No secret.** Full design in
+[packages/geocode/docs/GEOCODE.md](../packages/geocode/docs/GEOCODE.md).
+
+- **Image:** `ghcr.io/tgrecojr/grecohome-dagster-geocode`, serving
+  `grecohome_geocode.dagster.definitions`.
+- **Run as uid 1000 at runtime** (image builds `nonroot`) so it can read the `location` bronze the
+  promoter (also uid 1000) wrote. It reads `location/**` and writes `geocode/**` under `BRONZE_ROOT`.
+- **Deploy a Photon container** (`tuszik/photon-docker`, port 2322) reachable on the Docker network,
+  and point `PHOTON_BASE_URL` at it (e.g. `http://photon:2322` — **no** `/api` suffix).
+- **Mounts/env:** the shared `dagster.yaml` (`DAGSTER_HOME`) + `DAGSTER_POSTGRES_*`; `BRONZE_ROOT`
+  (reads `location/`, writes `geocode/`); `PHOTON_BASE_URL` (required). Optional tuning:
+  `PHOTON_RADIUS_KM`, `GEOCODE_SCAN_DAYS`, `GEOCODE_MAX_LOOKUPS_PER_RUN`. See
+  [ENV_TEMPLATE.md](ENV_TEMPLATE.md).
+
+```yaml
+# workspace.yaml
+  - grpc_server: { host: dagster_geocode, port: 4000, location_name: geocode }
+```
+
+```bash
+dagster instance concurrency set geocode 1   # single-slot: no double-lookup
+```
+
+Enable `geocode_reverse_every_30m` in the UI. To backfill the cache over all location history once,
+run with a wide `GEOCODE_SCAN_DAYS` (the cache is permanent, so a wide scan is needed only once per
+resolution).
+
 ## Silver (cross-subject layer)
 
 Silver is **not** a data subject — it captures nothing. It's a derived, rebuildable layer
@@ -371,8 +427,10 @@ and **writes** a separate silver root.
 
 Mounts (note bronze is **read-only** here — silver never writes under it):
 
-- **`BRONZE_ROOT` — read-only** (`/opt/datalake/bronze` → `/data/bronze:ro`). Silver only
-  reads the `garmin/` and `whoop/` source segments.
+- **`BRONZE_ROOT` — read-only** (`/opt/datalake/bronze` → `/data/bronze:ro`). Silver reads the
+  source segments it projects (`garmin/`, `whoop/`, `lingo/`, `uscrn/`, and for `silver_location`
+  the `location/` points + the `geocode/` reverse-geocode cache — including the geocode
+  `.meta.json` sidecars, where the cache's cell key lives).
 - **`SILVER_ROOT` — writable**, a **separate** volume outside bronze (e.g.
   `/opt/datalake/silver` → `/data/silver`). The atomic Parquet writer refuses any path under
   `BRONZE_ROOT`.

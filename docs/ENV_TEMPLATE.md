@@ -85,6 +85,29 @@ set the runtime user, e.g. compose `user: "1000:998"`) and mount `RELAY_CAPTURE_
 > The auth token is header/query-only at the relay and never touches a staging body, so nothing
 > secret reaches bronze. See [packages/location/docs/LOCATION.md](../packages/location/docs/LOCATION.md).
 
+### Geocode / Photon (`grecohome-geocode`) — its own container
+
+Reverse-geocodes the `location` bronze points against a self-hosted **Photon**
+(`tuszik/photon-docker`) and caches the raw responses to bronze (`geocode/reverse`). **No
+secret** — Photon is auth-less on the LAN. `BRONZE_ROOT`/`LOG_LEVEL`/`ENVIRONMENT` and the
+Dagster-instance vars below apply too. It reads the `location` bronze the promoter wrote, so
+**run this container as uid 1000 at runtime** (image builds `nonroot`; set e.g. compose
+`user: "1000:998"`) with `BRONZE_ROOT` mounted readable/writable (it reads `location/**` and
+writes `geocode/**`).
+
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `PHOTON_BASE_URL` | yes | — | Base URL of the self-hosted Photon, e.g. `http://photon:2322`. Do **not** append `/api` (the subject appends `/reverse`) |
+| `PHOTON_TIMEOUT` | no | `30` | Per-request timeout (seconds) for the Photon call |
+| `PHOTON_LANGUAGE` | no | `en` | Photon `lang` param (localizes place names) |
+| `PHOTON_RADIUS_KM` | no | `0.05` | Photon `/reverse` search radius (km); small, but non-zero so nearby candidates are returned and cached raw |
+| `GEOCODE_SCAN_DAYS` | no | `7` | Trailing window of `location` bronze scanned for observed cells. Widen for a one-time cache backfill over all history |
+| `GEOCODE_MAX_LOOKUPS_PER_RUN` | no | `2000` | Safety cap on new-cell lookups per run (remainder picked up next run; logged when hit) |
+| `GEOCODE_RECENT_PARTITIONS` | no | `14` | Trailing bronze partitions the checks inspect |
+
+> No state dir: idempotency is the cache itself (a cell recorded in a sidecar is never
+> re-queried). See [packages/geocode/docs/GEOCODE.md](../packages/geocode/docs/GEOCODE.md).
+
 ### Silver (`grecohome-silver`) — its own container, cross-subject
 
 Silver reads bronze and writes Parquet; it makes **no source-API calls** (no secrets, no

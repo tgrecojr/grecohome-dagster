@@ -67,9 +67,12 @@ BRONZE_ROOT/location/{overland|owntracks}/dt=YYYY-MM-DD/{collection}_{fetched_ms
 
 ## Deferrals (v1 non-goals)
 
-- **No silver/gold in v1.** Dawarich is the consumer/visualizer; the relay forwards to it in real
-  time. Add `silver_location` only when a concrete cross-subject gold question needs it (e.g.
-  travel/timezone vs. sleep/glucose). Recorded here as a deliberate choice.
+- **~~No silver/gold in v1~~ — superseded.** `silver_location` now exists, enriched with
+  reverse-geocoded place from the separate **`geocode`** bronze cache (Photon `/reverse`). The
+  promoter itself stays pure (no source API, no enrichment) — the geocoding lives in its own subject.
+  See [../../packages/geocode/docs/GEOCODE.md](../../geocode/docs/GEOCODE.md), `docs/SILVER.md`, and
+  [ADR 0012](../../../docs/adr/0012-geocode-cache-silver-location.md). Gold place marts (time-at-place,
+  home/away) remain deferred.
 - **No forwarding in Dagster.** Forwarding to Dawarich stays in the relay's Rust worker (real-time);
   a Dagster reconcile-from-bronze forwarder is a future option only if the relay's in-memory forward
   queue is ever observed dropping data. Don't run both.

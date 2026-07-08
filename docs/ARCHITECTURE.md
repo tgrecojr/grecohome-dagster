@@ -17,7 +17,8 @@ packages/
   lingo/   grecohome-lingo  — Lingo CGM bronze subject (ported from glucose-loader)
   soil/    grecohome-soil   — NOAA USCRN soil/temp bronze subject (ported from soildata)
   location/grecohome-location— phone location bronze subject (promotes locationrelay staging files)
-  silver/  grecohome-silver — silver layer (sleep, glucose, workouts, recovery)
+  geocode/ grecohome-geocode — reverse-geocode cache (Photon /reverse) for the location points
+  silver/  grecohome-silver — silver layer (sleep, glucose, workouts, recovery, location, …)
   gold/    grecohome-gold   — gold layer (daily wellness mart)
 ```
 
@@ -188,9 +189,43 @@ How Location differs (it reuses core too):
 - **Runs as uid 1000 at runtime.** The image builds like every other subject (runs as `nonroot`);
   the deployment sets the runtime user (e.g. compose `user: "1000:998"`). Staging files are `0600`
   owned by uid 1000, so only uid 1000 can read them (see [DEPLOYMENT](DEPLOYMENT.md)).
-- **v1 non-goals:** no `silver_location` and no Dagster→Dawarich forwarder (the relay forwards in
-  real time; bronze is the durable audit/replay copy). See
+- **Enrichment lives elsewhere.** No Dagster→Dawarich forwarder (the relay forwards in real time;
+  bronze is the durable audit/replay copy). Reverse-geocode enrichment is the **separate `geocode`
+  subject** + `silver_location`, so the promoter stays pure. See
   [packages/location/docs/LOCATION.md](../packages/location/docs/LOCATION.md).
+
+## `grecohome-geocode` — a sixth data subject (reverse-geocode cache)
+
+```
+grecohome_geocode/
+  config.py          GeocodeSettings(BaseSubjectSettings) — PHOTON_BASE_URL (no secret, no state dir)
+  cells.py           the (lat_e4, lon_e4) ~11 m cell-key contract shared with silver_location
+  fetch.py           sync httpx call to self-hosted Photon /reverse (tenacity retry)
+  capture.py         adapter over core capture_bronze (geocode/reverse, dedupe=False, ext=json, raw)
+  discover.py        pure-stdlib cell discovery (observed location cells − cached cells)
+  geocode.py         the run: discover → look up → cache
+  dagster/
+    assets.py        geocode_bronze_reverse (unpartitioned, single-slot pool; deps on location bronze)
+    schedules.py     every-30-min capture schedule + the capture job
+    checks.py        content (WARN) + schema drift (ERROR); freshness/completeness disabled
+    definitions.py   the gRPC code-location target
+```
+
+How Geocode differs (it reuses core too):
+- **Derived bronze cache, no external source.** It reads the `location` bronze points, snaps each to
+  a ~11 m grid **cell** `(lat_e4, lon_e4)`, and for any not-yet-cached cell calls a **self-hosted
+  Photon** (`tuszik/photon-docker`) `/reverse`, caching the raw GeoJSON `FeatureCollection` to
+  `geocode/reverse` bronze. The Photon calls happen once, here — so silver can enrich **offline**.
+- **Cell-based idempotency, no state dir.** `dedupe=False` (two distinct cells legitimately return
+  identical "no result" responses; content-dedup would leave one un-cached forever). The cell key is
+  recorded in each sidecar, so the cache is its own durable ledger — discovery skips cells already in
+  a sidecar. The cell key is also `silver_location`'s join key (`snap_e4` rounds half away from zero
+  to match DuckDB `round()`).
+- **Event-driven cache checks.** Content health (WARN) + schema drift (ERROR, on the stable
+  `["features","type"]` top level); freshness/completeness disabled (a cache has no polling cadence).
+- **Runs as uid 1000 at runtime** (image builds `nonroot`) to read the location bronze it enriches.
+  Only `PHOTON_BASE_URL` is required. See
+  [packages/geocode/docs/GEOCODE.md](../packages/geocode/docs/GEOCODE.md).
 
 ## `grecohome-silver` — the silver layer
 
@@ -201,6 +236,7 @@ grecohome_silver/
   glucose.py         Lingo CGM column mapping (dedup on the UTC instant)
   workouts.py        Garmin activities column mapping
   recovery.py        Whoop recovery column mapping (joins sleep)
+  location.py        location points + reverse-geocode enrichment join (offline)
   dagster/           per-table assets + checks, daily jobs/schedules, definitions
 ```
 
@@ -216,6 +252,10 @@ are declared by `AssetKey` (cross-location lineage); the reads are filesystem re
   repeats under different offsets) (ADR 0008).
 - **`silver_workouts`** — one row per Garmin activity (ADR 0009).
 - **`silver_recovery`** — one row per Whoop cycle; joins sleep via `sleep_id`/`cycle_id` (ADR 0010).
+- **`silver_location`** — one row per location fix (Overland + OwnTracks), LEFT JOINed to the
+  `geocode` bronze cache on the ~11 m cell key for reverse-geocoded place — the first offline
+  enrichment join (ADR 0012). Plus the other derived tables (weather, daily, strain, body, fitness,
+  workout-splits, whoop-workouts).
 
 Each table has `@asset_check`s (uniqueness/ranges = ERROR, coverage = WARN) and a daily rebuild
 schedule; a shared checks-only job catches a stopped asset. Full guide: [SILVER](SILVER.md).

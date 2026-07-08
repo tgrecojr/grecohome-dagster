@@ -16,6 +16,8 @@ from grecohome_silver.dagster.fitness_assets import FITNESS_ASSETS
 from grecohome_silver.dagster.fitness_checks import FITNESS_CHECKS
 from grecohome_silver.dagster.glucose_assets import GLUCOSE_ASSETS
 from grecohome_silver.dagster.glucose_checks import GLUCOSE_CHECKS
+from grecohome_silver.dagster.location_assets import LOCATION_ASSETS
+from grecohome_silver.dagster.location_checks import LOCATION_CHECKS
 from grecohome_silver.dagster.recovery_assets import RECOVERY_ASSETS
 from grecohome_silver.dagster.recovery_checks import RECOVERY_CHECKS
 from grecohome_silver.dagster.schedules import (
@@ -29,6 +31,8 @@ from grecohome_silver.dagster.schedules import (
     silver_fitness_job,
     silver_glucose_daily,
     silver_glucose_job,
+    silver_location_daily,
+    silver_location_job,
     silver_recovery_daily,
     silver_recovery_job,
     silver_sleep_daily,
@@ -59,12 +63,12 @@ defs = Definitions(
     assets=(
         SLEEP_ASSETS + GLUCOSE_ASSETS + WORKOUT_ASSETS + RECOVERY_ASSETS
         + WEATHER_ASSETS + DAILY_ASSETS + STRAIN_ASSETS + BODY_ASSETS + FITNESS_ASSETS
-        + WORKOUT_SPLITS_ASSETS + WHOOP_WORKOUTS_ASSETS
+        + WORKOUT_SPLITS_ASSETS + WHOOP_WORKOUTS_ASSETS + LOCATION_ASSETS
     ),
     asset_checks=(
         SLEEP_CHECKS + GLUCOSE_CHECKS + WORKOUT_CHECKS + RECOVERY_CHECKS
         + WEATHER_CHECKS + DAILY_CHECKS + STRAIN_CHECKS + BODY_CHECKS + FITNESS_CHECKS
-        + WORKOUT_SPLITS_CHECKS + WHOOP_WORKOUTS_CHECKS
+        + WORKOUT_SPLITS_CHECKS + WHOOP_WORKOUTS_CHECKS + LOCATION_CHECKS
     ),
     jobs=[
         silver_sleep_job,
@@ -78,6 +82,7 @@ defs = Definitions(
         silver_fitness_job,
         silver_workout_splits_job,
         silver_whoop_workouts_job,
+        silver_location_job,
         silver_checks_job,
     ],
     schedules=[
@@ -92,6 +97,7 @@ defs = Definitions(
         silver_fitness_daily,
         silver_workout_splits_daily,
         silver_whoop_workouts_daily,
+        silver_location_daily,
         silver_checks_schedule,
     ],
 )

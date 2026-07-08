@@ -32,6 +32,9 @@ Tables today:
 - **Fitness** — `silver_fitness` (per-snapshot-day Garmin VO2max / training status / race
   predictions; the first **multi-collection** table). See [Fitness (Garmin)](#fitness-garmin)
   below.
+- **Location** — `silver_location` (per-fix Overland + OwnTracks points, enriched with
+  reverse-geocoded place from the `geocode` bronze cache; the first **enrichment-join** table).
+  See [Location (points + reverse geocode)](#location-points--reverse-geocode) below.
 
 ## Invariants
 
@@ -85,6 +88,7 @@ whoop_bronze_sleep  ─▶ silver_sleep_whoop  ─┘
 {SILVER_ROOT}/strain/silver_strain.parquet   # strain: one row per Whoop cycle
 {SILVER_ROOT}/body/silver_body.parquet       # body: one row per Garmin weigh-in
 {SILVER_ROOT}/fitness/silver_fitness.parquet # fitness: one row per Garmin snapshot day
+{SILVER_ROOT}/location/silver_location.parquet # location: one row per fix (place-enriched)
 ```
 
 - **Atomic overwrite.** Each asset `COPY`s to a temp file in the destination dir and `os.replace`s
@@ -585,9 +589,10 @@ One row per `snapshot_date` (DATE, key): `vo2max_running`, `vo2max_cycling` (DOU
 - `silver_fitness_daily` (06:44 UTC) rebuilds `silver_fitness` (Garmin snapshot collections).
 - `silver_workout_splits_daily` (06:47 UTC) rebuilds `silver_workout_splits` (Garmin laps).
 - `silver_whoop_workouts_daily` (06:53 UTC) rebuilds `silver_whoop_workouts` (Whoop activities).
+- `silver_location_daily` (06:56 UTC) rebuilds `silver_location` (location fixes + geocode cache).
 - `silver_checks_daily` (07:00 UTC) runs **all** silver checks (sleep + glucose + workouts +
-  recovery + weather + daily + strain + body + fitness + workout-splits + whoop-workouts)
-  independently, so a *stopped* silver asset is still caught.
+  recovery + weather + daily + strain + body + fitness + workout-splits + whoop-workouts +
+  location) independently, so a *stopped* silver asset is still caught.
 
 All are off by default; enable them in the UI. Rebuild on demand (e.g. after a bronze backfill)
 with `dagster job execute --job silver_sleep_job` (or `--job silver_glucose_job`).
@@ -598,3 +603,71 @@ See [DEPLOYMENT.md → Silver](DEPLOYMENT.md#silver-cross-subject-layer) and
 [ENV_TEMPLATE.md](ENV_TEMPLATE.md): bronze mounted **read-only**, `SILVER_ROOT` writable on a
 separate volume, and a reserved `SILVER_MONITOR_DIR` (for the forthcoming silver monitor; unused
 today).
+
+# Location (points + reverse geocode)
+
+`silver_location` is the first **enrichment-join** table: it normalizes the two `location`
+bronze point streams into one typed table and LEFT JOINs each fix to its reverse-geocoded place
+from the **`geocode` bronze cache** (Photon responses; see
+[packages/geocode/docs/GEOCODE.md](../packages/geocode/docs/GEOCODE.md)). The join is a pure
+offline DuckDB read — no network at transform time, because the Photon calls already happened in
+the geocode bronze cache. Column mapping lives in `grecohome_silver.location`.
+
+## Sources & normalization
+
+- **Overland** — one file per POST: `{"locations": [Feature, ...]}`. Each Feature is GeoJSON —
+  `geometry.coordinates = [lon, lat]` (longitude first), `properties.timestamp` (ISO-8601 UTC),
+  `properties.horizontal_accuracy` (m). Unnested to one row per point.
+- **OwnTracks** — one message per file. Location messages carry flat `lat`/`lon` and `tst`
+  (epoch **seconds**, → UTC timestamp) and `acc` (m). Non-location messages (`lwt` / `transition`
+  without coordinates) are dropped.
+
+Both are unioned into `(source_stream, event_ts_utc, lat, lon, accuracy_m)`.
+
+## Deduplication & cell key
+
+- **Fix identity = `(source_stream, event_ts_utc, lat, lon)`** — a re-promoted byte-identical
+  POST collapses to one row (latest capture wins, by the bronze filename's fetch-millis), while
+  two genuinely distinct fixes that share a second stay separate.
+- Each fix is snapped to an integer **~11 m cell** — `lat_e4 = round(lat * 10000)` — the *same*
+  key the geocode cache uses (`grecohome_geocode.cells.snap_e4`, half-away-from-zero to match
+  DuckDB `round()`). The place fields are LEFT JOINed on `(lat_e4, lon_e4)`, so an un-cached cell
+  yields `geocoded = false` with null place columns (never dropped).
+- The geocode cache's cell key lives in the payload **sidecar** (the raw Photon body has no notion
+  of our grid), so silver reads the `.meta.json` sidecars for `lat_e4`/`lon_e4` and joins them to
+  their payloads (`features[0]` = nearest match) by filename.
+
+## Schema (`silver_location`)
+
+| Column | Type | Note |
+|---|---|---|
+| `event_ts_utc` | TIMESTAMP | fix instant (UTC) — part of the identity |
+| `source_stream` | VARCHAR | `overland` \| `owntracks` |
+| `lat` / `lon` | DOUBLE | the fix coordinates (WGS84) |
+| `lat_e4` / `lon_e4` | BIGINT | ~11 m cell key (join key to the geocode cache) |
+| `accuracy_m` | DOUBLE | reported horizontal accuracy (nullable) |
+| `event_date_utc` | DATE | UTC date of the fix (local-day semantics deferred to gold) |
+| `geocoded` | BOOLEAN | whether the fix's cell is in the geocode cache |
+| `geo_name` | VARCHAR | Photon `properties.name` (nullable) |
+| `geo_house_number` / `geo_street` | VARCHAR | address (nullable) |
+| `geo_city` / `geo_district` / `geo_county` / `geo_state` / `geo_postcode` | VARCHAR | admin hierarchy (nullable) |
+| `geo_country` / `geo_country_code` | VARCHAR | country (nullable) |
+| `geo_osm_key` / `geo_osm_value` | VARCHAR | OSM class of the matched object (e.g. `amenity`/`cafe`, `place`/`house`) — the prize for later gold place-typing |
+| `geo_osm_id` / `geo_osm_type` | BIGINT / VARCHAR | matched OSM object id/type (nullable) |
+
+All `geo_*` fields are optional per location (OSM coverage varies), so every one is nullable.
+
+## Asset checks
+
+| Check | Severity | What |
+|---|---|---|
+| `location_fix_unique_nonnull` | ERROR | one row per `(source_stream, event_ts_utc, lat, lon)`; timestamp/coords non-null |
+| `location_coord_range` | ERROR | latitude ∈ [-90, 90], longitude ∈ [-180, 180] |
+| `location_coverage_vs_bronze` | WARN | silver fixes ≈ bronze distinct fixes (no silent drop); reports geocoded/named-fix counts and cached-cell count |
+
+## Deferrals
+
+- **Nearest-only enrichment** in v1 (`features[0]`); the full candidate collection stays raw in
+  bronze for smarter attribution later without re-hitting Photon.
+- **Local-day / place semantics** (time-at-place, home vs away, daily travel) are a **gold**
+  concern — deferred.
