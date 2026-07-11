@@ -37,7 +37,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # =============================================================================
 # Stage 2: Runtime (distroless)
 # =============================================================================
-FROM cgr.dev/chainguard/python:latest@sha256:77d9f82d47d038bbda974e237ab65a27fdc37fe470189064612ab11b5178eb51
+FROM cgr.dev/chainguard/python:latest@sha256:48b99516540c29b4e949f77dfce8d1c8de6036adcce64245bb350b507b6fc9fc
 
 LABEL org.opencontainers.image.title="grecohome-dagster-silver"
 LABEL org.opencontainers.image.description="Silver layer: cross-subject derived/rebuildable Dagster code location"
