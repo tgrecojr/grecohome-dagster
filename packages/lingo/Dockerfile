@@ -33,7 +33,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # =============================================================================
 # Stage 2: Runtime (distroless)
 # =============================================================================
-FROM cgr.dev/chainguard/python:latest@sha256:48b99516540c29b4e949f77dfce8d1c8de6036adcce64245bb350b507b6fc9fc
+FROM cgr.dev/chainguard/python:latest@sha256:4d908c6a44ba22460e34a2f6dd665b8fcb82bd3e6c887e749bd6fef243e10094
 
 LABEL org.opencontainers.image.title="grecohome-dagster-lingo"
 LABEL org.opencontainers.image.description="Lingo CGM data subject: bronze-only Dagster code location"
