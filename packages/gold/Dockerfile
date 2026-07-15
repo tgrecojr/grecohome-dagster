@@ -37,7 +37,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # =============================================================================
 # Stage 2: Runtime (distroless)
 # =============================================================================
-FROM cgr.dev/chainguard/python:latest@sha256:4d908c6a44ba22460e34a2f6dd665b8fcb82bd3e6c887e749bd6fef243e10094
+FROM cgr.dev/chainguard/python:latest@sha256:ce9aaca1f826f7f963cd031e98f8c19f993b1843096d395ea919b646e72cb8de
 
 LABEL org.opencontainers.image.title="grecohome-dagster-gold"
 LABEL org.opencontainers.image.description="Gold layer: analysis marts Dagster code location"
