@@ -1,5 +1,6 @@
 """Tests for TokenManager backed by the plaintext-JSON file store."""
 
+import asyncio
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -94,6 +95,31 @@ class TestGetValidToken:
         with capture_logs() as logs:
             await mgr.get_valid_token()
         assert any(e.get("event") == "whoop_token_no_rotation" for e in logs)
+
+    async def test_concurrent_callers_refresh_only_once(self, store):
+        # The double-spend guard: many callers hitting a near-expiry token must
+        # trigger exactly one refresh (a second replay of the consumed rotating
+        # refresh token is what gets the Whoop grant revoked). The losers reuse
+        # the token the winner just rotated.
+        oauth = Mock()
+
+        async def slow_refresh(refresh_token):
+            await asyncio.sleep(0.05)  # widen the race window
+            return {
+                "access_token": "new_access",
+                "refresh_token": "new_refresh",
+                "expires_in": 3600,
+                "token_type": "Bearer",
+            }
+
+        oauth.refresh_access_token = AsyncMock(side_effect=slow_refresh)
+        mgr = _manager(store, oauth)
+        mgr.save_token("old_access", "old_refresh", expires_in=60)  # near expiry
+
+        results = await asyncio.gather(*[mgr.get_valid_token() for _ in range(5)])
+
+        assert results == ["new_access"] * 5
+        oauth.refresh_access_token.assert_awaited_once_with("old_refresh")
 
     async def test_malformed_refresh_raises_and_leaves_file_unchanged(self, store):
         oauth = Mock()
