@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 from typing import NamedTuple
 
 from grecohome_core.logging_config import get_logger
+from grecohome_core.tokens.file_lock import InterProcessLock
 from grecohome_core.tokens.file_store import TokenFileStore
 from grecohome_whoop.auth.oauth_client import WhoopOAuthClient
 from grecohome_whoop.config import settings
@@ -81,6 +82,10 @@ class TokenManager:
         self.oauth_client = oauth_client or WhoopOAuthClient()
         self.refresh_threshold = timedelta(minutes=refresh_threshold_minutes)
         self.store = store or TokenFileStore(settings.whoop_token_path)
+        # Sentinel for the host-wide refresh lock, next to the token file. See
+        # grecohome_core.tokens.file_lock: the asyncio lock only serializes within
+        # one process, but Dagster runs each step in its own subprocess.
+        self._lock_path = f"{self.store.path}.lock"
         logger.info(
             "Token manager initialized",
             refresh_threshold_minutes=refresh_threshold_minutes,
@@ -129,37 +134,67 @@ class TokenManager:
         if state.expires_at - now > self.refresh_threshold:
             return state.access_token
 
-        # Near expiry: serialize refresh per user. The lock holder refreshes;
-        # everyone else falls through to the freshly-stored token.
+        # Near expiry. Serialize the refresh so two callers never double-spend the
+        # single-use rotating refresh token -- Whoop treats a replayed (already
+        # consumed) refresh token as theft and revokes the whole grant. Two layers:
+        #   1. asyncio.Lock -- cheap serialization within one event loop / process.
+        #   2. file lock    -- host-wide serialization across the separate Dagster
+        #      step subprocesses and job runs the asyncio lock can't reach.
+        # Under each lock we re-read and re-check expiry, so a caller that waited
+        # reuses the token the holder just rotated instead of refreshing again.
         async with self._get_refresh_lock(user_id):
-            state = self._read_token_state()
-            if state is None:
-                return None
-            now = datetime.now(UTC)
-            if state.expires_at - now > self.refresh_threshold:
-                logger.info("Token refreshed by a concurrent caller; reusing", user_id=user_id)
-                return state.access_token
+            reused = self._reuse_if_fresh(user_id)
+            if reused is not None:
+                return reused
 
-            logger.info(
-                "Token near expiration, refreshing",
-                user_id=user_id,
-                time_until_expiry_seconds=(state.expires_at - now).total_seconds(),
-            )
+            lock = InterProcessLock(self._lock_path)
+            await asyncio.to_thread(lock.acquire)
             try:
-                token_data = await self.oauth_client.refresh_access_token(state.refresh_token)
-            except Exception as e:
-                # No exc_info: the exception's locals (the access/refresh tokens)
-                # would otherwise be rendered into logs. str(e) is the safe
-                # status-only message; the oauth client logs the specific cause.
-                logger.error("Failed to refresh token", user_id=user_id, error=str(e))
-                raise
+                reused = self._reuse_if_fresh(user_id)
+                if reused is not None:
+                    return reused
 
-            # Validate before mutating stored state, so a malformed 200 can't
-            # leave the file half-updated.
-            if not token_data.get("access_token") or token_data.get("expires_in") is None:
-                raise ValueError("Token refresh response missing access_token/expires_in")
+                state = self._read_token_state()
+                if state is None:
+                    return None
+                now = datetime.now(UTC)
+                logger.info(
+                    "Token near expiration, refreshing",
+                    user_id=user_id,
+                    time_until_expiry_seconds=(state.expires_at - now).total_seconds(),
+                )
+                try:
+                    token_data = await self.oauth_client.refresh_access_token(state.refresh_token)
+                except Exception as e:
+                    # No exc_info: the exception's locals (the access/refresh tokens)
+                    # would otherwise be rendered into logs. str(e) is the safe
+                    # status-only message; the oauth client logs the specific cause.
+                    logger.error("Failed to refresh token", user_id=user_id, error=str(e))
+                    raise
 
-            return self._store_refreshed_token(token_data, state)
+                # Validate before mutating stored state, so a malformed 200 can't
+                # leave the file half-updated.
+                if not token_data.get("access_token") or token_data.get("expires_in") is None:
+                    raise ValueError("Token refresh response missing access_token/expires_in")
+
+                return self._store_refreshed_token(token_data, state)
+            finally:
+                lock.release()
+
+    def _reuse_if_fresh(self, user_id: int) -> str | None:
+        """Return the stored access token if it is no longer near expiry, else None.
+
+        The post-lock double-check: a caller that waited on a refresh lock reuses
+        the token the holder just rotated instead of refreshing again (which would
+        replay a now-consumed refresh token and get the grant revoked).
+        """
+        state = self._read_token_state()
+        if state is None:
+            return None
+        if state.expires_at - datetime.now(UTC) > self.refresh_threshold:
+            logger.info("Token already refreshed by another caller; reusing", user_id=user_id)
+            return state.access_token
+        return None
 
     def _read_token_state(self) -> _TokenState | None:
         """Read the stored token into a snapshot (no refresh), or None if absent."""
