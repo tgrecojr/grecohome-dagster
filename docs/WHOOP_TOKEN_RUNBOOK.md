@@ -42,17 +42,30 @@ runs to backfill.
 
 ## Two ways the grant dies
 
-There are two distinct failure modes behind a `400 invalid_grant`. Only the first is
-truly unpreventable.
+There are two distinct failure modes behind a `400 invalid_grant`.
 
-### 1. Server-side non-atomic rotation (rare, unpreventable)
+### 1. Server-side non-atomic rotation (rare)
 
-Whoop's token rotation is non-atomic under load: a 5xx during a refresh can rotate the
-token server-side while returning an error, so the client never receives the new token
-and is left holding a consumed one (the 2026-06-11 incident). The client mitigates the
-*transient* variant (bounded 5xx/network retry) and detects the terminal one fast, but
-recovery from a lost grant is manual re-auth. **Tell-tale:** a `503`/`5xx` burst in the
-logs right before the `400`s begin.
+Whoop's token rotation is non-atomic: once a refresh POST reaches Whoop, the refresh
+token is consumed and rotated (`R -> R'`) even if the client never receives the
+response. Two variants have bitten us:
+
+- **Slow response / client timeout (2026-07-20).** The refresh used httpx's default
+  **5s** timeout. Whoop's token endpoint is routinely slow (observed 1-4s); one refresh
+  took >5s, so the read timed out *after* Whoop had rotated the token. `ReadTimeout` is a
+  transport error, so the client retried and replayed the now-consumed `R` -> permanent
+  `400`. **Fixed:** the token endpoint now uses a generous timeout
+  (`_TOKEN_TIMEOUT = 30s`, 5s connect) so a slow-but-successful rotation completes and
+  `R'` is persisted; and the refresh no longer retries on a read/write timeout or
+  mid-flight network error (only connect-phase errors and 5xx/429, where the request
+  provably never landed or Whoop responded). **Tell-tale:** an `Unexpected error during
+  token refresh` with an httpx timeout traceback right before the `400`s begin.
+- **5xx during rotation (2026-06-11).** A `5xx` can rotate the token server-side while
+  still returning an error, leaving the client holding a consumed token. **Tell-tale:** a
+  `503`/`5xx` burst just before the `400`s.
+
+The timeout and retry-narrowing above make the first variant largely preventable;
+recovery from an already-lost grant is still manual re-auth.
 
 ### 2. Concurrent double-spend of the rotating refresh token (was the real cause, now fixed)
 

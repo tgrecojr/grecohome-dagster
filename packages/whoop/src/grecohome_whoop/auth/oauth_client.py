@@ -29,6 +29,26 @@ logger = get_logger(__name__)
 _RETRYABLE_TOKEN_STATUS = frozenset({429, 500, 502, 503, 504})
 _TOKEN_EXP_WAIT = wait_exponential(multiplier=1, min=1, max=8)
 
+# Whoop's token endpoint is routinely slow (observed refreshes take 1-4s) and its
+# rotation is *non-atomic*: if a refresh POST reaches Whoop, the refresh token is
+# consumed and rotated (R -> R') even if we never receive the response. httpx's
+# default 5s timeout turned exactly that into a dead grant (2026-07-20): the read
+# timed out after Whoop had already rotated, so we kept -- and replayed -- the
+# consumed R. Give the rotation ample time to complete and be persisted; keep the
+# connect phase short so a genuinely-down network still fails fast.
+_TOKEN_TIMEOUT = httpx.Timeout(30.0, connect=5.0)
+
+# Transport errors safe to retry on the *refresh* endpoint: only those where the
+# request provably never reached Whoop, so no rotation could have happened. A
+# ReadTimeout / WriteError / RemoteProtocolError means the POST may already have
+# been received and the refresh token consumed -- replaying it double-spends the
+# single-use token and revokes the grant, so those must NOT be retried.
+_CONNECT_ONLY_TRANSPORT_ERRORS = (
+    httpx.ConnectError,
+    httpx.ConnectTimeout,
+    httpx.PoolTimeout,
+)
+
 
 def _parse_retry_after(value: str | None) -> float | None:
     """Parse a Retry-After header (delta-seconds form). HTTP-date form -> None."""
@@ -41,10 +61,16 @@ def _parse_retry_after(value: str | None) -> float | None:
 
 
 def _is_retryable_token_error(exc: BaseException) -> bool:
-    """True for transient token-endpoint failures (5xx/429, network) — never 4xx."""
+    """True for transient token-endpoint failures safe to retry — never 4xx.
+
+    Retries a 5xx/429 response or a *connect-phase* transport error (the request
+    never landed). Deliberately does NOT retry a read/write timeout or mid-flight
+    network error: on the refresh endpoint the POST may already have consumed the
+    single-use refresh token server-side, so replaying it would revoke the grant.
+    """
     if isinstance(exc, httpx.HTTPStatusError):
         return exc.response.status_code in _RETRYABLE_TOKEN_STATUS
-    return isinstance(exc, httpx.TransportError)
+    return isinstance(exc, _CONNECT_ONLY_TRANSPORT_ERRORS)
 
 
 def _token_retry_wait(retry_state) -> float:
@@ -152,7 +178,7 @@ class WhoopOAuthClient:
         }
         logger.info("Exchanging authorization code for token", code=code[:10] + "...")
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=_TOKEN_TIMEOUT) as client:
                 response = await client.post(
                     self.token_url,
                     data=data,
@@ -187,13 +213,18 @@ class WhoopOAuthClient:
     ) -> dict[str, Any]:
         """Refresh an expired access token.
 
-        Transient failures (5xx / 429 / network) are retried up to 3 times with
-        backoff; a 4xx (400 invalid_grant / 401) is terminal and re-raised
-        immediately — the refresh token is consumed or revoked and only re-auth
+        Retried up to 3 times with backoff on a 5xx/429 response or a connect-phase
+        transport error (the request never reached Whoop). A read/write timeout or
+        mid-flight network error is NOT retried: Whoop may already have consumed and
+        rotated the single-use refresh token, so replaying it would revoke the grant.
+        A 4xx (400 invalid_grant / 401) is terminal and re-raised immediately — the
+        refresh token is consumed or revoked and only re-auth
         (``python -m grecohome_whoop.oauth_setup``) recovers it.
 
         Raises:
             httpx.HTTPStatusError: If the refresh fails (token expired/revoked).
+            httpx.TransportError: On a network/timeout failure (not retried when the
+                request may already have consumed the token).
         """
         data = {
             "grant_type": "refresh_token",
@@ -203,7 +234,7 @@ class WhoopOAuthClient:
         }
         logger.info("Refreshing access token")
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=_TOKEN_TIMEOUT) as client:
                 response = await client.post(
                     self.token_url,
                     data=data,
