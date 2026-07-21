@@ -173,3 +173,36 @@ class TestWhoopOAuthClientAsync:
         respx.post(client.token_url).mock(side_effect=httpx.NetworkError)
         with pytest.raises(httpx.NetworkError):
             await client.exchange_code_for_token("test_code", "test_verifier")
+
+    @respx.mock
+    async def test_refresh_does_not_retry_on_read_timeout(self):
+        # A ReadTimeout means the POST reached Whoop -- which rotates the single-use
+        # refresh token non-atomically, so it may already be consumed. Retrying would
+        # replay the consumed token and revoke the grant (the 2026-07-20 outage).
+        # Must be a single call, then re-raise.
+        client = WhoopOAuthClient()
+        respx.post(client.token_url).mock(side_effect=httpx.ReadTimeout("slow"))
+        with pytest.raises(httpx.ReadTimeout):
+            await client.refresh_access_token("old_refresh_token")
+        assert respx.calls.call_count == 1
+
+    @respx.mock
+    async def test_refresh_retries_on_connect_error_then_succeeds(self):
+        # A ConnectError happens before the request lands, so no rotation could have
+        # occurred -- safe to retry.
+        client = WhoopOAuthClient()
+        route = respx.post(client.token_url)
+        route.side_effect = [
+            httpx.ConnectError("no route"),
+            httpx.Response(
+                200,
+                json={
+                    "access_token": "new_access_token",
+                    "refresh_token": "new_refresh_token",
+                    "expires_in": 3600,
+                },
+            ),
+        ]
+        token_data = await client.refresh_access_token("old_refresh_token")
+        assert token_data["access_token"] == "new_access_token"
+        assert route.call_count == 2
