@@ -126,7 +126,12 @@ def build_schema_drift_check(
                 )
 
             baseline = _read_baseline(baseline_file)
-            if baseline is None:
+            # `not baseline` covers both a missing baseline and an *empty* one. A
+            # stored `[]` is not a real baseline — it means the baseline was recorded
+            # back when every recent payload was empty (schema_signature now skips
+            # empties, but older baselines predate that). Re-record it from the first
+            # non-empty signature and pass, self-healing without host file surgery.
+            if not baseline:
                 _write_baseline(baseline_file, now_sig, cfg.source, cfg.collection)
                 return AssetCheckResult(
                     passed=True,

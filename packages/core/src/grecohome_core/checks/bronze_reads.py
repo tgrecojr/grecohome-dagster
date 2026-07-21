@@ -350,7 +350,15 @@ def schema_signature(
     added field makes the richest payload richer; a field dropped across *all*
     recent days lowers every candidate.
 
-    Returns None when there is no payload to read yet.
+    **Empty payloads are ignored entirely.** An empty ``[]`` / ``{}`` payload has a
+    zero-key signature — it has no schema to speak of, so it can neither define nor
+    contradict a baseline. Sparse collections (e.g. Garmin ``max_metrics``: VO2max
+    only repopulates after a qualifying activity, so most days write ``[]``) would
+    otherwise record an empty baseline and then "drift" the first time real data
+    lands. Skipping empties keys the signature off actual payloads whenever they
+    appear and stays silent on empty days.
+
+    Returns None when there is no *non-empty* payload to read in the window.
     """
     best: list[str] | None = None
     # Newest partition first, so an equal-richness tie keeps the newer payload.
@@ -359,7 +367,7 @@ def schema_signature(
         if not payloads:
             continue
         sig = _payload_signature(payloads[-1], reader=reader, unnest_records=unnest_records)
-        if sig is None:
+        if not sig:  # None (unreadable) or [] (empty payload: no schema to compare)
             continue
         if best is None or len(sig) > len(best):
             best = sig
