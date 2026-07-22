@@ -56,16 +56,23 @@ response. Two variants have bitten us:
   transport error, so the client retried and replayed the now-consumed `R` -> permanent
   `400`. **Fixed:** the token endpoint now uses a generous timeout
   (`_TOKEN_TIMEOUT = 30s`, 5s connect) so a slow-but-successful rotation completes and
-  `R'` is persisted; and the refresh no longer retries on a read/write timeout or
-  mid-flight network error (only connect-phase errors and 5xx/429, where the request
-  provably never landed or Whoop responded). **Tell-tale:** an `Unexpected error during
-  token refresh` with an httpx timeout traceback right before the `400`s begin.
-- **5xx during rotation (2026-06-11).** A `5xx` can rotate the token server-side while
-  still returning an error, leaving the client holding a consumed token. **Tell-tale:** a
-  `503`/`5xx` burst just before the `400`s.
+  `R'` is persisted. **Tell-tale:** an `Unexpected error during token refresh` with an
+  httpx timeout traceback right before the `400`s begin.
+- **5xx during rotation (2026-06-11, again 2026-07-22).** A `5xx` can register/rotate the
+  token server-side while still returning an error. Whoop rotates on *reuse detection*
+  (RFC 6749): presenting the same refresh token twice revokes the whole grant. So the
+  kill wasn't the `5xx` itself — it was the **retry replaying `R`** after it. On
+  2026-07-22 a refresh got a `502` at 12s (the 30s timeout worked — no premature bail),
+  the client retried, and the replayed `R` came back `400`. **Fixed:** the refresh now
+  retries **only** connect-phase transport errors (`ConnectError`/`ConnectTimeout`/
+  `PoolTimeout`), where the request provably never reached Whoop and `R` was never
+  presented. Any HTTP response (4xx *or* 5xx) or a read/write timeout is re-raised
+  without retry; a transient `5xx` fails one run and the next hourly tick recovers with
+  `R` intact. **Tell-tale:** a single `Token refresh failed status_code=5xx`, then a
+  `whoop_token_invalid_grant status_code=400` on the next attempt.
 
-The timeout and retry-narrowing above make the first variant largely preventable;
-recovery from an already-lost grant is still manual re-auth.
+Recovery from an already-lost grant is still manual re-auth — no client change revives a
+revoked grant.
 
 ### 2. Concurrent double-spend of the rotating refresh token (was the real cause, now fixed)
 

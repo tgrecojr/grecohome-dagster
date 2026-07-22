@@ -23,10 +23,6 @@ from grecohome_whoop.config import settings
 
 logger = get_logger(__name__)
 
-# Transient token-endpoint failures worth a brief retry. 4xx (esp. 400
-# invalid_grant / 401) are terminal: the refresh token is consumed or revoked and
-# only re-auth recovers it, so retrying just hammers the endpoint with a dead grant.
-_RETRYABLE_TOKEN_STATUS = frozenset({429, 500, 502, 503, 504})
 _TOKEN_EXP_WAIT = wait_exponential(multiplier=1, min=1, max=8)
 
 # Whoop's token endpoint is routinely slow (observed refreshes take 1-4s) and its
@@ -38,11 +34,16 @@ _TOKEN_EXP_WAIT = wait_exponential(multiplier=1, min=1, max=8)
 # connect phase short so a genuinely-down network still fails fast.
 _TOKEN_TIMEOUT = httpx.Timeout(30.0, connect=5.0)
 
-# Transport errors safe to retry on the *refresh* endpoint: only those where the
-# request provably never reached Whoop, so no rotation could have happened. A
-# ReadTimeout / WriteError / RemoteProtocolError means the POST may already have
-# been received and the refresh token consumed -- replaying it double-spends the
-# single-use token and revokes the grant, so those must NOT be retried.
+# The ONLY failures safe to retry on the *refresh* endpoint: connect-phase errors,
+# where the request provably never reached Whoop, so the single-use refresh token
+# was never presented. Everything else -- a 4xx/5xx HTTP response, a read/write
+# timeout, a mid-flight network error -- means Whoop may have *received* the POST
+# and registered the token. Whoop rotates on reuse detection (RFC 6749 best
+# practice), so presenting the same refresh token a second time revokes the whole
+# grant. Retrying is exactly what turned a transient 5xx into a dead grant twice:
+# the 2026-06-11 503 storm and the 2026-07-22 502 both died on the retry replaying
+# R, not on the first response. So the refresh retries connect-phase errors only; a
+# transient 5xx fails one run and the next hourly tick recovers with R intact.
 _CONNECT_ONLY_TRANSPORT_ERRORS = (
     httpx.ConnectError,
     httpx.ConnectTimeout,
@@ -50,37 +51,16 @@ _CONNECT_ONLY_TRANSPORT_ERRORS = (
 )
 
 
-def _parse_retry_after(value: str | None) -> float | None:
-    """Parse a Retry-After header (delta-seconds form). HTTP-date form -> None."""
-    if not value:
-        return None
-    try:
-        return max(0.0, float(value))
-    except (TypeError, ValueError):
-        return None
-
-
 def _is_retryable_token_error(exc: BaseException) -> bool:
-    """True for transient token-endpoint failures safe to retry — never 4xx.
+    """True only for connect-phase transport errors — never for an HTTP response.
 
-    Retries a 5xx/429 response or a *connect-phase* transport error (the request
-    never landed). Deliberately does NOT retry a read/write timeout or mid-flight
-    network error: on the refresh endpoint the POST may already have consumed the
-    single-use refresh token server-side, so replaying it would revoke the grant.
+    A refresh POST is non-idempotent against Whoop's single-use rotating refresh
+    token: any outcome where the request may have reached Whoop (an HTTP status, a
+    read/write timeout, a mid-flight network error) risks replaying an already-
+    presented token and tripping reuse-detection, which revokes the grant. Only a
+    connect-phase failure is provably safe: the token was never presented.
     """
-    if isinstance(exc, httpx.HTTPStatusError):
-        return exc.response.status_code in _RETRYABLE_TOKEN_STATUS
     return isinstance(exc, _CONNECT_ONLY_TRANSPORT_ERRORS)
-
-
-def _token_retry_wait(retry_state) -> float:
-    """Honor a server Retry-After on transient failures, else exponential backoff."""
-    exc = retry_state.outcome.exception() if retry_state.outcome else None
-    if isinstance(exc, httpx.HTTPStatusError):
-        retry_after = _parse_retry_after(exc.response.headers.get("Retry-After"))
-        if retry_after is not None:
-            return min(retry_after, 30.0)
-    return _TOKEN_EXP_WAIT(retry_state)
 
 
 class WhoopOAuthClient:
@@ -203,7 +183,7 @@ class WhoopOAuthClient:
 
     @retry(
         stop=stop_after_attempt(3),
-        wait=_token_retry_wait,
+        wait=_TOKEN_EXP_WAIT,
         retry=retry_if_exception(_is_retryable_token_error),
         reraise=True,
     )
@@ -213,18 +193,21 @@ class WhoopOAuthClient:
     ) -> dict[str, Any]:
         """Refresh an expired access token.
 
-        Retried up to 3 times with backoff on a 5xx/429 response or a connect-phase
-        transport error (the request never reached Whoop). A read/write timeout or
-        mid-flight network error is NOT retried: Whoop may already have consumed and
-        rotated the single-use refresh token, so replaying it would revoke the grant.
-        A 4xx (400 invalid_grant / 401) is terminal and re-raised immediately — the
-        refresh token is consumed or revoked and only re-auth
-        (``python -m grecohome_whoop.oauth_setup``) recovers it.
+        Retried (up to 3 times, exponential backoff) ONLY on a connect-phase
+        transport error, where the request provably never reached Whoop and the
+        single-use refresh token was never presented. Any HTTP response — a 4xx
+        (400 invalid_grant / 401, terminal) or a 5xx/429 — is re-raised without
+        retry, as is a read/write timeout: Whoop may have received the POST and
+        registered the token, and replaying it trips reuse-detection and revokes the
+        whole grant (the 2026-06-11 503 and 2026-07-22 502 outages). A transient 5xx
+        fails one run; the next hourly tick recovers with the refresh token intact.
+        Only re-auth (``python -m grecohome_whoop.oauth_setup``) recovers a revoked
+        grant.
 
         Raises:
-            httpx.HTTPStatusError: If the refresh fails (token expired/revoked).
-            httpx.TransportError: On a network/timeout failure (not retried when the
-                request may already have consumed the token).
+            httpx.HTTPStatusError: If the refresh returns a 4xx/5xx (not retried).
+            httpx.TransportError: On a network/timeout failure (retried only for a
+                connect-phase error, where the token was never presented).
         """
         data = {
             "grant_type": "refresh_token",
