@@ -16,8 +16,10 @@ Token refresh failed           status_code=400        # 400 == invalid_grant == 
 whoop_token_invalid_grant      status_code=400        # the distinct terminal signal
 ```
 
-A 5xx (`status_code=503`) burst instead means transient Whoop instability — the client
-retries those automatically (3 attempts, backoff). Only a 400/401 is terminal.
+A 5xx (`status_code=502`/`503`) on a refresh means transient Whoop instability. The
+refresh does **not** retry it (retrying would replay the single-use token and revoke the
+grant — see failure mode 1); it fails that one run and the next hourly tick recovers with
+the refresh token intact. A `400`/`401` is the only terminal signal.
 
 ## Recover (manual re-auth)
 
