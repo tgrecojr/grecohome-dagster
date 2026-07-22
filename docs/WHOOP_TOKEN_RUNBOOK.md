@@ -21,15 +21,35 @@ retries those automatically (3 attempts, backoff). Only a 400/401 is terminal.
 
 ## Recover (manual re-auth)
 
-Run the OAuth flow on the host and write a fresh token. It's a server, so use headless
-mode (authorize in a browser on any device, paste the callback URL back):
+Run the headless OAuth flow on host `fridge` and write a fresh token (authorize in a
+browser on any device, paste the callback URL back):
 
 ```
-python -m grecohome_whoop.oauth_setup --headless
+scripts/whoop-reauth.sh
 ```
 
-This writes a new access+refresh token atomically to `WHOOP_TOKEN_PATH`. No restart is
-needed — the file is re-read each run. The next hourly tick recovers; re-run any failed
+The pipeline runs as a gRPC code location with no shell of its own, so the script spins up
+a throwaway container from the **same image**, **volumes**, and **env** as the running
+`dagster_whoop` container and runs `grecohome_whoop.oauth_setup --headless` inside it —
+writing the new token to the real `WHOOP_TOKEN_PATH` the pipeline reads. It cleans up the
+temporary env file (which carries `WHOOP_CLIENT_SECRET`) on exit. Override the container or
+runtime user with `WHOOP_CONTAINER` / `WHOOP_RUN_USER` if they differ.
+
+Equivalent by hand, if you can't use the script:
+
+```
+docker inspect dagster_whoop --format '{{range .Config.Env}}{{println .}}{{end}}' > /tmp/whoop.env
+docker run --rm -it --entrypoint python \
+  --user 1000:988 \
+  --env-file /tmp/whoop.env \
+  --volumes-from dagster_whoop \
+  "$(docker inspect dagster_whoop --format '{{.Config.Image}}')" \
+  -m grecohome_whoop.oauth_setup --headless
+rm -f /tmp/whoop.env   # holds WHOOP_CLIENT_SECRET
+```
+
+Either way writes a new access+refresh token atomically to `WHOOP_TOKEN_PATH`. No restart
+is needed — the file is re-read each run. The next hourly tick recovers; re-run any failed
 runs to backfill.
 
 ## Detection
