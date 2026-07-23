@@ -1,6 +1,6 @@
 """Tests for the Whoop OAuth client."""
 
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, parse_qsl, urlparse
 
 import httpx
 import pytest
@@ -115,6 +115,28 @@ class TestWhoopOAuthClientAsync:
         token_data = await client.refresh_access_token("old_refresh_token")
         assert token_data["access_token"] == "new_access_token"
         assert token_data["refresh_token"] == "new_refresh_token"
+
+    @respx.mock
+    async def test_refresh_sends_offline_scope(self):
+        # Whoop's refresh tutorial sends scope=offline on the refresh POST; without
+        # it Whoop can return a 200 that omits a new refresh token, orphaning the
+        # rotating grant. Assert the form body carries it.
+        client = WhoopOAuthClient()
+        route = respx.post(client.token_url).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "access_token": "new_access_token",
+                    "refresh_token": "new_refresh_token",
+                    "token_type": "Bearer",
+                    "expires_in": 3600,
+                },
+            )
+        )
+        await client.refresh_access_token("old_refresh_token")
+        sent = dict(parse_qsl(route.calls.last.request.content.decode()))
+        assert sent["grant_type"] == "refresh_token"
+        assert sent["scope"] == "offline"
 
     @respx.mock
     async def test_refresh_access_token_failure(self):

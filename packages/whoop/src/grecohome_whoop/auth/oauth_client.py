@@ -214,6 +214,12 @@ class WhoopOAuthClient:
             "refresh_token": refresh_token,
             "client_id": self.client_id,
             "client_secret": self.client_secret,
+            # Whoop's refresh tutorial sends scope=offline on the refresh itself, not
+            # just the initial authorization. Without it Whoop can return a 200 that
+            # omits a new refresh token, so we'd keep (and later replay) the now-
+            # consumed one -> 400 invalid_grant. Send it to keep the rotating refresh
+            # token flowing. See docs/developing/oauth on developer.whoop.com.
+            "scope": "offline",
         }
         logger.info("Refreshing access token")
         try:
