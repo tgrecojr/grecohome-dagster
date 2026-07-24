@@ -18,9 +18,11 @@ class TestDefinitions:
         }
 
     def test_schedules_are_hourly_utc(self):
+        # Hourly, but staggered to :17 (not the top of the hour) so the OAuth token
+        # refresh dodges the top-of-hour cron surge on Whoop's token endpoint.
         for name in ("whoop_hourly", "whoop_snapshots_hourly"):
             s = defs.get_schedule_def(name)
-            assert s.cron_schedule == "0 * * * *"
+            assert s.cron_schedule == "17 * * * *"
             assert str(s.execution_timezone) == "UTC"
 
     def test_jobs_present(self):
