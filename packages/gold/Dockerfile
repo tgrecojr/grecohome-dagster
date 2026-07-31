@@ -9,7 +9,7 @@
 # =============================================================================
 # Stage 1: Builder
 # =============================================================================
-FROM cgr.dev/chainguard/python:latest-dev@sha256:bee63d1fd86c4b31dd2df85bb383be142e8067486e3d469265edb850af93e8e4 AS builder
+FROM cgr.dev/chainguard/python:latest-dev@sha256:92b8a0af0e138d8f3d169ac3fc92fc691c9f66aa16a6e0fd8d429b645ec349f1 AS builder
 
 USER root
 WORKDIR /app
