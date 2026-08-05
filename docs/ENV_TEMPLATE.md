@@ -64,51 +64,6 @@ manager. **Never commit a real `.env`.**
 | `USCRN_LOOKBACK_DAYS` | no | `2` | Trailing daily partitions the 6-hourly schedule re-captures |
 | `USCRN_START_DATE` | no | `2010-01-01` | Backfill floor for the daily partition set |
 
-### Location (`grecohome-location`) — its own container
-
-Promotes the `locationrelay` service's raw staging files into bronze. **No source-API calls, no
-secret.** `BRONZE_ROOT`/`LOG_LEVEL`/`ENVIRONMENT` and the Dagster-instance vars below apply too.
-**Run this container as uid 1000 at runtime** (image builds as `nonroot` like every other subject;
-set the runtime user, e.g. compose `user: "1000:998"`) and mount `RELAY_CAPTURE_DIR` **read-only**
-(staging files are `0600` owned by uid 1000; only uid 1000 can read them).
-
-| Variable | Required | Default | Purpose |
-|---|---|---|---|
-| `RELAY_CAPTURE_DIR` | yes | — | Relay data dir (host `/opt/docker/locationrelay/data`); mount **read-only**. Promoter never writes under it |
-| `LOCATION_STATE_DIR` | yes | — | Writable dir for the per-stream promoted-set; **outside** `BRONZE_ROOT` (refused otherwise) |
-| `LOCATION_PROMOTE_WINDOW_DAYS` | no | `3` | Trailing staging window the promoter scans (keep > promoter downtime, < relay retention) |
-| `LOCATION_PROMOTE_LAG_HOURS` | no | `6` | Promote-lag ERROR: un-promoted staging file older than this fails |
-| `LOCATION_FRESHNESS_WARN_HOURS` | no | `24` | Receipt-freshness WARN tolerance (hours since newest received POST) |
-| `LOCATION_FRESHNESS_ERROR_HOURS` | no | `168` | Receipt-freshness ERROR tolerance (very long gap) |
-| `LOCATION_RECENT_PARTITIONS` | no | `14` | Trailing bronze partitions the checks inspect |
-
-> The auth token is header/query-only at the relay and never touches a staging body, so nothing
-> secret reaches bronze. See [packages/location/docs/LOCATION.md](../packages/location/docs/LOCATION.md).
-
-### Geocode / Photon (`grecohome-geocode`) — its own container
-
-Reverse-geocodes the `location` bronze points against a self-hosted **Photon**
-(`tuszik/photon-docker`) and caches the raw responses to bronze (`geocode/reverse`). **No
-secret** — Photon is auth-less on the LAN. `BRONZE_ROOT`/`LOG_LEVEL`/`ENVIRONMENT` and the
-Dagster-instance vars below apply too. It reads the `location` bronze the promoter wrote, so
-**run this container as uid 1000 at runtime** (image builds `nonroot`; set e.g. compose
-`user: "1000:998"`) with `BRONZE_ROOT` mounted readable/writable (it reads `location/**` and
-writes `geocode/**`).
-
-| Variable | Required | Default | Purpose |
-|---|---|---|---|
-| `PHOTON_BASE_URL` | yes | — | Base URL of the self-hosted Photon, e.g. `http://photon:2322`. Do **not** append `/api` (the subject appends `/reverse`) |
-| `PHOTON_TIMEOUT` | no | `30` | Per-request timeout (seconds) for the Photon call |
-| `PHOTON_LANGUAGE` | no | `en` | Photon `lang` param (localizes place names) |
-| `PHOTON_RADIUS_KM` | no | `0.5` | Photon `/reverse` search radius (km); 500 m, matching Dawarich. Larger resolves more fixes but the nearest match can be farther away. Changing this re-geocodes affected cells |
-| `PHOTON_LIMIT` | no | `10` | Photon `/reverse` result limit — nearest N candidates cached raw (silver uses the nearest). Changing this re-geocodes affected cells |
-| `GEOCODE_SCAN_DAYS` | no | `7` | Trailing window of `location` bronze scanned for observed cells. Widen for a one-time cache backfill over all history |
-| `GEOCODE_MAX_LOOKUPS_PER_RUN` | no | `2000` | Safety cap on new-cell lookups per run (remainder picked up next run; logged when hit) |
-| `GEOCODE_RECENT_PARTITIONS` | no | `14` | Trailing bronze partitions the checks inspect |
-
-> No state dir: idempotency is the cache itself (a cell recorded in a sidecar is never
-> re-queried). See [packages/geocode/docs/GEOCODE.md](../packages/geocode/docs/GEOCODE.md).
-
 ### Silver (`grecohome-silver`) — its own container, cross-subject
 
 Silver reads bronze and writes Parquet; it makes **no source-API calls** (no secrets, no

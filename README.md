@@ -3,12 +3,10 @@
 A monorepo of personal health/environment data pipelines, orchestrated by self-hosted
 [Dagster](https://dagster.io/), in three layers:
 
-- **Bronze** — per-source code locations (Whoop, Garmin, Lingo, Soil/USCRN, Location, Geocode)
-  capture raw source data to a bronze layer (the immutable source of truth). Geocode is a *derived*
-  bronze cache: it reverse-geocodes the Location points via self-hosted Photon so Silver can enrich
-  offline.
+- **Bronze** — per-source code locations (Whoop, Garmin, Lingo, Soil/USCRN) capture raw
+  source data to a bronze layer (the immutable source of truth).
 - **Silver** — one cross-subject code location of typed, deduplicated **Parquet** (sleep,
-  glucose, workouts, recovery, location, …), derived from bronze.
+  glucose, workouts, recovery, …), derived from bronze.
 - **Gold** — analysis marts (daily wellness) derived from silver.
 
 Silver and gold are derived and fully rebuildable (DuckDB over Parquet — no database); bronze
@@ -30,9 +28,7 @@ packages/
   garmin/  grecohome-garmin — Garmin bronze subject (ported from garmincapture)
   lingo/   grecohome-lingo  — Lingo CGM bronze subject (ported from glucose-loader)
   soil/    grecohome-soil   — NOAA USCRN soil/temp bronze subject (ported from soildata)
-  location/grecohome-location— phone location bronze subject (promotes locationrelay staging files)
-  geocode/ grecohome-geocode — reverse-geocode cache (Photon /reverse) for the location points
-  silver/  grecohome-silver — silver layer (sleep, glucose, workouts, recovery, location, …)
+  silver/  grecohome-silver — silver layer (sleep, glucose, workouts, recovery, …)
   gold/    grecohome-gold   — gold layer (daily wellness mart)
 docs/      ARCHITECTURE, BRONZE, SILVER, GOLD, DEPLOYMENT, ENV_TEMPLATE, VALIDATION, adr/
 ```
@@ -68,12 +64,7 @@ root `pyproject.toml`, one `uv.lock`, one managed Python version.
   the trailing window (immutable, no dedup). Lingo: a Drive **sensor** + dynamic partitions
   keyed on file id (file-arrival-driven, no schedule). Soil/USCRN: daily UTC partitions where
   each stores only that day's rows sliced from the public NOAA year file, re-captured every 6h
-  with dedup. Location: a time-based schedule promotes the external `locationrelay` service's raw
-  staging files (Overland + OwnTracks POST bodies) into bronze byte-for-byte every few minutes,
-  idempotent via a per-stream promoted-set keyed on the staging filename (no source API call of its
-  own). Geocode: an every-30-min schedule reverse-geocodes newly-observed location cells via
-  self-hosted Photon and caches the raw responses to bronze (cell-keyed idempotency; no source of
-  its own). Backfill (where applicable) via `dagster backfill`. **Silver/gold** rebuild
+  with dedup. Backfill (where applicable) via `dagster backfill`. **Silver/gold** rebuild
   whole-table on daily schedules (silver ~06:00–06:50 UTC, gold 07:30) — each a pure projection
   of the layer below, so a rebuild is idempotent.
 
@@ -95,10 +86,6 @@ dev; production injects values via Ansible from a secrets manager.
 
 One code-location image per layer published to GHCR
 (`ghcr.io/tgrecojr/grecohome-dagster-<name>` for
-`whoop`/`garmin`/`lingo`/`soil`/`location`/`geocode`/`silver`/`gold`).
+`whoop`/`garmin`/`lingo`/`soil`/`silver`/`gold`).
 See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the host `workspace.yaml`, mounts (silver reads
-bronze read-only; gold reads silver read-only), and concurrency-pool wiring. The **location** and
-**geocode** containers are special: their images build like the others (`nonroot`) but must be run
-**at runtime** as **uid 1000** (e.g. `user: "1000:998"`). Location mounts `RELAY_CAPTURE_DIR`
-read-only (the relay stages files `0600` owned by uid 1000); geocode reads the location bronze
-(also uid 1000) and needs only `PHOTON_BASE_URL` (no secret).
+bronze read-only; gold reads silver read-only), and concurrency-pool wiring.
