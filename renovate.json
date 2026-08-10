@@ -93,6 +93,14 @@
         "patch"
       ],
       "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Keep the Chainguard builder (python:latest-dev) and runtime (python:latest) in lockstep across all package Dockerfiles — one PR, never desynced, so the venv copied from the builder always matches the runtime Python.",
+      "matchDepNames": [
+        "cgr.dev/chainguard/python"
+      ],
+      "groupName": "chainguard python base images",
+      "groupSlug": "chainguard-python-base"
     }
   ],
   "vulnerabilityAlerts": {
