@@ -9,7 +9,7 @@
 # =============================================================================
 # Stage 1: Builder
 # =============================================================================
-FROM cgr.dev/chainguard/python:latest-dev@sha256:4bf7e945777010672b8ccd5d2ae2c41c91ad6d3478878347c731ae536d506bef AS builder
+FROM cgr.dev/chainguard/python:latest-dev@sha256:aa8fd2447b8b52922db57deb3894b622c3229387aaaec5934d64b85dbff6eb17 AS builder
 
 USER root
 WORKDIR /app
@@ -37,7 +37,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # =============================================================================
 # Stage 2: Runtime (distroless)
 # =============================================================================
-FROM cgr.dev/chainguard/python:latest@sha256:1f6779775c9f466890da563e411cb677045a6c20b6a65160eefad1deffb5012c
+FROM cgr.dev/chainguard/python:latest@sha256:ee37f5e4fb445732409626797dccb6f2a6337872def2bab48729ee61b335fa77
 
 LABEL org.opencontainers.image.title="grecohome-dagster-gold"
 LABEL org.opencontainers.image.description="Gold layer: analysis marts Dagster code location"
