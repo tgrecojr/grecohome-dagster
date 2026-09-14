@@ -10,6 +10,8 @@
 # but dagster holds protobuf at 6.x, so 1.82.0 crashes every code location on startup
 # ("VersionError: gencode 7.35.0 runtime 6.33.6"). Keep grpc* on 1.81.1 until dagster
 # moves to protobuf 7. See renovate.json (grpc bumps are disabled to prevent recurrence).
+# As of dagster 1.13.22 upstream also caps grpcio-health-checking<1.82, so this constraint
+# is now belt-and-braces; it stays because grpcio must also track the host gRPC contract.
 [tool.uv]
 constraint-dependencies = [
     "grpcio==1.81.1",
