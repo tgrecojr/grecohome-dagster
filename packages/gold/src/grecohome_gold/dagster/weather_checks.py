@@ -18,7 +18,7 @@ from grecohome_gold.dagster.weather_assets import (
     gold_daily_weather,
     gold_weather_path,
 )
-from grecohome_gold.daily_weather import DEPTHS
+from grecohome_gold.daily_weather import DEPTHS, HOUR_COLS
 
 # Air/surface temperature columns (°F).
 _AIR_TEMP_F = ("air_temp_max_f", "air_temp_min_f", "air_temp_avg_f")
@@ -79,6 +79,8 @@ def weather_value_ranges() -> AssetCheckResult:
         "(solar_rad_mean_wm2 IS NOT NULL AND solar_rad_mean_wm2 < 0)",
         "(solar_rad_max_wm2 IS NOT NULL AND solar_rad_max_wm2 < 0)",
         "(hours_observed < 0 OR hours_observed > 26)",
+        # A field can't be valid in more hours than were observed at all.
+        *(f"({c} < 0 OR {c} > hours_observed)" for c in HOUR_COLS),
         # Daily max can never be below daily min (a swapped-aggregate bug).
         "(air_temp_max_f IS NOT NULL AND air_temp_min_f IS NOT NULL "
         "AND air_temp_max_f < air_temp_min_f)",

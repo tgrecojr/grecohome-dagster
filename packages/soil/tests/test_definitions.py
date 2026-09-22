@@ -13,6 +13,13 @@ class TestDefinitions:
     def test_capture_job_resolves(self):
         assert defs.resolve_job_def("uscrn_capture_job") is not None
 
+    def test_both_capture_schedules_registered(self):
+        live = defs.get_schedule_def("uscrn_schedule")
+        weekly = defs.get_schedule_def("uscrn_correction_schedule")
+        assert live.cron_schedule == "0 */6 * * *"
+        assert weekly.cron_schedule == "30 3 * * 0"
+        assert live.job_name == weekly.job_name == "uscrn_capture_job"
+
 
 @pytest.mark.unit
 class TestAssetChecks:

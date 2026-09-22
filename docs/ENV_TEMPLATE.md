@@ -62,6 +62,7 @@ manager. **Never commit a real `.env`.**
 | `USCRN_STATION` | no | `PA_Avondale_2_N` | Station filename stem (`STATE_LOCATION_DIST_DIR`) |
 | `USCRN_BASE_URL` | no | `.../products/hourly02` | USCRN hourly02 product base URL |
 | `USCRN_LOOKBACK_DAYS` | no | `2` | Trailing daily partitions the 6-hourly schedule re-captures |
+| `USCRN_CORRECTION_LOOKBACK_DAYS` | no | `400` | Trailing partitions the **weekly** correction schedule re-slices in one run, picking up NOAA's late in-place corrections of the year files (gap hours recovered from the logger, corrupt rows repaired). 400 covers the current + previous year file; older corrections need a manual backfill |
 | `USCRN_START_DATE` | no | `2010-01-01` | Backfill floor for the daily partition set |
 
 ### Silver (`grecohome-silver`) — its own container, cross-subject
@@ -88,6 +89,7 @@ and `GOLD_ROOT` writable on a separate volume.
 | `SILVER_ROOT` | yes | — | Silver tree to read (mount **read-only**; gold never writes under it) |
 | `GOLD_ROOT` | yes | — | Writable root for gold marts, **outside** `SILVER_ROOT` (writes there are refused) |
 | `GOLD_MONITOR_DIR` | no | — | Reserved for a future gold monitor; kept **outside** `GOLD_ROOT`. Unused today |
+| `GOLD_WEATHER_MIN_VALID_HOURS` | no | `22` | `gold_daily_weather` completeness gate: valid hours a field needs in a local day before its daily aggregate is reported (else NULL, with the `*_hours` count kept). Mirrors NCEI's daily product |
 
 > **Grafana dashboards** read the lake directly via a DuckDB datasource plugin over the
 > read-only `/data/{bronze,silver,gold}` mounts — no env vars, no separate container. (The

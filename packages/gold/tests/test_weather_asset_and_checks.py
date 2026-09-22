@@ -17,6 +17,13 @@ from grecohome_gold.dagster.weather_assets import (
 pytestmark = pytest.mark.unit
 
 
+@pytest.fixture(autouse=True)
+def two_obs_gate(monkeypatch) -> None:
+    """The shared fixture has two obs per day; lower the completeness gate so the
+    aggregates materialize (the gate itself is covered in test_daily_weather)."""
+    monkeypatch.setattr(settings, "gold_weather_min_valid_hours", 1)
+
+
 @pytest.fixture
 def materialized(weather_silver_root, tmp_path, monkeypatch) -> str:
     monkeypatch.setattr(settings, "silver_root", weather_silver_root)
@@ -26,9 +33,11 @@ def materialized(weather_silver_root, tmp_path, monkeypatch) -> str:
 
 
 def test_materializes_to_parquet(materialized) -> None:
-    n = int(connect().execute(
-        f"SELECT count(*) FROM read_parquet('{gold_weather_path(WEATHER_PARQUET)}')"
-    ).fetchone()[0])
+    n = int(
+        connect()
+        .execute(f"SELECT count(*) FROM read_parquet('{gold_weather_path(WEATHER_PARQUET)}')")
+        .fetchone()[0]
+    )
     assert n == 3  # 2026-04-20, the 04-21 gap, 04-22
 
 

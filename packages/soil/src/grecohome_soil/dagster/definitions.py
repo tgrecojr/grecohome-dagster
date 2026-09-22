@@ -12,11 +12,15 @@ from grecohome_soil.dagster.checks import (
     soil_checks_job,
     soil_checks_schedule,
 )
-from grecohome_soil.dagster.schedules import uscrn_capture_job, uscrn_schedule
+from grecohome_soil.dagster.schedules import (
+    uscrn_capture_job,
+    uscrn_correction_schedule,
+    uscrn_schedule,
+)
 
 defs = Definitions(
     assets=[uscrn_bronze_hourly],
     asset_checks=soil_checks,
     jobs=[uscrn_capture_job, soil_checks_job],
-    schedules=[uscrn_schedule, soil_checks_schedule],
+    schedules=[uscrn_schedule, uscrn_correction_schedule, soil_checks_schedule],
 )

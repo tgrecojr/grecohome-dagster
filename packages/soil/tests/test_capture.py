@@ -19,7 +19,6 @@ def _capture(rows, root):
         rows,
         station="PA_Avondale_2_N",
         partition_date="2026-06-09",
-        year=2026,
         source_url=SRC_URL,
         bronze_root=root,
     )
@@ -46,6 +45,8 @@ class TestCaptureHourly:
         assert meta["request_params"]["station"] == "PA_Avondale_2_N"
         assert meta["request_params"]["utc_date"] == "20260609"
         assert meta["request_params"]["wbanno"] == "03761"
+        assert meta["request_params"]["year"] == 2026
+        assert meta["request_params"]["year_files"] == [2026]
         assert meta["request_params"]["row_count"] == 2
 
     def test_skips_empty(self, isolate_soil_bronze):

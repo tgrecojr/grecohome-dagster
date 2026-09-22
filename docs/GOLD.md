@@ -103,8 +103,17 @@ silver is faithful hourly **SI**, gold is the **imperial + derived** layer other
 | `rh_mean_pct` | daily mean relative humidity |
 | `soil_temp_{5,10,20,50,100}_f_mean` | daily mean soil temp per depth → °F |
 | `soil_moisture_{5,10,20,50,100}_mean` | daily mean volumetric soil moisture per depth |
-| `hours_observed` | observation count for the day (coverage) |
+| `hours_observed` | hours with **any** measurement (NOAA "no transmission" placeholder rows don't count) |
+| `*_hours` | valid-hour count per field: `air_temp_hours`, `precip_hours`, `solar_hours`, `surface_temp_hours`, `rh_hours`, `soil_temp_{d}_hours`, `soil_moisture_{d}_hours` |
 | `has_weather` | provenance — false on a spine gap day |
+
+**Completeness gate.** Every aggregate is reported only when its own field has at least
+`GOLD_WEATHER_MIN_VALID_HOURS` valid hours that day (default **22 of 24**, which is what NCEI applies
+to its own `daily01` product and which tolerates the 23-hour DST day); otherwise the aggregate is
+NULL and the `*_hours` column says why. USCRN dropouts cluster (in 2026 the Avondale soil probes
+went missing mostly in the local afternoon), so a mean over the surviving hours is biased, not just
+imprecise — hence gating rather than averaging what's there. Lower the threshold for partial-day
+values; the counts are always present.
 
 Validated against the live archive (6,009 days, 2010-present): ~47.7 in/yr precipitation, 1,676
 frost days — consistent with SE Pennsylvania.
@@ -113,7 +122,7 @@ frost days — consistent with SE Pennsylvania.
 | Check | Severity | What |
 |---|---|---|
 | `weather_day_unique_nonnull` | ERROR | one row per `day`, never null |
-| `weather_value_ranges` | ERROR | imperial temps/soil/RH/precip/GDD/hours in bounds; daily max ≥ min |
+| `weather_value_ranges` | ERROR | imperial temps/soil/RH/precip/GDD/hours in bounds; `*_hours ≤ hours_observed`; daily max ≥ min |
 | `weather_coverage` | WARN | day coverage; reports frost days; fails only if the mart is empty |
 
 # Operations
