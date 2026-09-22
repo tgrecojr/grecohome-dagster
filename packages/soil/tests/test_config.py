@@ -15,6 +15,7 @@ class TestSoilSettings:
             "USCRN_STATION",
             "USCRN_BASE_URL",
             "USCRN_LOOKBACK_DAYS",
+            "USCRN_CORRECTION_LOOKBACK_DAYS",
             "USCRN_START_DATE",
         ):
             monkeypatch.delenv(var, raising=False)
@@ -22,11 +23,14 @@ class TestSoilSettings:
         assert s.uscrn_station == "PA_Avondale_2_N"
         assert s.uscrn_base_url.endswith("/hourly02")
         assert s.uscrn_lookback_days == 2
+        assert s.uscrn_correction_lookback_days == 400
         assert s.uscrn_start_date == "2010-01-01"
 
     def test_reads_env(self, monkeypatch):
         monkeypatch.setenv("USCRN_STATION", "CA_Bodega_6_WSW")
         monkeypatch.setenv("USCRN_LOOKBACK_DAYS", "5")
+        monkeypatch.setenv("USCRN_CORRECTION_LOOKBACK_DAYS", "30")
         s = SoilSettings()
         assert s.uscrn_station == "CA_Bodega_6_WSW"
         assert s.uscrn_lookback_days == 5
+        assert s.uscrn_correction_lookback_days == 30

@@ -29,11 +29,22 @@ def gold_weather_path(filename: str) -> str:
 def gold_daily_weather(context: AssetExecutionContext) -> MaterializeResult:
     """One row per local day: temp/GDD/frost, precip, solar, soil, humidity (imperial)."""
     con = connect()
-    sql = daily_weather_sql(settings.silver_root)
+    min_hours = settings.gold_weather_min_valid_hours
+    sql = daily_weather_sql(settings.silver_root, min_valid_hours=min_hours)
     dest = gold_weather_path(WEATHER_PARQUET)
     rows = write_parquet_atomic(con, sql, dest, protected_root=settings.silver_root)
-    context.log.info(f"gold_daily_weather: {rows} days -> {dest} (GDD base {GDD_BASE_F}F)")
-    return MaterializeResult(metadata={"rows": rows, "gdd_base_f": GDD_BASE_F, "path": dest})
+    context.log.info(
+        f"gold_daily_weather: {rows} days -> {dest} "
+        f"(GDD base {GDD_BASE_F}F, completeness gate {min_hours}h)"
+    )
+    return MaterializeResult(
+        metadata={
+            "rows": rows,
+            "gdd_base_f": GDD_BASE_F,
+            "min_valid_hours": min_hours,
+            "path": dest,
+        }
+    )
 
 
 WEATHER_ASSETS = [gold_daily_weather]

@@ -66,3 +66,45 @@ class TestFetchYearFile:
         respx.get(url).mock(return_value=httpx.Response(503))
         with pytest.raises(httpx.HTTPStatusError):
             fetch.fetch_year_file(url)
+
+
+@pytest.mark.unit
+class TestYearsForDate:
+    def test_ordinary_date_is_its_own_year(self):
+        assert fetch.years_for_date("20260609") == [2026]
+        assert fetch.years_for_date("20261231") == [2026]
+
+    def test_jan_1_also_reads_the_prior_year_file_first(self):
+        assert fetch.years_for_date("20260101") == [2025, 2026]
+
+
+@pytest.mark.unit
+class TestYearFilesAndRowsForPartition:
+    @respx.mock
+    def test_fetches_each_year_once_and_caches_404(self):
+        r25 = respx.get(fetch.year_file_url(2025)).mock(return_value=httpx.Response(404))
+        r26 = respx.get(fetch.year_file_url(2026)).mock(
+            return_value=httpx.Response(200, text=SAMPLE)
+        )
+        files = fetch.YearFiles()
+        assert files.get(2026) == SAMPLE
+        assert files.get(2026) == SAMPLE
+        assert files.get(2025) is None
+        assert files.get(2025) is None
+        assert r26.call_count == 1 and r25.call_count == 1
+        assert files.status == {"2026": "ok", "2025": "not found (404)"}
+
+    @respx.mock
+    def test_rows_for_partition_spans_the_year_boundary(self):
+        respx.get(fetch.year_file_url(2025)).mock(
+            return_value=httpx.Response(
+                200, text="03761 20260101 0000 20251231 1900 0.5 0.5 0.5 0.5 0.0"
+            )
+        )
+        respx.get(fetch.year_file_url(2026)).mock(
+            return_value=httpx.Response(
+                200, text="03761 20260101 0100 20251231 2000 0.4 0.4 0.4 0.4 0.0"
+            )
+        )
+        rows = fetch.rows_for_partition(fetch.YearFiles(), "20260101")
+        assert [r.split()[2] for r in rows] == ["0000", "0100"]

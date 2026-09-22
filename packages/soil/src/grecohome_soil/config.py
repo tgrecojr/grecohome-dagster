@@ -22,6 +22,13 @@ class SoilSettings(BaseSubjectSettings):
     # UTC-midnight rollover and any late rows). Dedup keeps re-captures ~free.
     uscrn_lookback_days: int = 2
 
+    # Trailing daily partitions the WEEKLY correction schedule re-slices in one
+    # partition-range run. NOAA back-corrects the year files in place long after
+    # the fact (gap hours recovered from the station logger, corrupt rows repaired),
+    # so a day is never final; 400 days covers the current and previous year files.
+    # Older corrections need a manual backfill.
+    uscrn_correction_lookback_days: int = 400
+
     # Backfill floor for the daily partition set. Early/empty partitions are
     # harmless (the asset skips the write when a date has no rows yet).
     uscrn_start_date: str = "2010-01-01"
