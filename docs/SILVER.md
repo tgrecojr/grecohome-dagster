@@ -475,7 +475,9 @@ Body battery: `body_battery_high`/`_low`/`_charged`/`_drained`. Vitals: `avg_spo
 ### Source & event date
 `whoop/cycle` records carry a numeric `id` (the cycle id), `start`/`end` (UTC),
 `timezone_offset`, `created_at`/`updated_at` (Whoop rescores), `score_state`, and a nested
-`score` (`strain` 0–21, `kilojoule`, `average_heart_rate`, `max_heart_rate`). Dedup by
+`score` (`strain` 0–21, `kilojoule`, `average_heart_rate`, `max_heart_rate`). Since
+2026-09-23 Whoop also emits a top-level `step_count` (steps over the cycle); earlier
+captures lack it, so the column is nullable before that date. Dedup by
 `cycle_id` keeping the latest `updated_at`. `cycle_id` is the join key into
 `silver_recovery.cycle_id` and `silver_sleep.whoop_cycle_id`, so gold can put strain next
 to recovery for the day. `strain_date` is the **local date of `start`** (a cycle begins at
@@ -489,13 +491,14 @@ wake), derived via the record's `timezone_offset` like the sleep wake date — i
 ### Schema (`silver_strain`)
 One row per cycle: `cycle_id` (BIGINT, key), `strain_date` (DATE), `start_ts`/`end_ts`
 (TIMESTAMP), `day_strain` (DOUBLE), `kilojoules` (DOUBLE), `avg_heart_rate`/
-`max_heart_rate` (INT), `score_state` (VARCHAR).
+`max_heart_rate` (INT), `score_state` (VARCHAR), `step_count` (INT, nullable — null
+before 2026-09-23).
 
 ### Asset checks
 | Check | Severity | What |
 |---|---|---|
 | `strain_cycle_unique_nonnull` | ERROR | one row per `cycle_id`; `cycle_id`/`strain_date` non-null |
-| `strain_value_ranges` | ERROR | strain 0–21, HR 20–240, kilojoules ≥ 0 |
+| `strain_value_ranges` | ERROR | strain 0–21, HR 20–240, kilojoules ≥ 0, step_count ≥ 0 |
 | `strain_coverage_vs_bronze` | WARN | silver cycles ≈ bronze distinct `cycle_id`; reports distinct days |
 
 # Body (Garmin weigh-ins)

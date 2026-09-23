@@ -7,7 +7,9 @@ Source shape (profiled against live bronze, 2025-12-18→present, ~179 cycles): 
 ``{"records": [...]}`` envelope as recovery/sleep; each record is one physiological cycle
 with a numeric ``id`` (the cycle id), ``start``/``end`` (UTC), ``timezone_offset``,
 ``created_at``/``updated_at`` (Whoop rescores), ``score_state``, and a nested ``score``
-(``strain`` 0–21, ``kilojoule``, ``average_heart_rate``, ``max_heart_rate``).
+(``strain`` 0–21, ``kilojoule``, ``average_heart_rate``, ``max_heart_rate``). Since
+2026-09-23 Whoop also emits a top-level ``step_count`` (steps for the cycle); older
+captures lack it, so ``step_count`` is nullable and never back-filled.
 
 * **Identity / dedup:** key on ``cycle_id`` (the record ``id``), keep the latest
   ``updated_at`` (Whoop rescores a cycle as the day fills) — exactly the recovery idiom.
@@ -78,6 +80,7 @@ def strain_sql(files: list[str]) -> str:
             TRY_CAST({json_str('r', score + 'max_heart_rate')} AS INTEGER)
                                                                        AS max_heart_rate,
             {json_str('r', 'score_state')}                             AS score_state,
+            TRY_CAST({json_str('r', 'step_count')} AS INTEGER)         AS step_count,
             {json_str('r', 'updated_at')}                              AS _updated_at
         FROM ({rel})
         WHERE {json_str('r', 'id')} IS NOT NULL
