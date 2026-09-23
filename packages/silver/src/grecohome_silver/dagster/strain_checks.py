@@ -55,7 +55,7 @@ def strain_cycle_unique_nonnull() -> AssetCheckResult:
 @asset_check(asset=silver_strain, name="strain_value_ranges")
 @alerting_check
 def strain_value_ranges() -> AssetCheckResult:
-    """Non-null metrics within plausible bounds (strain 0–21, HR 20–240, kJ ≥ 0)."""
+    """Non-null metrics within plausible bounds (strain 0–21, HR 20–240, kJ/steps ≥ 0)."""
     path = strain_path(STRAIN_PARQUET)
     if not os.path.exists(path):
         return _missing(path)
@@ -64,6 +64,7 @@ def strain_value_ranges() -> AssetCheckResult:
         "(kilojoules IS NOT NULL AND kilojoules < 0)",
         "(avg_heart_rate IS NOT NULL AND (avg_heart_rate < 20 OR avg_heart_rate > 240))",
         "(max_heart_rate IS NOT NULL AND (max_heart_rate < 20 OR max_heart_rate > 240))",
+        "(step_count IS NOT NULL AND step_count < 0)",
     ]
     bad = _scalar(f"SELECT count(*) FROM {_src(path)} WHERE {' OR '.join(clauses)}")
     return AssetCheckResult(

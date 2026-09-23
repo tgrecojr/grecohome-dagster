@@ -14,12 +14,14 @@ pytestmark = pytest.mark.unit
 
 
 def _cycle(cid, start, updated_at, *, offset="-04:00", strain=12.5, kj=8000.0,
-           avg_hr=120, max_hr=170, state="SCORED", scored=True) -> dict:
+           avg_hr=120, max_hr=170, state="SCORED", scored=True, steps=None) -> dict:
     rec = {
         "id": cid, "start": start, "end": start.replace("T1", "T2"),
         "timezone_offset": offset, "created_at": updated_at, "updated_at": updated_at,
         "score_state": state,
     }
+    if steps is not None:  # Whoop added top-level ``step_count`` on 2026-09-23
+        rec["step_count"] = steps
     if scored:
         rec["score"] = {"strain": strain, "kilojoule": kj,
                         "average_heart_rate": avg_hr, "max_heart_rate": max_hr}
@@ -53,6 +55,19 @@ def test_typing_and_local_start_date(tmp_path) -> None:
     assert r["strain_date"].isoformat() == "2026-06-10"  # 11:00Z − 4h = 07:00 local
     assert r["day_strain"] == 12.5 and r["kilojoules"] == 8000.0
     assert r["avg_heart_rate"] == 120 and r["max_heart_rate"] == 170
+    assert r["step_count"] is None  # pre-2026-09-23 payloads have no step_count
+
+
+def test_step_count_typed_when_present(tmp_path) -> None:
+    """Whoop's ``step_count`` (added 2026-09-23) lands as a nullable INTEGER."""
+    root = str(tmp_path / "bronze")
+    _write(root, "2026-09-23", 1_790_191_146606, [
+        _cycle(1817987567, "2026-09-23T01:41:40.820Z", "2026-09-23T19:00:00.000Z", steps=3256),
+        _cycle(1815757587, "2026-09-22T01:37:30.260Z", "2026-09-23T19:00:00.000Z"),
+    ])
+    rows = {r["cycle_id"]: r for r in _rows(root)}
+    assert rows[1817987567]["step_count"] == 3256
+    assert rows[1815757587]["step_count"] is None
 
 
 def test_local_start_date_can_roll_back_a_day(tmp_path) -> None:
