@@ -16,7 +16,7 @@ dependencies = [
     "pydantic-settings==2.15.0",
     "structlog==26.1.0",
     "python-json-logger==4.2.0",
-    "python-dotenv==1.2.3",
+    "python-dotenv==1.2.4",
     "tzdata>=2026.2",
 ]
 
