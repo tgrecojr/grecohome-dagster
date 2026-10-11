@@ -95,6 +95,13 @@ instance config:
   that Postgres.
 - `dagster-postgres` is bundled in the image, so the run subprocess can instantiate the
   Postgres storage.
+- **Pin the DB driver in `dagster.yaml`** with `scheme: postgresql+psycopg2` under
+  `storage.postgres.postgres_db`. `dagster-postgres` ships only psycopg2. SQLAlchemy 2.1
+  changed the default driver for a bare `postgresql://` URL to psycopg (v3). With the scheme
+  left at its default, every code location fails at startup with `No module named 'psycopg'`.
+  That was the 2026-09-29 outage. `packages/core/tests/test_instance_storage.py` mirrors the
+  host's storage config and checks in CI that its driver is importable, so keep the two in
+  sync.
 
 The host `dagster.yaml` also carries the `whoop_api` pool from step 2; mounting the same file
 into the container is harmless (the limit is enforced by the daemon's run coordinator).

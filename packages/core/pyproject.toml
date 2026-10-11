@@ -8,6 +8,9 @@ dependencies = [
     "dagster==1.13.22",
     # Lets a run worker (DefaultRunLauncher runs execute inside the code-location
     # container) write to the host instance's Postgres event/run/schedule storage.
+    # It ships psycopg2 only, so the host dagster.yaml must pin
+    # `scheme: postgresql+psycopg2`. SQLAlchemy 2.1's default is psycopg v3.
+    # See tests/test_instance_storage.py.
     "dagster-postgres==0.29.22",
     "pydantic==2.13.5",
     "pydantic-settings==2.15.0",
