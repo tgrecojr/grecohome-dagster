@@ -57,7 +57,7 @@ class TestTokenFailureIsNotRetried:
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestReRaisedMessagesCarryTypeOnly:
-    # @spec WHOOP-LOG-002
+    # @spec WHOOP-AUTH-LOG-002
     async def test_auth_error_message_has_type_name_not_text(self):
         original = RuntimeError("Bearer leaked-token-value")
         client, _ = _client_with_token(side_effect=original)

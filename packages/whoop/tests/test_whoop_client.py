@@ -83,7 +83,7 @@ class TestWhoopClientAsync:
         await client.aclose()
 
     @respx.mock
-    # @spec WHOOP-LOG-004
+    # @spec WHOOP-AUTH-LOG-004
     async def test_make_request_error_message_excludes_body(self):
         client = WhoopClient(user_id=1)
         with patch.object(
@@ -99,6 +99,7 @@ class TestWhoopClientAsync:
         await client.aclose()
 
     @respx.mock
+    # @spec WHOOP-CAPTURE-008
     async def test_make_request_retries_on_429(self):
         client = WhoopClient(user_id=1)
         with patch.object(
@@ -238,6 +239,7 @@ class TestWhoopClientBronzeCapture:
     """Capture is always on; verify it fires correctly through the client."""
 
     @respx.mock
+    # @spec WHOOP-CAPTURE-002
     async def test_successful_fetch_captures_payload(
         self, isolate_bronze_root, mock_whoop_recovery_response
     ):
@@ -259,6 +261,7 @@ class TestWhoopClientBronzeCapture:
         await client.aclose()
 
     @respx.mock
+    # @spec WHOOP-CAPTURE-003
     async def test_empty_terminator_page_is_not_captured(self, isolate_bronze_root):
         client = WhoopClient(user_id=1)
         with patch.object(
@@ -273,6 +276,7 @@ class TestWhoopClientBronzeCapture:
         await client.aclose()
 
     @respx.mock
+    # @spec WHOOP-CAPTURE-004
     async def test_error_body_is_not_captured(self, isolate_bronze_root):
         """An error response still raises, but its body never lands in bronze.
 
@@ -309,6 +313,7 @@ class TestWhoopClientBronzeCapture:
         await client.aclose()
 
     @respx.mock
+    # @spec WHOOP-CAPTURE-PAGE-003
     async def test_paginate_stops_on_nonadvancing_cursor(self):
         """A next_token that never advances must terminate, not loop forever."""
         client = WhoopClient(user_id=1)
@@ -327,6 +332,7 @@ class TestWhoopClientBronzeCapture:
         await client.aclose()
 
     @respx.mock
+    # @spec WHOOP-CAPTURE-PAGE-004
     async def test_paginate_stops_at_max_pages(self):
         """An advancing-but-never-clearing cursor is bounded by max_pages."""
         client = WhoopClient(user_id=1)
@@ -348,6 +354,7 @@ class TestWhoopClientBronzeCapture:
         await client.aclose()
 
     @respx.mock
+    # @spec WHOOP-CAPTURE-PAGE-002
     async def test_paginate_normal_termination(self):
         """Normal pagination still ends when next_token clears (guards don't interfere)."""
         client = WhoopClient(user_id=1)

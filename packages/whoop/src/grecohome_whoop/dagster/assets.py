@@ -45,6 +45,7 @@ async def _fetch_range(collection: str, method: str, start, end, dt: str) -> int
         await client.aclose()
 
 
+# @spec WHOOP-CAPTURE-001, WHOOP-CAPTURE-006
 def _make_bronze_asset(collection: str, method: str) -> AssetsDefinition:
     """Build a daily-partitioned bronze asset for one range collection."""
 
@@ -87,6 +88,7 @@ async def _fetch_snapshots() -> dict[str, bool]:
         await client.aclose()
 
 
+# @spec WHOOP-CAPTURE-007
 @asset(name="whoop_bronze_snapshots", pool=WHOOP_POOL, group_name=BRONZE_GROUP)
 def bronze_snapshots(context: AssetExecutionContext) -> None:
     """Capture current-only Whoop snapshots (profile, body measurement)."""

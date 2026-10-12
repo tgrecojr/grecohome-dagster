@@ -1,14 +1,7 @@
-# Whoop bronze subject — EARS specs
+# Whoop token lifecycle — EARS specs
 
-Design: [whoop-design.md](whoop-design.md). Prefix `WHOOP`. Facets: `SCHED` (schedules),
-`AUTH` (OAuth token lifecycle), `LOG` (credential-safe logging), `CHECKS` (token health).
-
-## Schedules
-
-- [x] **WHOOP-SCHED-001**: When the `whoop_hourly` schedule ticks, the system shall emit one run request for each of the trailing `RECONCILE_WINDOW_DAYS + 1` Whoop daily partitions, including the current, in-progress UTC day.
-- [x] **WHOOP-SCHED-002**: The `whoop_hourly` schedule shall give each run request a `run_key` of the form `<partition_key>-<YYYYMMDDTHH>`, where the suffix is the tick's scheduled execution time in UTC.
-- [x] **WHOOP-SCHED-003**: When the `whoop_snapshots_hourly` schedule ticks, the system shall emit exactly one run request with a `run_key` of `snapshots-<YYYYMMDDTHH>`.
-- [x] **WHOOP-SCHED-004**: Both Whoop API schedules (`whoop_hourly` and `whoop_snapshots_hourly`) shall run hourly at minute 17 UTC, never at minute 0.
+Design: [auth-design.md](auth-design.md). Prefix `WHOOP-AUTH`. Facets: none (token
+lifecycle), `LOG` (credential-safe logging), `HEALTH` (the token-health check).
 
 ## OAuth token lifecycle
 
@@ -31,13 +24,13 @@ Design: [whoop-design.md](whoop-design.md). Prefix `WHOOP`. Facets: `SCHED` (sch
 
 ## Credential-safe logging
 
-- [x] **WHOOP-LOG-001**: If an unexpected failure (anything other than an HTTP error status) occurs in the Whoop authorization-code exchange, token refresh or API request path, then the system shall log only the message and the exception's type name, with no traceback and no exception text.
-- [x] **WHOOP-LOG-002**: If the Whoop authorization-code exchange, token refresh or API request path re-raises an unexpected failure as a Whoop exception, then the system shall put only the original exception's type name in the new exception's message.
-- [x] **WHOOP-LOG-003**: The Whoop subject shall never log any part, including a prefix, of an access token, refresh token, client secret, authorization code or PKCE verifier.
-- [x] **WHOOP-LOG-004**: The Whoop subject shall never log the body of a Whoop token-endpoint response or API error response.
-- [x] **WHOOP-LOG-005**: Where nothing has configured structlog in a process running Whoop code, the shared logger (`grecohome_core.logging_config.get_logger`) shall render exception tracebacks without frame-local variables, and otherwise keep structlog's default output format, with no ANSI color codes when output is not a terminal.
+- [x] **WHOOP-AUTH-LOG-001**: If an unexpected failure (anything other than an HTTP error status) occurs in the Whoop authorization-code exchange, token refresh or API request path, then the system shall log only the message and the exception's type name, with no traceback and no exception text.
+- [x] **WHOOP-AUTH-LOG-002**: If the Whoop authorization-code exchange, token refresh or API request path re-raises an unexpected failure as a Whoop exception, then the system shall put only the original exception's type name in the new exception's message.
+- [x] **WHOOP-AUTH-LOG-003**: The Whoop subject shall never log any part, including a prefix, of an access token, refresh token, client secret, authorization code or PKCE verifier.
+- [x] **WHOOP-AUTH-LOG-004**: The Whoop subject shall never log the body of a Whoop token-endpoint response or API error response.
+- [x] **WHOOP-AUTH-LOG-005**: Where nothing has configured structlog in a process running Whoop code, the shared logger (`grecohome_core.logging_config.get_logger`) shall render exception tracebacks without frame-local variables, and otherwise keep structlog's default output format, with no ANSI color codes when output is not a terminal.
 
 ## Token health check
 
-- [x] **WHOOP-CHECKS-001**: If the stored Whoop token's `expires_at` is more than 90 minutes in the past when the `whoop_token_health` check runs, then the system shall fail the check at ERROR severity and log `whoop_token_unhealthy`.
-- [x] **WHOOP-CHECKS-002**: If the Whoop token file is missing or unreadable (invalid JSON, or no `expires_at`) when the `whoop_token_health` check runs, then the system shall fail the check at ERROR severity rather than raising.
+- [x] **WHOOP-AUTH-HEALTH-001**: If the stored Whoop token's `expires_at` is more than 90 minutes in the past when the `whoop_token_health` check runs, then the system shall fail the check at ERROR severity and log `whoop_token_unhealthy`.
+- [x] **WHOOP-AUTH-HEALTH-002**: If the Whoop token file is missing or unreadable (invalid JSON, or no `expires_at`) when the `whoop_token_health` check runs, then the system shall fail the check at ERROR severity rather than raising.

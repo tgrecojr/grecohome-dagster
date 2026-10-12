@@ -12,11 +12,11 @@ Whoop specifics worth knowing:
   *rescore*, so the latest partitions are re-captured (and re-written) frequently;
   sidecar freshness tracks that cleanly. Their event date lives in the payload
   (``start`` / ``created_at``), not the partition ``dt``.
-* **Snapshots** (profile, body_measurement) are current-only and captured with
-  content-hash dedup, so a new file is written only when the snapshot *changes* —
-  which for these near-static collections can be weeks apart. Sidecar freshness
-  would therefore false-positive "stale", so freshness is intentionally disabled
-  for snapshots; schema + content health still apply. They share one asset
+* **Snapshots** (profile, body_measurement) are current-only and captured into the
+  UTC fetch-date folder with skip-identical on. Skip-identical compares only within a
+  folder, so each day's first capture lands in a new, empty folder and is written:
+  each snapshot gets about one file a day. Freshness therefore detects a stalled
+  snapshots job; schema + content health also apply. They share one asset
   (``whoop_bronze_snapshots``); two configs attach to it, one per collection.
 * **Workouts** are intermittent (the user had a real multi-week gap), so the
   completeness window is wide and WARN-only, content health is skipped, and
@@ -82,7 +82,7 @@ def evaluate_token_health(data: dict | None, now: datetime) -> tuple[bool, dict]
     }
 
 
-# @spec WHOOP-CHECKS-001, WHOOP-CHECKS-002
+# @spec WHOOP-AUTH-HEALTH-001, WHOOP-AUTH-HEALTH-002
 @asset_check(asset=bronze_sleep, name="whoop_token_health")
 @alerting_check
 def whoop_token_health() -> AssetCheckResult:
@@ -111,6 +111,7 @@ def whoop_token_health() -> AssetCheckResult:
 # Range collections: daily-partitioned, {"records": [...]} payloads, event date
 # from the payload (dt is the partition date here, but completeness counts the
 # distinct event days the records actually cover).
+# @spec WHOOP-CAPTURE-CHECKS-001, WHOOP-CAPTURE-CHECKS-002
 WHOOP_CHECK_CONFIGS: list[CollectionCheckConfig] = [
     CollectionCheckConfig(
         source="whoop",
@@ -164,7 +165,9 @@ WHOOP_CHECK_CONFIGS: list[CollectionCheckConfig] = [
         cadence_days=14,
         enabled_checks=frozenset({"completeness", "schema"}),
     ),
-    # Snapshots: current-only, dedup'd -> freshness disabled (see module docstring).
+    # Snapshots: written ~daily (first capture per fetch-date folder) -> freshness on;
+    # no event timeline -> no completeness (see module docstring).
+    # @spec WHOOP-CAPTURE-CHECKS-003
     CollectionCheckConfig(
         source="whoop",
         collection="profile",
@@ -172,7 +175,8 @@ WHOOP_CHECK_CONFIGS: list[CollectionCheckConfig] = [
         reader="json",
         unnest_records=False,
         event_date_source="none",
-        enabled_checks=frozenset({"schema", "content"}),
+        cadence_hours=26.0,
+        enabled_checks=frozenset({"freshness", "schema", "content"}),
     ),
     CollectionCheckConfig(
         source="whoop",
@@ -181,7 +185,8 @@ WHOOP_CHECK_CONFIGS: list[CollectionCheckConfig] = [
         reader="json",
         unnest_records=False,
         event_date_source="none",
-        enabled_checks=frozenset({"schema", "content"}),
+        cadence_hours=26.0,
+        enabled_checks=frozenset({"freshness", "schema", "content"}),
     ),
 ]
 
@@ -200,6 +205,7 @@ whoop_checks = [
 
 # A checks-only job + hourly schedule, so freshness/staleness is caught even if an
 # asset stops materializing. Runs off the whoop_api pool (checks make no API calls).
+# @spec WHOOP-CAPTURE-CHECKS-004
 whoop_checks_job = build_bronze_checks_job(whoop_checks, name="whoop_bronze_checks_job")
 whoop_checks_schedule = build_bronze_checks_schedule(
     whoop_checks_job, name="whoop_bronze_checks_hourly"

@@ -101,6 +101,7 @@ def _is_empty_pagination_terminator(data: Any) -> bool:
     )
 
 
+# @spec WHOOP-CAPTURE-009
 def _whoop_retry_wait(retry_state) -> float:
     """Honor a server-provided Retry-After, else exponential backoff."""
     exc = retry_state.outcome.exception() if retry_state.outcome else None
@@ -224,6 +225,8 @@ class WhoopClient:
         except Exception as e:  # noqa: BLE001 - capture must never break processing
             logger.warning("bronze dispatch failed", collection=collection, error=str(e))
 
+    # @spec WHOOP-CAPTURE-002, WHOOP-CAPTURE-003, WHOOP-CAPTURE-004, WHOOP-CAPTURE-005
+    # @spec WHOOP-CAPTURE-008, WHOOP-CAPTURE-010, WHOOP-CAPTURE-011
     @retry(
         stop=stop_after_attempt(3),
         wait=_whoop_retry_wait,
@@ -278,7 +281,7 @@ class WhoopClient:
 
         except httpx.HTTPStatusError as e:
             status_code = e.response.status_code
-            # @spec WHOOP-LOG-004 -- log status only, never the response body.
+            # @spec WHOOP-AUTH-LOG-004 -- log status only, never the response body.
             if status_code in _RETRYABLE_STATUS_CODES:
                 retry_after = _parse_retry_after(e.response.headers.get("Retry-After"))
                 logger.warning(
@@ -303,7 +306,7 @@ class WhoopClient:
         except WhoopAPIError:
             raise
         except Exception as e:
-            # @spec WHOOP-LOG-001, WHOOP-LOG-002
+            # @spec WHOOP-AUTH-LOG-001, WHOOP-AUTH-LOG-002
             # Type name only: no traceback (its locals hold the bearer token) and no
             # exception text (an HTTP library can quote the Authorization header).
             error_type = type(e).__name__
@@ -312,6 +315,8 @@ class WhoopClient:
             )
             raise WhoopAPIError(f"Unexpected error during API request ({error_type})") from e
 
+    # @spec WHOOP-CAPTURE-PAGE-001, WHOOP-CAPTURE-PAGE-002
+    # @spec WHOOP-CAPTURE-PAGE-003, WHOOP-CAPTURE-PAGE-004
     async def _paginate(
         self,
         endpoint: str,
@@ -378,6 +383,7 @@ class WhoopClient:
                 )
                 break
 
+    # @spec WHOOP-CAPTURE-001
     async def _fetch_range(
         self,
         endpoint: str,
