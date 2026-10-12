@@ -247,7 +247,7 @@ def distinct_event_dates(
     """Sorted distinct event dates for a collection over the trailing partitions.
 
     For ``event_date_source == "partition"`` the event date *is* the ``dt=`` folder
-    (capture-once/immutable sources). For ``"payload"`` the date is read from inside
+    (e.g. Garmin daily collections). For ``"payload"`` the date is read from inside
     each payload (a JSON record field or a CSV column) — this is what makes Lingo
     glucose and Whoop snapshots correct, where ``dt`` is the *fetch* date, not the
     event date.

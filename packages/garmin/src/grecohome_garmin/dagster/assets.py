@@ -2,10 +2,11 @@
 
 Every catalog endpoint becomes its own bronze asset (``garmin_bronze_<collection>``):
 date-oriented endpoints (daily / range / per-device-range / activities) are
-daily-UTC-partitioned; reference endpoints (static / goals / weekly / per-profile /
+daily-partitioned; reference endpoints (static / goals / weekly / per-profile /
 per-device) are unpartitioned. ``activities`` fans out per-activity detail + the FIT
 download internally. Each asset uses the shared per-run Garmin client resource and
-captures append-only (no dedup -- Garmin data is immutable).
+captures append-only; daily partitions are re-captured every tick of the trailing
+window, with identical re-captures skipped where sound (see ``pull.py``).
 
 ``FETCH_SELECTION`` / ``FETCH_EXCLUDE`` are honored at runtime: a deselected asset
 materializes as a no-op (no capture), keeping the asset graph stable.
@@ -47,6 +48,7 @@ def _puller(context: AssetExecutionContext) -> GarminPuller:
     return GarminPuller(context.resources.garmin, settings)
 
 
+# @spec GARMIN-CAPTURE-009
 def _run_partitioned(context: AssetExecutionContext, ep: Endpoint) -> None:
     d = context.partition_key
     puller = _puller(context)

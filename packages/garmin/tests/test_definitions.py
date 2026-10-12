@@ -37,12 +37,18 @@ class TestAssetChecks:
     def _cfg(self, collection):
         return next(c for c in GARMIN_CHECK_CONFIGS if c.collection == collection)
 
+    # @spec GARMIN-CHECKS-001
     def test_every_collection_has_freshness(self):
         # The universal signal is on every catalog collection that has an asset.
         keys = self._checks()
         for cfg in GARMIN_CHECK_CONFIGS:
             assert (f"AssetKey(['garmin_bronze_{cfg.collection}'])",
                     f"garmin_{cfg.collection}_freshness") in keys
+
+    def test_freshness_tolerance_is_daily_cadence_plus_grace(self):
+        assert all(
+            (c.cadence_hours, c.grace_hours) == (26.0, 6.0) for c in GARMIN_CHECK_CONFIGS
+        )
 
     def test_important_collections_get_full_suite(self):
         keys = self._checks()

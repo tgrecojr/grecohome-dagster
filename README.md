@@ -48,8 +48,8 @@ root `pyproject.toml`, one `uv.lock`, one managed Python version.
 ## Architecture
 
 - **Three layers.** Bronze subjects call their source API and write raw payloads to
-  `BRONZE_ROOT` (atomic, append-only; content-hash dedup opt-in — on for Whoop, off for
-  immutable Garmin). **Silver** reads bronze and writes typed, deduplicated Parquet to
+  `BRONZE_ROOT` (atomic, append-only; content-hash dedup opt-in — on for Whoop/USCRN and
+  Garmin single-request endpoints, off for Garmin fan-out paths). **Silver** reads bronze and writes typed, deduplicated Parquet to
   `SILVER_ROOT`; **gold** reads silver and writes analysis marts to `GOLD_ROOT`. Silver/gold
   are DuckDB-over-Parquet, fully rebuildable, and never write under the layer below. See
   [`docs/SILVER.md`](docs/SILVER.md) and [`docs/GOLD.md`](docs/GOLD.md).
@@ -60,8 +60,10 @@ root `pyproject.toml`, one `uv.lock`, one managed Python version.
 - **Cross-layer lineage by `AssetKey`.** silver→bronze and gold→silver deps render in the UI;
   the reads themselves are filesystem reads of the upstream root, not gRPC calls.
 - **Orchestration varies by source.** Whoop: daily UTC partitions, one hourly schedule
-  re-captures the trailing 8 (rescores) + content-hash dedup. Garmin: daily capture-once over
-  the trailing window (immutable, no dedup). Lingo: a Drive **sensor** + dynamic partitions
+  re-captures the trailing 8 (rescores) + content-hash dedup. Garmin: one daily schedule
+  re-captures the trailing `LOOKBACK_DAYS` completed days every tick (Garmin syncs late and
+  restates days) + skip-identical dedup on single-request endpoints
+  (`docs/intent/garmin/garmin-design.md`). Lingo: a Drive **sensor** + dynamic partitions
   keyed on file id (file-arrival-driven, no schedule). Soil/USCRN: daily UTC partitions where
   each stores only that day's rows sliced from the public NOAA year file, re-captured every 6h
   with dedup. Backfill (where applicable) via `dagster backfill`. **Silver/gold** rebuild

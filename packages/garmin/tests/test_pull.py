@@ -32,6 +32,7 @@ def _payloads(root: str, collection: str) -> list[str]:
 
 @pytest.mark.unit
 class TestPullEndpoint:
+    # @spec GARMIN-CAPTURE-009
     def test_daily_captures_under_event_date(self, tmp_path):
         client = MagicMock()
         client.get_sleep_data.return_value = {"x": 1}
@@ -41,6 +42,7 @@ class TestPullEndpoint:
         assert len(files) == 1
         assert "/dt=2025-01-05/" in files[0].replace(os.sep, "/")
 
+    # @spec GARMIN-CAPTURE-001
     def test_none_is_not_captured(self, tmp_path):
         client = MagicMock()
         client.get_hrv_data.return_value = None
@@ -48,6 +50,7 @@ class TestPullEndpoint:
         p.pull_endpoint(catalog.get("hrv"), cdate="2025-01-05")
         assert _payloads(str(tmp_path / "bronze"), "hrv") == []
 
+    # @spec GARMIN-CAPTURE-002
     def test_empty_with_skip_flag_not_captured(self, tmp_path):
         client = MagicMock()
         client.get_lifestyle_logging_data.return_value = []  # skip_if_empty=True
@@ -55,6 +58,7 @@ class TestPullEndpoint:
         p.pull_endpoint(catalog.get("lifestyle_logging"), cdate="2025-01-05")
         assert _payloads(str(tmp_path / "bronze"), "lifestyle_logging") == []
 
+    # @spec GARMIN-CAPTURE-003
     def test_empty_without_skip_flag_is_captured(self, tmp_path):
         # training_readiness has no skip flag: an empty 200 is a faithful record.
         client = MagicMock()

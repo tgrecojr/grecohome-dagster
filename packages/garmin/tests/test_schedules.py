@@ -1,4 +1,4 @@
-"""Tests for the Garmin schedules (capture-once daily window)."""
+"""Tests for the Garmin schedules (daily trailing re-capture window)."""
 
 from datetime import UTC, datetime
 
@@ -15,21 +15,39 @@ def _ctx(when: datetime):
     )
 
 
+def _tick(when: datetime):
+    return garmin_daily.evaluate_tick(_ctx(when)).run_requests
+
+
 @pytest.mark.unit
 class TestGarminDaily:
-    def test_capture_once_trailing_window(self):
-        result = garmin_daily.evaluate_tick(_ctx(datetime(2026, 6, 9, 7, tzinfo=UTC)))
-        rrs = result.run_requests
+    # @spec GARMIN-SCHED-001, GARMIN-SCHED-002
+    def test_trailing_window_of_completed_partitions(self):
+        rrs = _tick(datetime(2026, 6, 9, 7, tzinfo=UTC))
+        keys = [r.partition_key for r in rrs]
         assert len(rrs) == settings.lookback_days
-        # run-once: run_key equals the partition key (no hour suffix).
-        assert all(r.run_key == r.partition_key for r in rrs)
         # end_offset=0: only completed days; today (06-09) is excluded.
-        assert rrs[-1].partition_key == "2026-06-08"
-        assert "2026-06-09" not in {r.partition_key for r in rrs}
+        assert keys[-1] == "2026-06-08"
+        assert "2026-06-09" not in keys
+
+    # @spec GARMIN-SCHED-003
+    def test_consecutive_ticks_recapture_overlapping_partitions_as_distinct_runs(self):
+        day1 = {r.partition_key: r.run_key for r in _tick(datetime(2026, 6, 9, 7, tzinfo=UTC))}
+        day2 = {r.partition_key: r.run_key for r in _tick(datetime(2026, 6, 10, 7, tzinfo=UTC))}
+        overlap = set(day1) & set(day2)
+        assert len(overlap) == settings.lookback_days - 1
+        # A partition re-emitted on a later tick must be a new run, not deduped.
+        assert all(day1[k] != day2[k] for k in overlap)
+
+    # @spec GARMIN-SCHED-004
+    def test_run_key_is_partition_plus_tick(self):
+        rrs = _tick(datetime(2026, 6, 9, 7, tzinfo=UTC))
+        assert all(r.run_key == f"{r.partition_key}-20260609T07" for r in rrs)
 
 
 @pytest.mark.unit
 class TestGarminReference:
+    # @spec GARMIN-SCHED-005
     def test_single_dated_request(self):
         result = garmin_reference.evaluate_tick(_ctx(datetime(2026, 6, 9, 7, tzinfo=UTC)))
         assert len(result.run_requests) == 1

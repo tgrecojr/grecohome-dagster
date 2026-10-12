@@ -13,8 +13,8 @@ rebuildable (see [SILVER](SILVER.md), [GOLD](GOLD.md)). Bronze itself is never m
 - **Content-hash dedup (opt-in, `dedupe`).** With `dedupe=True` (default) the payload's sha256 is
   compared to the newest capture for the same `(source, collection, dt)` partition and an
   identical payload is skipped — so a source that re-captures an overlapping window (Whoop, which
-  rescores) costs API calls but ~zero storage. Immutable sources (Garmin) pass `dedupe=False` and
-  rely on **capture-once scheduling** (`run_key = partition_key`) to avoid re-pulls instead.
+  rescores) costs API calls but ~zero storage. Callers pass `dedupe=False` where every capture must
+  be kept (Garmin's fan-out and skip-flagged endpoints; see Garmin specifics).
 - **Non-fatal.** `capture_bronze` never raises; failures are logged and swallowed.
 - **Swappable root.** The bronze root is passed in by the caller (`BRONZE_ROOT`); nothing is
   hardcoded, keeping an object-store migration open.
@@ -61,8 +61,12 @@ Provenance for each payload. Filled by the capture function: `source`, `collecti
 - **Two capture grades** (recorded in `capture_mode`): `reserialized` — the `garminconnect`
   library returns parsed objects, re-serialized via deterministic compact JSON (no `sort_keys`);
   and `raw` — binary downloads (the FIT/original `.zip`) stored byte-for-byte.
-- **No dedup** (`dedupe=False`): Garmin data is immutable, so every capture is kept and re-pulls
-  are avoided by capture-once scheduling rather than content-hash dedup.
+- **Re-captured, not capture-once.** Garmin syncs late and restates days, so the daily schedule
+  re-captures every trailing `LOOKBACK_DAYS` completed partition on every tick, and a
+  `(collection, dt)` folder holds several captures (silver takes the latest). Skip-identical
+  (`dedupe=True`) applies only to single-request endpoints without a `skip_if_*` flag; fan-out
+  paths (per activity / device / goal status) and skip-flagged endpoints keep every capture.
+  Authoritative design: `docs/intent/garmin/garmin-design.md`.
 - **Secret-screening:** profile/settings collections (`user_settings`, `userprofile_settings`)
   are run through a recursive secret-key remover before capture; dropped key paths are recorded
   in `redacted_fields`. Tokens/credentials never reach bronze (the token store is a separate

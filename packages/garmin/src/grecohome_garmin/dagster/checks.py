@@ -18,8 +18,10 @@ Policy (kept lightweight given the collection count):
   Empty collections still get a content check so a *genuine error* envelope warns.
 
 Reference/unpartitioned collections have no event timeline → ``event_date_source``
-is ``"none"`` (completeness skipped). Garmin captures with ``dedupe=False``, so
-every scheduled run writes — sidecar freshness is reliable here.
+is ``"none"`` (completeness skipped). Sidecar freshness is reliable here even with
+skip-identical on: each daily tick's newly completed partition (and each reference
+run's new fetch-date folder) gets a first capture that always writes, and
+skip-flagged endpoints that can miss a day keep every capture (see ``pull.py``).
 
 * **Excluded endpoints get no checks.** A collection turned off via
   ``FETCH_EXCLUDE`` / ``FETCH_SELECTION`` never writes again, so a freshness check
@@ -84,6 +86,7 @@ EMPIRICALLY_EMPTY: frozenset[str] = frozenset(
 )
 
 
+# @spec GARMIN-CHECKS-001
 def _config_for(ep: catalog.Endpoint) -> CollectionCheckConfig | None:
     """Derive a check config for one catalog endpoint, or None if it has no asset
     or the endpoint is excluded from capture."""

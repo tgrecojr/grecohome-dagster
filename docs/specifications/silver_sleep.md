@@ -108,9 +108,9 @@ Reuse the `bronze_reads` helpers built for the validation checks — do not re-s
 
 ### 4.3 Deduplication (critical — bronze is heavily re-captured)
 Live data shows massive duplication (every night captured many times across pulls):
-- **Garmin:** dedup key = `calendarDate`. Keep the **latest** version. Garmin is immutable per
-  BRONZE.md, but the same night appears in many files (re-pulls), so dedup by calendarDate keeping
-  one is still required. Tie-break by sidecar `fetched_at` (latest) or by the file's `dt`.
+- **Garmin:** dedup key = `calendarDate`. Keep the **latest** version. Garmin re-captures each
+  trailing day daily and restates late-synced data, so the same night appears in many files and
+  later captures can be more complete; dedup by calendarDate keeping the latest is required. Tie-break by sidecar `fetched_at` (latest) or by the file's `dt`.
 - **Whoop:** dedup key = `r.id` (the sleep UUID). Whoop **rescores**, so keep the row with the
   **latest `updated_at`** per `id`. Then collapse to one row per night (see naps, §4.4).
 Use a `row_number() OVER (PARTITION BY <key> ORDER BY <recency> DESC) = 1` pattern.
