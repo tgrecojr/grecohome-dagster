@@ -1,7 +1,11 @@
 # ADR 0004: Garmin port — per-collection assets, no dedup, delegated auth
 
 ## Status
-Accepted.
+Accepted. **Amended 2026-10-12:** the "immutable / no dedup / exactly once" capture policy below
+is superseded. Garmin restates and back-fills days after the fact, so the daily schedule
+re-captures every trailing `LOOKBACK_DAYS` completed partition on every tick (tick-scoped
+`run_key`), with skip-identical dedup on single-request endpoints. The authoritative design is
+`docs/intent/garmin/garmin-design.md`; the rest of this record stands.
 
 ## Context
 Garmin is the second data subject, ported from the standalone `garmincapture` service into the

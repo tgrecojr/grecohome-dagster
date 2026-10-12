@@ -62,7 +62,7 @@ date; for others it's the fetch date. Completeness uses the **true event date**:
 |---|---|---|
 | Whoop sleep/recovery/cycle/workout | partition date | payload field (`start` / `created_at`) |
 | Whoop `profile` / `body_measurement` | fetch date | — (current-only snapshot; completeness skipped) |
-| Garmin daily collections | partition date | partition `dt` (capture-once/immutable) |
+| Garmin daily collections | partition date | partition `dt` (Garmin calendar date; re-captured daily) |
 | Lingo `glucose` | **fetch date** | **in-CSV reading timestamp** (NOT `dt`) |
 | USCRN `hourly` | partition date | partition `dt` (= the UTC date) |
 

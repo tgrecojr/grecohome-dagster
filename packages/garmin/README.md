@@ -11,8 +11,10 @@ full Garmin Connect data surface (allowlisted) to the bronze layer. Ported from
   auth methods are never callable, and a drift detector surfaces new readable
   endpoints. Two capture grades: reserialized JSON, and raw FIT `.zip` downloads.
 - One asset per collection (daily-partitioned for date-oriented data, unpartitioned
-  for reference/snapshots), captured **append-only, no dedup** (Garmin data is
-  immutable). Backfill via `dagster backfill`.
+  for reference/snapshots), captured **append-only**. The daily schedule re-captures every trailing
+  `LOOKBACK_DAYS` completed day on every tick (Garmin syncs late and restates days);
+  identical re-captures are skipped on single-request endpoints. Backfill via
+  `dagster backfill`. Design: `docs/intent/garmin/garmin-design.md`.
 
 Ships as a per-subject gRPC **code-location image** (`grecohome-dagster-garmin`)
 that registers with the host Dagster daemon/webserver. See `docs/DEPLOYMENT.md`.

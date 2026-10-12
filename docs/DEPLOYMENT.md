@@ -169,9 +169,12 @@ a few subject-specific differences:
   self-heals/refreshes it. Required env: `GARMINCONNECT_EMAIL`, `GARMINCONNECT_BASE64_PASSWORD`
   (+ optional `GARMINCONNECT_IS_CN`); tuning: `LOOKBACK_DAYS`, `FETCH_SELECTION`/`FETCH_EXCLUDE`
   (default empty = capture all), `RATE_LIMIT_SECONDS`, `WEEKLY_WEEKS`, `CAPTURE_ALT_FORMATS`.
-- **No dedup** (Garmin data is immutable) — the daily schedule captures each completed partition
-  **exactly once** (`run_key = partition_key`), trailing `LOOKBACK_DAYS`. A second daily schedule
-  refreshes the unpartitioned reference/snapshot collections.
+- **Daily re-capture** — the daily schedule re-captures every one of the trailing `LOOKBACK_DAYS`
+  completed partitions on every tick (Garmin syncs late and restates days); identical
+  re-captures are skipped on single-request endpoints. Days that fall out of the window during
+  an outage need a manual partition backfill of `garmin_daily_job`. A second daily schedule
+  refreshes the unpartitioned reference/snapshot collections. Design:
+  `docs/intent/garmin/garmin-design.md`.
 
 ### Host container (`dagster_garmin`)
 

@@ -21,7 +21,7 @@ from dagster import AssetKey
 Reader = Literal["json", "csv", "txt"]
 
 #: Where a collection's *event* date comes from. ``"partition"`` means the hive
-#: ``dt=`` folder is the event date (capture-once/immutable sources); ``"payload"``
+#: ``dt=`` folder is the event date (e.g. Garmin daily collections); ``"payload"``
 #: means it lives inside the payload (e.g. a CSV reading timestamp, a Whoop
 #: ``start`` field) and must be parsed; ``"none"`` is a current-only snapshot with
 #: no meaningful timeline (completeness is skipped).

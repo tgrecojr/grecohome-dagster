@@ -14,8 +14,9 @@ Design constraints (from the bronze spec):
   payload's sha256 is compared to the newest capture for the same
   ``(source, collection, dt)`` partition and an identical payload is skipped —
   so a source that re-captures an overlapping window each tick (e.g. Whoop, which
-  rescores) costs API calls but near-zero storage. Sources with immutable data
-  (e.g. Garmin) pass ``dedupe=False`` to keep every capture.
+  rescores) costs API calls but near-zero storage. Callers pass ``dedupe=False``
+  where every capture must be kept (e.g. Garmin's fan-out paths, where several
+  distinct requests write one partition folder).
 * **Non-fatal.** :func:`capture_bronze` never raises; any failure is logged as a
   warning and swallowed so the caller's normal processing continues.
 * **Swappable root.** The bronze root is passed in by the caller (from its

@@ -118,7 +118,8 @@ Garmin daily, and USCRN; but `dt` is the *fetch* date for Lingo glucose and Whoo
 (`profile`, `body_measurement`). So completeness must use the **true event date**:
 - Whoop sleep/recovery/workout/cycle: event date from payload (`start`/`created_at`) — these
   rescore, so dedup keeps one logical record; completeness counts distinct event days.
-- Garmin daily collections: event date = partition `dt` (capture-once, immutable).
+- Garmin daily collections: event date = partition `dt` (the Garmin calendar date requested; the
+  folder may hold several re-captures).
 - Lingo glucose: event date is **inside the CSV** (the reading timestamp), NOT `dt` (which is
   fetch date). Parse the timestamp column. Expect heavy intermittency (CGM worn in bursts) →
   WARN only, wide tolerance.

@@ -1,9 +1,12 @@
 """Garmin capture adapter over the shared core bronze writer.
 
-garmincapture had its own ``capture_bronze``; in the monorepo there is one writer
-(``grecohome_core.bronze.capture_bronze``). These helpers build the Garmin-specific
-sidecar fields (capture grade, redacted fields) and call core with ``dedupe=False``
-(Garmin data is immutable -- keep every capture) and an explicit ``ext``.
+These helpers build the Garmin-specific sidecar fields (capture grade, redacted
+fields) and call ``grecohome_core.bronze.capture_bronze`` with an explicit ``ext``.
+
+``dedupe`` (the core skip-identical check) is a **required** argument: Garmin
+re-captures each trailing day on every tick, and whether an identical re-capture
+may be skipped depends on the capture path (see ``pull.py`` and
+``docs/intent/garmin/garmin-design.md``), so every call site must decide.
 """
 
 from typing import Any
@@ -27,6 +30,7 @@ DOWNLOAD_EXT: dict[str, tuple[str, str]] = {
 }
 
 
+# @spec GARMIN-CAPTURE-010, GARMIN-CAPTURE-011
 def capture_json(
     collection: str,
     parsed: Any,
@@ -37,8 +41,12 @@ def capture_json(
     processor_version: str = __version__,
     dt: str | None = None,
     screen_secrets: bool = False,
+    dedupe: bool,
 ) -> str | None:
-    """Screen (if asked), reserialize, and capture a parsed JSON return."""
+    """Screen (if asked), reserialize, and capture a parsed JSON return.
+
+    Returns the payload path, or ``None`` if skipped as identical or on failure.
+    """
     redacted: list[str] = []
     payload = parsed
     if screen_secrets:
@@ -58,10 +66,11 @@ def capture_json(
     }
     return capture_bronze(
         SOURCE, collection, to_bronze_json(payload), meta,
-        bronze_root=bronze_root, dt=dt, dedupe=False, ext="json",
+        bronze_root=bronze_root, dt=dt, dedupe=dedupe, ext="json",
     )
 
 
+# @spec GARMIN-CAPTURE-010
 def capture_raw(
     collection: str,
     raw_bytes: bytes,
@@ -73,6 +82,7 @@ def capture_raw(
     bronze_root: str,
     processor_version: str = __version__,
     dt: str | None = None,
+    dedupe: bool,
 ) -> str | None:
     """Capture binary download bytes at the ``raw`` grade (true bytes, no reserialize)."""
     meta = {
@@ -90,5 +100,5 @@ def capture_raw(
     }
     return capture_bronze(
         SOURCE, collection, raw_bytes, meta,
-        bronze_root=bronze_root, dt=dt, dedupe=False, ext=ext,
+        bronze_root=bronze_root, dt=dt, dedupe=dedupe, ext=ext,
     )
