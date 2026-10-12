@@ -197,6 +197,8 @@ concurrency pool.
 
 ### Deferred
 
+Items 2–4 belong to the shared core writer and are tracked in issue #176.
+
 1. **Collections that change on every pull.** `lifestyle_logging` and `device_settings`
    differ on nearly every capture. For `device_settings`, part of the reason is that several
    devices interleave in one folder. If the remaining difference is a volatile field (a request
