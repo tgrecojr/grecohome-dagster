@@ -114,7 +114,7 @@ def _ensure_safe_defaults() -> None:
     structlog.configure(processors=processors)
 
 
-# @spec WHOOP-LOG-005
+# @spec WHOOP-AUTH-LOG-005
 def get_logger(name: str) -> Any:
     """Return a structured logger bound to ``name`` (typically ``__name__``).
 

@@ -17,7 +17,7 @@ class TestDefinitions:
             "AssetKey(['whoop_bronze_snapshots'])",
         }
 
-    # @spec WHOOP-SCHED-004
+    # @spec WHOOP-CAPTURE-SCHED-004
     def test_schedules_are_hourly_utc(self):
         # Hourly, but staggered to :17 (not the top of the hour) so the OAuth token
         # refresh dodges the top-of-hour cron surge on Whoop's token endpoint.
@@ -57,21 +57,22 @@ class TestAssetChecks:
         assert (akey, "whoop_workout_freshness") not in keys
         assert (akey, "whoop_workout_content_health") not in keys
 
-    def test_snapshots_have_schema_and_content_no_freshness(self):
+    def test_snapshots_have_freshness_schema_and_content(self):
         keys = self._check_keys()
         akey = "AssetKey(['whoop_bronze_snapshots'])"
         for coll in ("profile", "body_measurement"):
             assert (akey, f"whoop_{coll}_schema_drift") in keys
             assert (akey, f"whoop_{coll}_content_health") in keys
-            # Freshness disabled: dedup'd snapshots make sidecar-freshness misleading.
-            assert (akey, f"whoop_{coll}_freshness") not in keys
+            # Each snapshot is written ~daily (first capture in each fetch-date folder),
+            # so freshness detects a stalled snapshots job.
+            assert (akey, f"whoop_{coll}_freshness") in keys
             # Current-only snapshots have no event timeline.
             assert (akey, f"whoop_{coll}_completeness") not in keys
 
     def test_total_check_count(self):
-        # 3 range collections x4 + workout x2 (completeness+schema) + 2 snapshots x2
-        # = 18 collection checks, + 1 bespoke whoop_token_health (auth health) = 19.
-        assert len(self._check_keys()) == 19
+        # 3 range collections x4 + workout x2 (completeness+schema) + 2 snapshots x3
+        # = 20 collection checks, + 1 bespoke whoop_token_health (auth health) = 21.
+        assert len(self._check_keys()) == 21
 
     def test_token_health_check_present(self):
         # Token-health rides on a whoop bronze asset, in the hourly checks job.

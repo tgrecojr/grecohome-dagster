@@ -138,7 +138,7 @@ class WhoopOAuthClient:
         logger.info("Generated authorization URL", state=state[:10] + "...", scopes=self.scopes)
         return auth_url, state, code_verifier
 
-    # @spec WHOOP-AUTH-006, WHOOP-LOG-001
+    # @spec WHOOP-AUTH-006, WHOOP-AUTH-LOG-001
     async def exchange_code_for_token(
         self,
         code: str,
@@ -157,7 +157,7 @@ class WhoopOAuthClient:
             "client_secret": self.client_secret,
             "code_verifier": code_verifier,
         }
-        # @spec WHOOP-LOG-003 -- never log any part of the code, verifier or tokens.
+        # @spec WHOOP-AUTH-LOG-003 -- never log any part of the code, verifier or tokens.
         logger.info("Exchanging authorization code for token")
         try:
             async with httpx.AsyncClient(timeout=_TOKEN_TIMEOUT) as client:
@@ -176,7 +176,7 @@ class WhoopOAuthClient:
                 )
                 return token_data
         except httpx.HTTPStatusError as e:
-            # @spec WHOOP-LOG-004 -- log status only; the body carries secrets.
+            # @spec WHOOP-AUTH-LOG-004 -- log status only; the body carries secrets.
             logger.error("Token exchange failed", status_code=e.response.status_code)
             raise
         except Exception as e:
@@ -243,7 +243,7 @@ class WhoopOAuthClient:
                 )
                 return token_data
         except httpx.HTTPStatusError as e:
-            # @spec WHOOP-LOG-004 -- log status only; the body carries secrets.
+            # @spec WHOOP-AUTH-LOG-004 -- log status only; the body carries secrets.
             status = e.response.status_code
             if status in (400, 401):
                 # Terminal: the refresh token is dead. Emit a distinct, greppable
@@ -254,7 +254,7 @@ class WhoopOAuthClient:
                 logger.error("Token refresh failed", status_code=status)
             raise
         except Exception as e:
-            # @spec WHOOP-LOG-001
+            # @spec WHOOP-AUTH-LOG-001
             # Type only: the traceback's locals and the exception text can carry the
             # client secret and refresh token.
             logger.error("Unexpected error during token refresh", error_type=type(e).__name__)

@@ -90,7 +90,7 @@ class TestWhoopOAuthClientAsync:
         assert token_data["expires_in"] == 3600
 
     @respx.mock
-    # @spec WHOOP-LOG-004
+    # @spec WHOOP-AUTH-LOG-004
     async def test_exchange_code_for_token_failure(self):
         client = WhoopOAuthClient()
         respx.post(client.token_url).mock(

@@ -72,7 +72,7 @@ Whoop's refresh token is single-use. Once a refresh POST reaches Whoop, `R` is c
 and rotated to `R'` even if we never receive the response, and presenting a consumed `R`
 again trips Whoop's **reuse detection**, which revokes the whole grant. Every known way to
 lose the grant is a variant of "`R` presented twice" or "`R'` lost". The authoritative
-design is `docs/intent/whoop/whoop-design.md`; this section is the field guide.
+design is `docs/intent/whoop/auth/auth-design.md`; this section is the field guide.
 
 | Failure | Guard | Tell-tale in Loki |
 |---|---|---|

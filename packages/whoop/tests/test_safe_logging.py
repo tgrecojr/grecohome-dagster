@@ -29,7 +29,7 @@ def _assert_type_only(logs: list[dict], event: str) -> None:
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestUnexpectedFailuresLogTypeOnly:
-    # @spec WHOOP-LOG-001
+    # @spec WHOOP-AUTH-LOG-001
     @respx.mock
     async def test_refresh_unexpected_failure(self):
         client = WhoopOAuthClient()
@@ -60,7 +60,7 @@ class TestUnexpectedFailuresLogTypeOnly:
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestNoTokenFragmentsLogged:
-    # @spec WHOOP-LOG-003
+    # @spec WHOOP-AUTH-LOG-003
     @respx.mock
     async def test_exchange_and_refresh_log_no_part_of_any_token(self):
         client = WhoopOAuthClient()

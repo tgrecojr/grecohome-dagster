@@ -47,7 +47,7 @@ class TestLogging:
 
 @pytest.mark.unit
 class TestSafeDefaults:
-    # @spec WHOOP-LOG-005
+    # @spec WHOOP-AUTH-LOG-005
     def test_unconfigured_logger_renders_tracebacks_without_locals(self, capsys):
         structlog.reset_defaults()
         log = get_logger("safe-defaults-test")
