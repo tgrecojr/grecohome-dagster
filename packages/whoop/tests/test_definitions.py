@@ -17,6 +17,7 @@ class TestDefinitions:
             "AssetKey(['whoop_bronze_snapshots'])",
         }
 
+    # @spec WHOOP-SCHED-004
     def test_schedules_are_hourly_utc(self):
         # Hourly, but staggered to :17 (not the top of the hour) so the OAuth token
         # refresh dodges the top-of-hour cron surge on Whoop's token endpoint.

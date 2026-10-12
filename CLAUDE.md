@@ -92,6 +92,7 @@ See `docs/ENV_TEMPLATE.md` (and `.env.example`). Per layer:
 
 Paths in scope:
 - `packages/garmin/**`
+- `packages/whoop/**`
 
 ## Linked-Intent Development (MANDATORY)
 

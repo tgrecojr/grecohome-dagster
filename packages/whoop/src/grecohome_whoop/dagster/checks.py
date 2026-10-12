@@ -82,6 +82,7 @@ def evaluate_token_health(data: dict | None, now: datetime) -> tuple[bool, dict]
     }
 
 
+# @spec WHOOP-CHECKS-001, WHOOP-CHECKS-002
 @asset_check(asset=bronze_sleep, name="whoop_token_health")
 @alerting_check
 def whoop_token_health() -> AssetCheckResult:
@@ -93,7 +94,13 @@ def whoop_token_health() -> AssetCheckResult:
     outage we want caught fast. On failure it logs ``event=whoop_token_unhealthy``,
     which the Grafana/Loki rule turns into a Slack alert.
     """
-    data = TokenFileStore(settings.whoop_token_path).read()
+    try:
+        data = TokenFileStore(settings.whoop_token_path).read()
+    except (OSError, ValueError) as e:
+        # An unreadable token file (bad JSON, permissions) is a failed check, not a
+        # crashed one: auth is broken either way.
+        data = None
+        logger.warning("whoop_token_file_unreadable", error_type=type(e).__name__)
     passed, metadata = evaluate_token_health(data, datetime.now(UTC))
     if not passed:
         logger.warning("whoop_token_unhealthy", **metadata)

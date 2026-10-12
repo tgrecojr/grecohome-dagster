@@ -12,8 +12,8 @@ Every hourly `whoop_bronze_job` / `whoop_snapshots_job` tick fails on auth. In L
 (`{service_name="dagster_whoop"}`):
 
 ```
-Token refresh failed           status_code=400        # 400 == invalid_grant == dead refresh token
-whoop_token_invalid_grant      status_code=400        # the distinct terminal signal
+whoop_token_invalid_grant      status_code=400        # dead refresh token (400/401) -- re-auth
+Failed to refresh token        error_type=HTTPStatusError status_code=400
 ```
 
 A 5xx (`status_code=502`/`503`) on a refresh means transient Whoop instability. The
@@ -58,60 +58,30 @@ runs to backfill.
 
 - `whoop_token_invalid_grant` (ERROR) fires on the **first** failed refresh — page on it
   for immediate re-auth.
-- `whoop_token_health` asset check (in `whoop_bronze_checks_job`) is the backstop: it
-  ERRORs once `expires_at` is more than the grace window (`_TOKEN_GRACE_SECONDS`, ~90 min)
-  in the past. Slower, but catches a stalled poller that isn't even attempting refreshes.
+- `whoop_token_health` asset check (in `whoop_bronze_checks_job`, hourly at `:00`) is the
+  backstop: it ERRORs once `expires_at` is more than the grace window
+  (`_TOKEN_GRACE_SECONDS`, ~90 min) in the past, or when the token file is missing or
+  unreadable. It logs `whoop_token_unhealthy` (and `whoop_token_file_unreadable` for a
+  corrupt file). Slower, but catches a stalled poller that isn't even attempting refreshes.
+- Errors on the token and API paths log `error_type` (and `status_code`), never a
+  traceback or the exception text -- those can carry the client secret or a token.
 
-## Two ways the grant dies
+## How a grant dies, and the guard for each
 
-There are two distinct failure modes behind a `400 invalid_grant`.
+Whoop's refresh token is single-use. Once a refresh POST reaches Whoop, `R` is consumed
+and rotated to `R'` even if we never receive the response, and presenting a consumed `R`
+again trips Whoop's **reuse detection**, which revokes the whole grant. Every known way to
+lose the grant is a variant of "`R` presented twice" or "`R'` lost". The authoritative
+design is `docs/intent/whoop/whoop-design.md`; this section is the field guide.
 
-### 1. Server-side non-atomic rotation (rare)
+| Failure | Guard | Tell-tale in Loki |
+|---|---|---|
+| **Retrying a refresh that reached Whoop** (2026-06-11 503s, 2026-07-22 502) | The refresh retries **only** connect-phase errors (`ConnectError`/`ConnectTimeout`/`PoolTimeout`); any HTTP response or read/write timeout is raised without retry. A token failure reaches the API client as a non-retryable `WhoopAuthError`, so the data-request retry can't re-run it either. | One `Token refresh failed status_code=5xx` (or `Unexpected error during token refresh error_type=ReadTimeout`), then `whoop_token_invalid_grant status_code=400` on the next tick. |
+| **Read timeout after rotation** (2026-07-20) | 30 s token-endpoint timeout (5 s connect), so a slow but successful rotation completes and `R'` is saved. | `Unexpected error during token refresh error_type=ReadTimeout` right before the `400`s. |
+| **Two processes refreshing at once** (2026-06-26) | Host-wide `fcntl` lock at `<WHOOP_TOKEN_PATH>.lock` plus a re-read after locking, so a waiter reuses the token the holder just rotated. Re-auth takes the same lock. | Several `Token near expiration, refreshing` lines within seconds with *different* `time_until_expiry_seconds`. |
+| **5xx mid-rotation at the top-of-hour surge** (deaths at `HH:00`, through 2026-07-24) | Both Whoop schedules run at minute **17**. None lost since. | A `5xx` then `400`, at `HH:17`. If this recurs, open a Whoop support ticket with the traces and consider a slower poll cadence. |
+| **Malformed 200** (no `access_token`/`expires_in`) | A rotated `R'` in the response is saved, marked expired, so the next caller refreshes with `R'`. | `whoop_token_malformed_refresh_kept_rotation` (WARNING). |
+| **200 with no rotated refresh token** | The current token is kept and the anomaly is logged. | `whoop_token_no_rotation` (WARNING). |
 
-Whoop's token rotation is non-atomic: once a refresh POST reaches Whoop, the refresh
-token is consumed and rotated (`R -> R'`) even if the client never receives the
-response. Two variants have bitten us:
-
-- **Slow response / client timeout (2026-07-20).** The refresh used httpx's default
-  **5s** timeout. Whoop's token endpoint is routinely slow (observed 1-4s); one refresh
-  took >5s, so the read timed out *after* Whoop had rotated the token. `ReadTimeout` is a
-  transport error, so the client retried and replayed the now-consumed `R` -> permanent
-  `400`. **Fixed:** the token endpoint now uses a generous timeout
-  (`_TOKEN_TIMEOUT = 30s`, 5s connect) so a slow-but-successful rotation completes and
-  `R'` is persisted. **Tell-tale:** an `Unexpected error during token refresh` with an
-  httpx timeout traceback right before the `400`s begin.
-- **5xx during rotation (2026-06-11, again 2026-07-22).** A `5xx` can register/rotate the
-  token server-side while still returning an error. Whoop rotates on *reuse detection*
-  (RFC 6749): presenting the same refresh token twice revokes the whole grant. So the
-  kill wasn't the `5xx` itself — it was the **retry replaying `R`** after it. On
-  2026-07-22 a refresh got a `502` at 12s (the 30s timeout worked — no premature bail),
-  the client retried, and the replayed `R` came back `400`. **Fixed:** the refresh now
-  retries **only** connect-phase transport errors (`ConnectError`/`ConnectTimeout`/
-  `PoolTimeout`), where the request provably never reached Whoop and `R` was never
-  presented. Any HTTP response (4xx *or* 5xx) or a read/write timeout is re-raised
-  without retry; a transient `5xx` fails one run and the next hourly tick recovers with
-  `R` intact. **Tell-tale:** a single `Token refresh failed status_code=5xx`, then a
-  `whoop_token_invalid_grant status_code=400` on the next attempt.
-
-Recovery from an already-lost grant is still manual re-auth — no client change revives a
-revoked grant.
-
-### 2. Concurrent double-spend of the rotating refresh token (was the real cause, now fixed)
-
-Whoop rotates the refresh token on every refresh and treats a *replayed* (already
-consumed) refresh token as theft — revoking the **entire grant**. If two workers refresh
-at once, both read refresh token `R`, both POST it; one wins (`R -> R'`), the other
-replays the now-consumed `R` and the family is revoked. This caused the 2026-06-26 and
-2026-07-20 outages. **Tell-tale:** clean `200`s (no 5xx), then at the top of an hour
-several refreshes fire within seconds carrying *different* `time_until_expiry_seconds`
-snapshots — separate processes refreshing independently.
-
-Why the in-process guard wasn't enough: `TokenManager._refresh_locks` is an
-`asyncio.Lock` (per event loop), but Dagster's multiprocess executor runs each step in
-its own subprocess and `whoop_bronze_job` / `whoop_snapshots_job` are separate runs on
-the same cron. **Fix (implemented):** `TokenManager.get_valid_token` now wraps the
-refresh in a host-wide `fcntl.flock` file lock (`grecohome_core.tokens.file_lock`,
-sentinel at `<WHOOP_TOKEN_PATH>.lock`) *inside* the asyncio lock, with a post-lock
-re-read so the loser of a race reuses the just-rotated token instead of replaying the
-consumed one. Belt-and-suspenders: keep the host `whoop_api` op-concurrency pool limit
-at `1` in `dagster.yaml`.
+Recovery from an already-revoked grant is always manual re-auth (above). No client
+change revives a revoked grant.

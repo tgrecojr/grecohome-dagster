@@ -15,7 +15,7 @@ from datetime import UTC, datetime, timedelta
 from typing import NamedTuple
 
 from grecohome_core.logging_config import get_logger
-from grecohome_core.tokens.file_lock import InterProcessLock
+from grecohome_core.tokens.file_lock import InterProcessLock, interprocess_lock
 from grecohome_core.tokens.file_store import TokenFileStore
 from grecohome_whoop.auth.oauth_client import WhoopOAuthClient
 from grecohome_whoop.config import settings
@@ -52,9 +52,8 @@ class TokenManager:
     # concurrent refreshes would race: the second presents an already-consumed
     # refresh token and can revoke the grant. Serializing per user (the event
     # loop is single-threaded, so get-or-create is atomic between awaits) ensures
-    # one in-flight refresh per user. Across separate run processes the Dagster
-    # `whoop_api` concurrency pool serializes API work, so only one run holds the
-    # token at a time.
+    # one in-flight refresh per user. Across processes (Dagster step subprocesses
+    # and concurrent runs) the host-wide file lock in get_valid_token does the same.
     _refresh_locks: dict[int, asyncio.Lock] = {}
 
     @classmethod
@@ -99,19 +98,26 @@ class TokenManager:
         token_type: str = "Bearer",
         scopes: list[str] | None = None,
     ) -> None:
-        """Write a fresh token to the file store (used by the OAuth init flow)."""
+        """Write a fresh token to the file store (used by the OAuth init flow).
+
+        Holds the host-wide refresh lock, so a refresh still in flight on the old
+        grant can't finish afterwards and overwrite the fresh token.
+        """
+        # @spec WHOOP-AUTH-016
         expires_at = datetime.now(UTC) + timedelta(seconds=expires_in)
-        self.store.write_atomic(
-            {
-                "access_token": access_token,
-                "refresh_token": refresh_token,
-                "token_type": token_type,
-                "expires_at": expires_at.isoformat(),
-                "scopes": scopes or [],
-            }
-        )
+        with interprocess_lock(self._lock_path):
+            self.store.write_atomic(
+                {
+                    "access_token": access_token,
+                    "refresh_token": refresh_token,
+                    "token_type": token_type,
+                    "expires_at": expires_at.isoformat(),
+                    "scopes": scopes or [],
+                }
+            )
         logger.info("Saved token", expires_at=expires_at.isoformat())
 
+    # @spec WHOOP-AUTH-001, WHOOP-AUTH-002, WHOOP-AUTH-003, WHOOP-AUTH-004
     async def get_valid_token(self, user_id: int = USER_ID) -> str | None:
         """Return a valid access token, refreshing if near expiry.
 
@@ -166,20 +172,47 @@ class TokenManager:
                 try:
                     token_data = await self.oauth_client.refresh_access_token(state.refresh_token)
                 except Exception as e:
-                    # No exc_info: the exception's locals (the access/refresh tokens)
-                    # would otherwise be rendered into logs. str(e) is the safe
-                    # status-only message; the oauth client logs the specific cause.
-                    logger.error("Failed to refresh token", user_id=user_id, error=str(e))
+                    # Type and status only: no exc_info (its locals hold the tokens)
+                    # and no exception text. The oauth client logs the specific cause.
+                    status = getattr(getattr(e, "response", None), "status_code", None)
+                    logger.error(
+                        "Failed to refresh token",
+                        user_id=user_id,
+                        error_type=type(e).__name__,
+                        status_code=status,
+                    )
                     raise
 
-                # Validate before mutating stored state, so a malformed 200 can't
-                # leave the file half-updated.
+                # @spec WHOOP-AUTH-013, WHOOP-AUTH-014
+                # Validate before trusting the response. R is consumed either way, so
+                # a rotated R' must survive a malformed 200: otherwise the next caller
+                # replays R and the grant is revoked.
                 if not token_data.get("access_token") or token_data.get("expires_in") is None:
+                    if token_data.get("refresh_token"):
+                        self._keep_rotated_refresh_token(token_data["refresh_token"], state)
                     raise ValueError("Token refresh response missing access_token/expires_in")
 
                 return self._store_refreshed_token(token_data, state)
             finally:
                 lock.release()
+
+    # @spec WHOOP-AUTH-013
+    def _keep_rotated_refresh_token(self, rotated: str, current: _TokenState) -> None:
+        """Persist R' from a malformed refresh response, marked as already expired.
+
+        The past ``expires_at`` makes the next caller refresh immediately -- with R',
+        not the consumed R.
+        """
+        logger.warning("whoop_token_malformed_refresh_kept_rotation")
+        self.store.write_atomic(
+            {
+                "access_token": current.access_token,
+                "refresh_token": rotated,
+                "token_type": current.token_type,
+                "expires_at": (datetime.now(UTC) - timedelta(seconds=1)).isoformat(),
+                "scopes": current.scopes,
+            }
+        )
 
     def _reuse_if_fresh(self, user_id: int) -> str | None:
         """Return the stored access token if it is no longer near expiry, else None.
@@ -209,6 +242,7 @@ class TokenManager:
             scopes=data.get("scopes", []),
         )
 
+    # @spec WHOOP-AUTH-011, WHOOP-AUTH-012
     def _store_refreshed_token(self, token_data: dict, current: _TokenState) -> str:
         """Persist a refreshed token atomically and return the new access token."""
         new_access_token = token_data["access_token"]

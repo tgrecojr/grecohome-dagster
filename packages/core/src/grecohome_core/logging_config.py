@@ -3,9 +3,17 @@
 Source-agnostic: :func:`configure_logging` takes the level/environment explicitly
 (a subject passes its own settings) rather than importing a global ``settings``,
 so this module has no dependency on any particular subject's config.
+
+Tracebacks never render frame-local variables, in any process. Secrets (OAuth
+tokens, client secrets) live in locals on credential paths, and Rich's traceback
+formatter -- structlog's default -- prints locals verbatim into the logs that ship
+to Loki. :func:`get_logger` therefore applies safe defaults on first use when
+nothing has configured structlog, so the guarantee doesn't depend on every code
+location remembering to call :func:`configure_logging`.
 """
 
 import logging
+import os
 import sys
 from typing import Any
 
@@ -38,17 +46,10 @@ def configure_logging(log_level: str = "INFO", environment: str = "development")
     console_handler.setFormatter(json_formatter)
     root_logger.addHandler(console_handler)
 
-    # Never render frame-local variables in tracebacks. Secrets (e.g. the Whoop
-    # OAuth access/refresh tokens) live in locals on the refresh path, and the
-    # dev rich-traceback formatter defaults to dumping them verbatim into logs.
-    # Forcing show_locals=False keeps any stray exc_info=True from leaking them.
     renderer = (
         structlog.processors.JSONRenderer()
         if environment == "production"
-        else structlog.dev.ConsoleRenderer(
-            colors=True,
-            exception_formatter=structlog.dev.RichTracebackFormatter(show_locals=False),
-        )
+        else _console_renderer()
     )
 
     structlog.configure(
@@ -71,6 +72,54 @@ def configure_logging(log_level: str = "INFO", environment: str = "development")
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 
+def _use_colors() -> bool:
+    """structlog's own default color decision: ``NO_COLOR``, ``FORCE_COLOR``, else a TTY."""
+    if os.environ.get("NO_COLOR"):
+        return False
+    if os.environ.get("FORCE_COLOR"):
+        return True
+    return sys.stdout is not None and hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
+
+
+def _console_renderer() -> structlog.dev.ConsoleRenderer:
+    """A console renderer whose tracebacks never show frame-local variables.
+
+    Colors follow structlog's default decision, so a container (no TTY) gets plain
+    text, exactly like structlog's own default renderer -- only the locals go.
+    """
+    colors = _use_colors()
+    return structlog.dev.ConsoleRenderer(
+        colors=colors,
+        force_colors=bool(os.environ.get("FORCE_COLOR")),
+        exception_formatter=structlog.dev.RichTracebackFormatter(
+            show_locals=False, color_system="truecolor" if colors else None
+        ),
+    )
+
+
+def _ensure_safe_defaults() -> None:
+    """Apply structlog's defaults minus traceback locals, unless already configured.
+
+    Only the console renderer is swapped; every other default (processors, logger
+    factory, ``cache_logger_on_first_use=False``) is kept, so the log format is
+    unchanged and a later :func:`configure_logging` (or Dagster's own setup) still
+    takes effect.
+    """
+    if structlog.is_configured():
+        return
+    processors = [
+        _console_renderer() if isinstance(p, structlog.dev.ConsoleRenderer) else p
+        for p in structlog.get_config()["processors"]
+    ]
+    structlog.configure(processors=processors)
+
+
+# @spec WHOOP-LOG-005
 def get_logger(name: str) -> Any:
-    """Return a structured logger bound to ``name`` (typically ``__name__``)."""
+    """Return a structured logger bound to ``name`` (typically ``__name__``).
+
+    Applies the safe (no traceback locals) defaults first if nothing has
+    configured structlog in this process.
+    """
+    _ensure_safe_defaults()
     return structlog.get_logger(name)
