@@ -23,9 +23,11 @@ class GarminSettings(BaseSubjectSettings):
     garminconnect_is_cn: bool = False
 
     # --- Pull window / pacing ---
-    # Trailing days a schedule re-captures (covers Garmin's restatement lag and
-    # missed runs). Backfill (dagster backfill) overrides this.
-    lookback_days: int = 7
+    # Trailing completed days the daily schedule re-captures every tick. Garmin
+    # back-fills whole batches of days when a device syncs after a gap (observed
+    # batches reach a week back), so the window covers two weeks.
+    # @spec GARMIN-SCHED-006
+    lookback_days: int = 14
     rate_limit_seconds: float = 2.0
     # Trailing weeks requested from the weekly-aggregate endpoints.
     weekly_weeks: int = 4

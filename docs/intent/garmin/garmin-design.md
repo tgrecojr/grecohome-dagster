@@ -17,8 +17,9 @@ Garmin data for a given day is **not final when the day ends**. The watch syncs 
 computes some daily aggregates hours or days later, and summaries are restated as more data
 arrives. In bronze, the second capture of a day differs from the first for most of the
 important daily collections (`user_summary`, `spo2`, `respiration`, `steps_intraday`,
-`stress`, `body_battery`, `sleep`). Some collections keep changing through the sixth or
-seventh capture. The design therefore follows the HLD tenet *Completeness over economy*:
+`stress`, `body_battery`, `sleep`). Garmin also back-fills **whole batches of days** when a
+device syncs after a gap: one sync fills in sleep, steps and heart rate for every day since the
+last sync, and observed batches reach at least seven days back. The design therefore follows the HLD tenet *Completeness over economy*:
 recent days are **re-captured every day** for a trailing window, and every capture that
 differs from what bronze already holds is kept.
 
@@ -53,7 +54,7 @@ own collection. No two collections share a folder.
 
 Two schedules run at 07:00 UTC:
 
-- **`garmin_daily`** emits one run per partition in the trailing `LOOKBACK_DAYS` (default 7)
+- **`garmin_daily`** emits one run per partition in the trailing `LOOKBACK_DAYS` (default 14)
   **completed** daily partitions. The current, still-open day is never captured. Each tick
   re-captures all of those partitions, whether or not they were captured before. So every
   completed day is captured on about `LOOKBACK_DAYS` consecutive days, and each capture can
@@ -67,9 +68,14 @@ tick-scoped key states in code that re-emitting a partition on a later tick is i
 also stops a future move to a sensor, where run keys are deduped across all evaluations, from
 silently turning re-capture into capture-once.
 
-`LOOKBACK_DAYS` is the one knob for the window. A larger value catches later restatements at
-the cost of more API calls per tick. Storage cost barely grows, because unchanged
-re-captures are skipped (next section).
+`LOOKBACK_DAYS` is the one knob for the window. Its default of 14 is sized to the late-sync
+batches in bronze. Most restatements land on the second capture. The rest arrive as batches
+when a device syncs after a gap, and several observed batches reached exactly the seventh day
+back, the edge of a 7-day window. That means older days in the same batch were never
+re-fetched. A two-week window covers a sync gap of up to about two weeks (a trip, for example).
+Each extra day costs one partition run per tick (about a minute of API work). Storage cost
+barely grows, because unchanged re-captures are skipped (next section). A sync gap longer than
+the window still needs a manual backfill (see *Failure and recovery*).
 
 ## Bronze writes: skip-identical capture
 
@@ -177,7 +183,8 @@ concurrency pool.
 
 | Decision | Chosen | Alternatives Considered | Rationale |
 |---|---|---|---|
-| How often a completed day is captured | Re-capture each of the trailing `LOOKBACK_DAYS` completed days on every daily tick | (a) Capture each partition exactly once (skip already-materialized partitions, or a sensor with partition-key run keys); (b) a shorter 2–3 day window | Garmin restates and back-fills days after the fact. Bronze shows most important collections changing on the second capture and some through the seventh. Capture-once freezes each day at its first, often sparse, pull. That degrades silver and makes the sparse newest-day stub permanent. A short window drops the day-4-to-7 corrections. *Completeness over economy*. |
+| How often a completed day is captured | Re-capture each of the trailing `LOOKBACK_DAYS` completed days on every daily tick | (a) Capture each partition exactly once (skip already-materialized partitions, or a sensor with partition-key run keys); (b) a shorter 2–3 day window | Garmin restates and back-fills days after the fact. Bronze shows most important collections changing on the second capture, plus late-sync batches reaching a week back. Capture-once freezes each day at its first, often sparse, pull. That degrades silver and makes the sparse newest-day stub permanent. A short window drops the late corrections. *Completeness over economy*. |
+| Window length (`LOOKBACK_DAYS` default) | 14 days | 7 days; 7 days daily plus a weekly deep re-capture of days 8–30 | With a 7-day window, late-sync batches repeatedly reached the window's edge, which means older days in the same batch were never re-fetched. 14 days covers a two-week sync gap at the cost of about 7 more partition runs per tick, with negligible storage under skip-identical. A weekly deep re-capture catches longer gaps but adds a second schedule; a manual backfill covers the rare longer gap. *Completeness over economy*. |
 | Storage control for re-captures | Core skip-identical (`dedupe=True`) | Keep every capture (`dedupe=False`); shrink the window | About 71% of re-captures are byte-identical to the previous capture. Skipping them never loses data and reuses the shared core mechanism Whoop and USCRN already use. |
 | Which captures may be skipped | Single-request-per-folder paths whose endpoint returns a value every run | Skip-identical everywhere | Two soundness conditions. Fan-out folders would drop identical answers to different requests. Endpoints that skip no-data days would starve freshness and page falsely. The excluded paths are cheap except per-activity (next row). |
 | Per-activity fan-out storage | Keep every capture | Teach the core writer to compare against the newest capture of the **same request** (matching `request_params`) | The per-activity collections are about 38% of Garmin bronze bytes (FIT downloads dominate), so they keep growing about 7× per activity. Per-request comparison is the right fix but changes the shared writer, which every source uses. Keeping every capture is complete and safe now. The core change is deferred. |
@@ -190,25 +197,21 @@ concurrency pool.
 
 ### Deferred
 
-1. **Window length.** Some collections (`activities_fordate`, `heart_rates`,
-   `intensity_minutes`) still change on the sixth or seventh capture. It's unknown whether
-   that is genuine restatement (which would argue for a larger `LOOKBACK_DAYS`) or a volatile
-   field that changes on every request. Decide after inspecting the late diffs.
-2. **Collections that change on every pull.** `lifestyle_logging` and `device_settings`
+1. **Collections that change on every pull.** `lifestyle_logging` and `device_settings`
    differ on nearly every capture. For `device_settings`, part of the reason is that several
    devices interleave in one folder. If the remaining difference is a volatile field (a request
    timestamp, for example), these keep growing about 7× per day. A Garmin-side normalization
    would have to be weighed against bronze's byte-faithful rule.
-3. **Per-request skip-identical in core.** An opt-in match key on `capture_bronze` (compare
+2. **Per-request skip-identical in core.** An opt-in match key on `capture_bronze` (compare
    against the newest capture with the same `request_params`) would let the fan-out paths skip
    identical re-captures too. This is a change to the shared writer, owned outside this
    package.
-4. **Orphan payloads in core.** The writer saves the payload before its sidecar. If the sidecar
+3. **Orphan payloads in core.** The writer saves the payload before its sidecar. If the sidecar
    write fails, the payload is an orphan: silver reads it, but the skip-identical check
    (sidecar-based) doesn't see it. A later capture identical to the older, sidecar-backed
    capture would then be skipped while silver keeps the orphan. This needs a failed sidecar
    write and is owned by the core writer.
-5. **Written / skipped / failed counts.** The core writer returns `None` both for a skipped and
+4. **Written / skipped / failed counts.** The core writer returns `None` both for a skipped and
    for a failed capture, so a run that wrote nothing looks like a healthy run. Per-run counts in
    materialization metadata would separate the two. This needs the writer to distinguish the
    outcomes.

@@ -31,7 +31,7 @@ manager. **Never commit a real `.env`.**
 | `GARMINCONNECT_EMAIL` | yes | — | Garmin Connect login email |
 | `GARMINCONNECT_BASE64_PASSWORD` | yes | — | Base64-encoded Garmin password |
 | `GARMINCONNECT_IS_CN` | no | `false` | Use the Garmin China domain |
-| `LOOKBACK_DAYS` | no | `7` | Trailing completed partitions the daily schedule captures (once each) |
+| `LOOKBACK_DAYS` | no | `14` | Trailing completed partitions the daily schedule re-captures on every tick (Garmin back-fills late syncs) |
 | `FETCH_SELECTION` | no | (empty = all) | Allowlist of catalog collection names |
 | `FETCH_EXCLUDE` | no | (empty) | Denylist (wins over selection); empty = capture everything |
 | `RATE_LIMIT_SECONDS` | no | `2.0` | Sleep between API calls within a run |

@@ -10,6 +10,7 @@ cadence), `CAPTURE` (bronze writes and skip-identical), `CHECKS` (bronze-check g
 - [x] **GARMIN-SCHED-003**: When the `garmin_daily` schedule ticks, the system shall emit a run request for every partition in the trailing window, including partitions already captured on earlier ticks, so that each completed day is re-captured on every tick while it remains in the window.
 - [x] **GARMIN-SCHED-004**: The `garmin_daily` schedule shall give each run request a `run_key` of the form `<partition_key>-<YYYYMMDDTHH>`, where the suffix is the tick's scheduled execution time in UTC.
 - [x] **GARMIN-SCHED-005**: When the `garmin_reference` schedule ticks (daily at 07:00 UTC), the system shall emit exactly one run request for the Garmin reference job, with a `run_key` of `garmin-reference-<YYYYMMDD>` for the tick's UTC date.
+- [x] **GARMIN-SCHED-006**: Where the `LOOKBACK_DAYS` environment variable is unset, the system shall size the Garmin daily re-capture window (the `garmin_daily` trailing partitions) at 14 completed daily partitions.
 
 ## Bronze writes
 
