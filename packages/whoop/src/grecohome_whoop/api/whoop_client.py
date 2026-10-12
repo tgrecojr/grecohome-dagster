@@ -53,6 +53,16 @@ class WhoopRetryableError(WhoopAPIError):
         self.retry_after = retry_after
 
 
+class WhoopAuthError(WhoopAPIError):
+    """Obtaining an access token failed. Never retried by the data-request retry.
+
+    The token refresh has its own (connect-only) retry. Re-running it from the
+    data-request retry could replay a refresh token Whoop already rotated, which
+    revokes the grant -- so a token failure must surface as this type, which the
+    data-request retry predicate does not match.
+    """
+
+
 # HTTP statuses worth retrying: rate limiting and transient server errors.
 _RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 
@@ -156,15 +166,26 @@ class WhoopClient:
     async def __aexit__(self, *exc_info) -> None:
         await self.aclose()
 
+    # @spec WHOOP-AUTH-009, WHOOP-AUTH-010
     async def _get_headers(self) -> dict[str, str]:
         """Return HTTP headers with a valid access token.
 
+        Any failure to obtain the token -- including a refresh that timed out or
+        hit a network error -- is raised as :class:`WhoopAuthError`, so the
+        data-request retry around :meth:`_make_request` never re-runs a refresh.
+
         Raises:
-            WhoopAPIError: If no valid token is available.
+            WhoopAuthError: If no valid token is available or obtaining one failed.
         """
-        access_token = await self.token_manager.get_valid_token(self.user_id)
+        try:
+            access_token = await self.token_manager.get_valid_token(self.user_id)
+        except Exception as e:
+            # Type (and HTTP status) only: exception text can embed credentials.
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            detail = type(e).__name__ + (f", status={status}" if status else "")
+            raise WhoopAuthError(f"Obtaining a Whoop access token failed ({detail})") from e
         if not access_token:
-            raise WhoopAPIError("No valid access token available")
+            raise WhoopAuthError("No valid access token available")
         return {
             "Authorization": f"Bearer {access_token}",
             "Accept": "application/json",
@@ -257,7 +278,7 @@ class WhoopClient:
 
         except httpx.HTTPStatusError as e:
             status_code = e.response.status_code
-            # Log status only -- never the response body.
+            # @spec WHOOP-LOG-004 -- log status only, never the response body.
             if status_code in _RETRYABLE_STATUS_CODES:
                 retry_after = _parse_retry_after(e.response.headers.get("Retry-After"))
                 logger.warning(
@@ -282,13 +303,14 @@ class WhoopClient:
         except WhoopAPIError:
             raise
         except Exception as e:
+            # @spec WHOOP-LOG-001, WHOOP-LOG-002
+            # Type name only: no traceback (its locals hold the bearer token) and no
+            # exception text (an HTTP library can quote the Authorization header).
+            error_type = type(e).__name__
             logger.error(
-                "Unexpected error during API request",
-                endpoint=endpoint,
-                error=str(e),
-                exc_info=True,
+                "Unexpected error during API request", endpoint=endpoint, error_type=error_type
             )
-            raise WhoopAPIError(f"Unexpected error: {str(e)}") from e
+            raise WhoopAPIError(f"Unexpected error during API request ({error_type})") from e
 
     async def _paginate(
         self,

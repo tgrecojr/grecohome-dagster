@@ -39,6 +39,7 @@ class TestGetValidToken:
         mgr = _manager(store)
         assert await mgr.get_valid_token() is None
 
+    # @spec WHOOP-AUTH-001
     async def test_returns_access_when_not_near_expiry(self, store):
         oauth = Mock()
         oauth.refresh_access_token = AsyncMock()
@@ -48,6 +49,7 @@ class TestGetValidToken:
         assert await mgr.get_valid_token() == "good_access"
         oauth.refresh_access_token.assert_not_awaited()
 
+    # @spec WHOOP-AUTH-002, WHOOP-AUTH-011
     async def test_refreshes_when_near_expiry(self, store):
         oauth = Mock()
         oauth.refresh_access_token = AsyncMock(
@@ -80,6 +82,7 @@ class TestGetValidToken:
         assert await mgr.get_valid_token() == "new_access"
         assert store.read()["refresh_token"] == "old_refresh"  # preserved
 
+    # @spec WHOOP-AUTH-012
     async def test_missing_rotation_logs_warning(self, store):
         # A 200 without a rotated refresh token must not pass silently — it's how
         # a refresh failure becomes a silent outage.
@@ -96,6 +99,7 @@ class TestGetValidToken:
             await mgr.get_valid_token()
         assert any(e.get("event") == "whoop_token_no_rotation" for e in logs)
 
+    # @spec WHOOP-AUTH-004
     async def test_concurrent_callers_refresh_only_once(self, store):
         # The double-spend guard: many callers hitting a near-expiry token must
         # trigger exactly one refresh (a second replay of the consumed rotating
@@ -121,6 +125,7 @@ class TestGetValidToken:
         assert results == ["new_access"] * 5
         oauth.refresh_access_token.assert_awaited_once_with("old_refresh")
 
+    # @spec WHOOP-AUTH-014
     async def test_malformed_refresh_raises_and_leaves_file_unchanged(self, store):
         oauth = Mock()
         oauth.refresh_access_token = AsyncMock(return_value={"unexpected": "shape"})

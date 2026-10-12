@@ -18,6 +18,7 @@ def _context(when: datetime):
 
 @pytest.mark.unit
 class TestWhoopHourly:
+    # @spec WHOOP-SCHED-001
     def test_emits_trailing_window_partitions(self):
         when = datetime(2026, 6, 8, 14, 0, tzinfo=UTC)
         result = whoop_hourly.evaluate_tick(_context(when))
@@ -27,6 +28,7 @@ class TestWhoopHourly:
         assert keys[-1] == "2026-06-08"
         assert keys[0] == "2026-06-01"
 
+    # @spec WHOOP-SCHED-002
     def test_run_keys_are_hour_scoped(self):
         when = datetime(2026, 6, 8, 14, 0, tzinfo=UTC)
         result = whoop_hourly.evaluate_tick(_context(when))
@@ -38,6 +40,7 @@ class TestWhoopHourly:
 
 @pytest.mark.unit
 class TestWhoopSnapshotsHourly:
+    # @spec WHOOP-SCHED-003
     def test_emits_single_snapshot_request(self):
         when = datetime(2026, 6, 8, 14, 0, tzinfo=UTC)
         result = whoop_snapshots_hourly.evaluate_tick(_context(when))

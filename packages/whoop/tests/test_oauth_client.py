@@ -90,6 +90,7 @@ class TestWhoopOAuthClientAsync:
         assert token_data["expires_in"] == 3600
 
     @respx.mock
+    # @spec WHOOP-LOG-004
     async def test_exchange_code_for_token_failure(self):
         client = WhoopOAuthClient()
         respx.post(client.token_url).mock(
@@ -117,6 +118,7 @@ class TestWhoopOAuthClientAsync:
         assert token_data["refresh_token"] == "new_refresh_token"
 
     @respx.mock
+    # @spec WHOOP-AUTH-005
     async def test_refresh_sends_offline_scope(self):
         # Whoop's refresh tutorial sends scope=offline on the refresh POST; without
         # it Whoop can return a 200 that omits a new refresh token, orphaning the
@@ -148,6 +150,7 @@ class TestWhoopOAuthClientAsync:
             await client.refresh_access_token("invalid_refresh_token")
 
     @respx.mock
+    # @spec WHOOP-AUTH-008
     async def test_refresh_does_not_retry_on_400(self):
         # 400 invalid_grant is terminal: the refresh token is dead, so retrying
         # would only hammer Whoop with a known-bad grant. Must be a single call.
@@ -173,6 +176,7 @@ class TestWhoopOAuthClientAsync:
         assert respx.calls.call_count == 1
 
     @respx.mock
+    # @spec WHOOP-AUTH-008
     async def test_refresh_does_not_retry_on_502(self):
         # The 2026-07-22 outage: a 502 during rotation. Single attempt, re-raise.
         client = WhoopOAuthClient()
@@ -191,6 +195,7 @@ class TestWhoopOAuthClientAsync:
             await client.exchange_code_for_token("test_code", "test_verifier")
 
     @respx.mock
+    # @spec WHOOP-AUTH-008
     async def test_refresh_does_not_retry_on_read_timeout(self):
         # A ReadTimeout means the POST reached Whoop -- which rotates the single-use
         # refresh token non-atomically, so it may already be consumed. Retrying would
@@ -203,6 +208,7 @@ class TestWhoopOAuthClientAsync:
         assert respx.calls.call_count == 1
 
     @respx.mock
+    # @spec WHOOP-AUTH-007
     async def test_refresh_retries_on_connect_error_then_succeeds(self):
         # A ConnectError happens before the request lands, so no rotation could have
         # occurred -- safe to retry.

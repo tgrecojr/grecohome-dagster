@@ -62,6 +62,7 @@ class TestWhoopTokenHealthCheck:
         assert result.passed is True
         assert result.severity == AssetCheckSeverity.ERROR
 
+    # @spec WHOOP-CHECKS-001
     def test_check_fails_and_logs_on_stale_token(self):
         stale = _tok((datetime.now(UTC) - timedelta(hours=3)).isoformat())
         with patch("grecohome_whoop.dagster.checks.TokenFileStore.read", return_value=stale), patch(
@@ -72,7 +73,18 @@ class TestWhoopTokenHealthCheck:
         warn.assert_called_once()
         assert warn.call_args.args[0] == "whoop_token_unhealthy"
 
+    # @spec WHOOP-CHECKS-002
     def test_check_fails_when_token_file_missing(self):
         with patch("grecohome_whoop.dagster.checks.TokenFileStore.read", return_value=None):
             result = whoop_token_health()
         assert result.passed is False
+
+    # @spec WHOOP-CHECKS-002
+    @pytest.mark.parametrize(
+        "error", [ValueError("Expecting value: line 1 column 1"), OSError("permission denied")]
+    )
+    def test_check_fails_when_token_file_unreadable(self, error):
+        with patch("grecohome_whoop.dagster.checks.TokenFileStore.read", side_effect=error):
+            result = whoop_token_health()
+        assert result.passed is False
+        assert result.severity == AssetCheckSeverity.ERROR

@@ -83,6 +83,7 @@ class TestWhoopClientAsync:
         await client.aclose()
 
     @respx.mock
+    # @spec WHOOP-LOG-004
     async def test_make_request_error_message_excludes_body(self):
         client = WhoopClient(user_id=1)
         with patch.object(

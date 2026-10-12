@@ -44,6 +44,7 @@ whoop_snapshots_job = define_asset_job(
 _WHOOP_CRON = "17 * * * *"
 
 
+# @spec WHOOP-SCHED-001, WHOOP-SCHED-002, WHOOP-SCHED-004
 @schedule(cron_schedule=_WHOOP_CRON, job=whoop_bronze_job, execution_timezone="UTC")
 def whoop_hourly(context: ScheduleEvaluationContext) -> Iterator[RunRequest]:
     """Hourly: re-materialize the trailing daily bronze partitions."""
@@ -55,6 +56,7 @@ def whoop_hourly(context: ScheduleEvaluationContext) -> Iterator[RunRequest]:
         yield RunRequest(run_key=f"{key}-{now:%Y%m%dT%H}", partition_key=key)
 
 
+# @spec WHOOP-SCHED-003, WHOOP-SCHED-004
 @schedule(cron_schedule=_WHOOP_CRON, job=whoop_snapshots_job, execution_timezone="UTC")
 def whoop_snapshots_hourly(context: ScheduleEvaluationContext) -> RunRequest:
     """Hourly: capture the current-only Whoop snapshots."""

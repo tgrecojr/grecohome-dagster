@@ -1,7 +1,7 @@
 # High-Level Design: grecohome-dagster
 
-LID runs in **Scoped** mode here. Only the Garmin bronze subject (`packages/garmin/**`)
-is under the arrow. Sections that describe other parts of the system are short
+LID runs in **Scoped** mode here. Only the Garmin and Whoop bronze subjects
+(`packages/garmin/**`, `packages/whoop/**`) are under the arrow. Sections that describe other parts of the system are short
 orientation summaries. The detailed design for those parts lives in `docs/ARCHITECTURE.md`,
 `docs/BRONZE.md`, `docs/SILVER.md`, `docs/GOLD.md` and `docs/adr/`.
 
@@ -84,6 +84,20 @@ are applied in silver at read time.
   whose sha256 matches the newest capture already in that partition folder (`dedupe=True`). A
   re-capture costs an API call but no storage unless the source returned something new. This
   never drops data, because only byte-identical payloads are skipped.
+- **Logs never carry credentials.** Logs ship to Loki, which keeps them for weeks and is
+  readable by anything with Grafana access. So no code location may write a token, client
+  secret or password to a log line, including inside a rendered traceback. This is enforced
+  in two places:
+  - Credential-handling paths log status and error type only, never `exc_info`.
+  - The shared logger in `grecohome_core.logging_config` renders tracebacks **without local
+    variables** in every code location, whether or not that code location configures
+    logging explicitly. Apart from that, its safe defaults keep structlog's own output format
+    (no color codes when output isn't a terminal), so the Loki queries and alerts that match
+    log text keep working.
+
+  The second rule is the backstop for a stray `exc_info` on a path nobody thought of.
+  Relying on each code location to call a setup function was rejected: a missed call fails
+  silently, open.
 - **Layers are append-only or rebuildable.** Bronze is never modified by the layers above it,
   and silver and gold never write under the layer below them (enforced by `protected_root`).
 
