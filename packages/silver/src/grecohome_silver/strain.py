@@ -37,11 +37,14 @@ from grecohome_core.silver import (
 
 
 def _cycle_relation(payloads_sql: str) -> str:
-    """Unnest each file's ``records`` array to one row per cycle (``r``)."""
+    """Unnest each file's ``records`` array to one row per cycle (``r``).
+
+    A payload without ``records`` contributes nothing; a ``records`` that isn't an array
+    fails the cast, and so the rebuild, rather than silently emptying the table.
+    """
     return (
         f"SELECT p.filename AS filename, rec AS r "
-        f"FROM ({payloads_sql}) AS p, UNNEST(CAST(p.j -> '$.records' AS JSON[])) AS t(rec) "
-        "WHERE json_type(p.j -> '$.records') = 'ARRAY'"
+        f"FROM ({payloads_sql}) AS p, UNNEST(CAST(p.j -> '$.records' AS JSON[])) AS t(rec)"
     )
 
 
@@ -63,6 +66,8 @@ def _local_start_date(rec: str) -> str:
     return f"COALESCE({local_date}, {json_date(rec, 'start')})"
 
 
+# @spec SILVER-CYCLES-STRAIN-001, SILVER-CYCLES-STRAIN-002, SILVER-CYCLES-STRAIN-003
+# @spec SILVER-CYCLES-STRAIN-004, SILVER-CYCLES-STRAIN-005, SILVER-CYCLES-STRAIN-007
 def strain_sql(files: list[str]) -> str:
     """Typed, deduped Whoop strain — one row per ``cycle_id`` (latest rescore)."""
     rel = _cycle_relation(payloads_relation_sql(files))

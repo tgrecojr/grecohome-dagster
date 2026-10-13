@@ -3,26 +3,22 @@
 The silver layer's intent (layer rules, architecture, storage, check and schedule conventions)
 lives in [docs/intent/silver/silver-design.md](intent/silver/silver-design.md), and the shared
 helpers in [docs/intent/core/silver/silver-design.md](intent/core/silver/silver-design.md).
-Sleep is specified in [docs/intent/silver/sleep/](intent/silver/sleep/sleep-design.md).
+Sleep, glucose and cycles (recovery, strain) are specified under
+[docs/intent/silver/](intent/silver/silver-design.md).
 
 This page still describes the table families not yet specified there:
 
-- **Glucose** — `silver_glucose` (per-reading Lingo CGM). See [Glucose (Lingo CGM)](#glucose-lingo-cgm) below.
 - **Workouts** — `silver_workouts` (per-activity Garmin). See
   [Workouts (Garmin activities)](#workouts-garmin-activities) below.
 - **Workout splits** — `silver_workout_splits` (per-lap Garmin detail; enriches workouts). See
   [Workout splits (Garmin laps)](#workout-splits-garmin-laps) below.
 - **Whoop workouts** — `silver_whoop_workouts` (per-workout Whoop activities; the device's
   own activity log, parallel to Garmin's). See [Whoop workouts](#whoop-workouts) below.
-- **Recovery** — `silver_recovery` (per-cycle Whoop; joins to sleep). See
-  [Recovery (Whoop)](#recovery-whoop) below.
 - **Weather** — `silver_weather` (per-hour NOAA USCRN soil/weather). The first
   **line-oriented** (fixed-width text) source. See [Weather (NOAA USCRN)](#weather-noaa-uscrn)
   below.
 - **Daily** — `silver_daily` (per local day Garmin movement + wellness rollup). See
   [Daily summary (Garmin)](#daily-summary-garmin) below.
-- **Strain** — `silver_strain` (per-cycle Whoop exertion; the twin of recovery). See
-  [Strain (Whoop)](#strain-whoop) below.
 - **Body** — `silver_body` (per-weigh-in Garmin body composition). See
   [Body (Garmin weigh-ins)](#body-garmin-weigh-ins) below.
 - **Fitness** — `silver_fitness` (per-snapshot-day Garmin VO2max / training status / race
@@ -32,62 +28,14 @@ This page still describes the table families not yet specified there:
 Layout under `SILVER_ROOT` for these families (`<family>/<table>.parquet`):
 
 ```
-{SILVER_ROOT}/glucose/silver_glucose.parquet # glucose: one row per CGM reading
 {SILVER_ROOT}/workouts/silver_workouts.parquet # workouts: one row per Garmin activity
 {SILVER_ROOT}/workout_splits/silver_workout_splits.parquet # one row per Garmin lap
 {SILVER_ROOT}/whoop_workouts/silver_whoop_workouts.parquet # one row per Whoop workout
-{SILVER_ROOT}/recovery/silver_recovery.parquet # recovery: one row per Whoop cycle
 {SILVER_ROOT}/weather/silver_weather.parquet # weather: one row per USCRN hourly observation
 {SILVER_ROOT}/daily/silver_daily.parquet     # daily summary: one row per local day (Garmin)
-{SILVER_ROOT}/strain/silver_strain.parquet   # strain: one row per Whoop cycle
 {SILVER_ROOT}/body/silver_body.parquet       # body: one row per Garmin weigh-in
 {SILVER_ROOT}/fitness/silver_fitness.parquet # fitness: one row per Garmin snapshot day
 ```
-
-# Glucose (Lingo CGM)
-
-`silver_glucose` is the first **single-source** table — a straight reduction of the sleep
-template (no join). One row per CGM reading.
-
-### Source & event date
-Lingo bronze (`lingo/glucose`) is a 2-column CSV (reading time, `Measurement(mg/dL)`) plus the
-bronze `dt` column, re-uploaded cumulatively so each reading recurs in many files (~13× raw
-duplication). The reading time is **already local with its offset embedded**
-(`2026-06-11T18:05-04:00`) — so the event date is just its local date; no UTC/wake-date subtlety
-like Whoop.
-
-### Deduplication — on the UTC instant
-The same physical reading is re-exported under **different offset spellings** (up to 4×, e.g. after
-a timezone change): ~163k distinct local strings map to only **~55k distinct UTC instants**, and
-every duplicate carries an **identical** value (zero conflicts). So dedup keys on the **UTC
-instant** — lossless; keying on the local string would ~3× inflate. The instant is computed
-arithmetically as `reading_ts_local − tz_offset` (the offset string lacks seconds and won't cast to
-`TIMESTAMPTZ`).
-
-### Local-date caveat
-For ~11% of instants the derived local **date** differs across an instant's offset spellings. The
-**instant is canonical**; for the local fields (`reading_ts_local`, `reading_date`,
-`tz_offset_minutes`) the **latest-captured** export's representation wins (consistent with silver
-being a projection of current bronze). `mgdl` is never ambiguous. A null measurement is kept with
-`mgdl` null (never dropped), matching the null-safe convention.
-
-### Schema (`silver_glucose`)
-One row per reading.
-
-| Column | Type | Note |
-|---|---|---|
-| `reading_ts_utc` | TIMESTAMP | UTC instant — the dedup key / canonical identity |
-| `reading_ts_local` | TIMESTAMP | local wall-clock of the reading |
-| `reading_date` | DATE | local date (the day) |
-| `tz_offset_minutes` | INT | signed UTC offset of the reading |
-| `mgdl` | INT | `Measurement(mg/dL)` (nullable) |
-
-### Asset checks
-| Check | Severity | What |
-|---|---|---|
-| `glucose_reading_unique_nonnull` | ERROR | one row per `reading_ts_utc`; `reading_ts_utc`/`reading_date` non-null |
-| `glucose_value_range` | ERROR | non-null `mgdl` within 10–600 |
-| `glucose_coverage_vs_bronze` | WARN | silver readings ≈ bronze distinct instants; reports distinct days |
 
 # Workouts (Garmin activities)
 
@@ -184,43 +132,6 @@ One row per workout: `workout_id` (VARCHAR, key), `workout_date` (DATE), `sport_
 | `whoop_workout_value_ranges` | ERROR | strain 0–21, HR 20–240, kilojoules/distance ≥ 0 |
 | `whoop_workout_coverage_vs_bronze` | WARN | silver workouts ≈ bronze distinct `id`; reports distinct sports |
 
-# Recovery (Whoop)
-
-`silver_recovery` is a single-source table — one row per Whoop cycle — and the natural companion
-to sleep: each recovery links to a sleep.
-
-### Source & event date
-Whoop recovery bronze (`whoop/recovery`) is `{"records": [...]}`; each record is one cycle's
-recovery with `cycle_id` and `sleep_id` (both 1:1 with the recovery), `created_at`/`updated_at`
-(UTC; Whoop rescores), and a nested `score`. Dedup by **`cycle_id`** keeping the latest
-`updated_at`. Recovery records carry **no `timezone_offset`**, so `recovery_date` is the **UTC
-date of `created_at`** (≈ the wake morning) — for precise alignment, gold joins to
-`silver_sleep_whoop` on `sleep_id` (= `whoop_sleep_id`) or `cycle_id` (= `whoop_cycle_id`), which
-carry the sleep's true local night.
-
-### Schema (`silver_recovery`)
-One row per cycle.
-
-| Column | Type | Note |
-|---|---|---|
-| `cycle_id` | BIGINT | dedup key; joins `silver_sleep_whoop.whoop_cycle_id` |
-| `sleep_id` | VARCHAR | joins `silver_sleep_whoop.whoop_sleep_id` |
-| `recovery_date` | DATE | UTC date of `created_at` (≈ wake morning) |
-| `created_at` | TIMESTAMP | UTC |
-| `recovery_score` | DOUBLE | 0–100 % |
-| `resting_heart_rate` | DOUBLE | bpm |
-| `hrv_rmssd_milli` | DOUBLE | ms |
-| `spo2_percentage` | DOUBLE | % |
-| `skin_temp_celsius` | DOUBLE | °C |
-| `user_calibrating` | BOOLEAN | Whoop still calibrating that day |
-
-### Asset checks
-| Check | Severity | What |
-|---|---|---|
-| `recovery_cycle_unique_nonnull` | ERROR | one row per `cycle_id`; `cycle_id`/`recovery_date` non-null |
-| `recovery_value_ranges` | ERROR | score 0–100, RHR 20–120, HRV 0–500, SpO2 50–100, skin 20–45 |
-| `recovery_coverage_vs_bronze` | WARN | silver recoveries ≈ bronze distinct `cycle_id` (no silent drop) |
-
 # Weather (NOAA USCRN)
 
 `silver_weather` is a single-source table — one row per hourly observation — and the first
@@ -315,40 +226,6 @@ Body battery: `body_battery_high`/`_low`/`_charged`/`_drained`. Vitals: `avg_spo
 | `daily_value_ranges` | ERROR | steps/calories/HR/stress/SpO2/body-battery within generous bounds |
 | `daily_coverage_vs_bronze` | WARN | silver days ≈ bronze distinct `calendarDate`; reports days-with-steps |
 
-# Strain (Whoop)
-
-`silver_strain` is a single-source table — one row per Whoop **cycle** — the exertion
-**twin of `silver_recovery`** (same `{records:[…]}` envelope, same dedup idiom).
-
-### Source & event date
-`whoop/cycle` records carry a numeric `id` (the cycle id), `start`/`end` (UTC),
-`timezone_offset`, `created_at`/`updated_at` (Whoop rescores), `score_state`, and a nested
-`score` (`strain` 0–21, `kilojoule`, `average_heart_rate`, `max_heart_rate`). Since
-2026-09-23 Whoop also emits a top-level `step_count` (steps over the cycle); earlier
-captures lack it, so the column is nullable before that date. Dedup by
-`cycle_id` keeping the latest `updated_at`. `cycle_id` is the join key into
-`silver_recovery.cycle_id` and `silver_sleep.whoop_cycle_id`, so gold can put strain next
-to recovery for the day. `strain_date` is the **local date of `start`** (a cycle begins at
-wake), derived via the record's `timezone_offset` like the sleep wake date — informational
-(a day can hold two short cycles); uniqueness is on `cycle_id`.
-
-### Typing & units
-`kilojoules` kept as Whoop reports it (gold converts to kcal); `day_strain` is the unitless
-0–21 Whoop scale. An unscored cycle (`score_state` ≠ SCORED) is kept with null metrics.
-
-### Schema (`silver_strain`)
-One row per cycle: `cycle_id` (BIGINT, key), `strain_date` (DATE), `start_ts`/`end_ts`
-(TIMESTAMP), `day_strain` (DOUBLE), `kilojoules` (DOUBLE), `avg_heart_rate`/
-`max_heart_rate` (INT), `score_state` (VARCHAR), `step_count` (INT, nullable — null
-before 2026-09-23).
-
-### Asset checks
-| Check | Severity | What |
-|---|---|---|
-| `strain_cycle_unique_nonnull` | ERROR | one row per `cycle_id`; `cycle_id`/`strain_date` non-null |
-| `strain_value_ranges` | ERROR | strain 0–21, HR 20–240, kilojoules ≥ 0, step_count ≥ 0 |
-| `strain_coverage_vs_bronze` | WARN | silver cycles ≈ bronze distinct `cycle_id`; reports distinct days |
-
 # Body (Garmin weigh-ins)
 
 `silver_body` is a single-source table — one row per **weigh-in** (a body measurement
@@ -424,14 +301,13 @@ One row per `snapshot_date` (DATE, key): `vo2max_running`, `vo2max_cycling` (DOU
 
 - `silver_sleep_daily` (06:00 UTC) rebuilds the three sleep assets; see the
   [sleep design](intent/silver/sleep/sleep-design.md).
-- `silver_glucose_daily` (06:30 UTC) rebuilds `silver_glucose` (Lingo arrives via sensor; a daily
-  rebuild keeps silver a current projection without chasing each upload).
+- `silver_glucose_daily` (06:30), `silver_recovery_daily` (06:50) and `silver_strain_daily` (06:52
+  UTC); see the [glucose](intent/silver/glucose/glucose-design.md) and
+  [cycles](intent/silver/cycles/cycles-design.md) designs.
 - `silver_workouts_daily` (06:45 UTC) rebuilds `silver_workouts` (after the Garmin daily capture).
-- `silver_recovery_daily` (06:50 UTC) rebuilds `silver_recovery` (Whoop hourly capture).
 - `silver_weather_daily` (06:55 UTC) rebuilds `silver_weather` (USCRN captured a few times a day;
   a daily rebuild keeps silver a current projection).
 - `silver_daily_daily` (06:40 UTC) rebuilds `silver_daily` (after the Garmin daily capture).
-- `silver_strain_daily` (06:52 UTC) rebuilds `silver_strain` (Whoop cycle).
 - `silver_body_daily` (06:42 UTC) rebuilds `silver_body` (Garmin weigh-ins).
 - `silver_fitness_daily` (06:44 UTC) rebuilds `silver_fitness` (Garmin snapshot collections).
 - `silver_workout_splits_daily` (06:47 UTC) rebuilds `silver_workout_splits` (Garmin laps).
@@ -442,7 +318,7 @@ One row per `snapshot_date` (DATE, key): `vo2max_running`, `vo2max_cycling` (DOU
 
 The rebuild schedules default to stopped and are enabled in the UI; `silver_checks_daily`
 starts running. Rebuild on demand (e.g. after a bronze backfill) with
-`dagster job execute --job silver_sleep_job` (or `--job silver_glucose_job`).
+`dagster job execute --job silver_sleep_job` (or any family's job).
 
 ## Deployment
 

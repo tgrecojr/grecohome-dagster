@@ -26,6 +26,7 @@ def glucose_path(filename: str) -> str:
     return os.path.join(settings.silver_root, GLUCOSE_SUBDIR, filename)
 
 
+# @spec SILVER-GLUCOSE-TABLE-006
 @asset(name="silver_glucose", group_name=GROUP, deps=[AssetKey("lingo_bronze_glucose")])
 def silver_glucose(context: AssetExecutionContext) -> MaterializeResult:
     """Typed, deduped Lingo CGM — one row per reading (deduped on the UTC instant)."""

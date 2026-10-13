@@ -65,6 +65,8 @@ def _utc_ts(ts: str) -> str:
     return f"({_local_ts(ts)} - {_offset_minutes(ts)} * INTERVAL 1 MINUTE)"
 
 
+# @spec SILVER-GLUCOSE-TABLE-001, SILVER-GLUCOSE-TABLE-002, SILVER-GLUCOSE-TABLE-003
+# @spec SILVER-GLUCOSE-TABLE-004, SILVER-GLUCOSE-TABLE-005
 def glucose_sql(files: list[str]) -> str:
     """Typed, deduped Lingo glucose — one row per reading (per UTC instant)."""
     raw = csv_relation_sql(files, {"ts_str": _TS_COL, "mgdl_str": _MGDL_COL})

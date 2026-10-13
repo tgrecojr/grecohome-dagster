@@ -13,6 +13,7 @@ from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 from grecohome_core.checks import alerting_check
 from grecohome_core.silver import connect, list_payload_files
 from grecohome_silver.config import settings
+from grecohome_silver.dagster.freshness import table_freshness_check
 from grecohome_silver.dagster.glucose_assets import GLUCOSE_PARQUET, glucose_path, silver_glucose
 from grecohome_silver.glucose import bronze_reading_count_sql
 
@@ -33,6 +34,7 @@ def _src(path: str) -> str:
     return f"read_parquet('{path.replace(chr(39), chr(39) * 2)}')"
 
 
+# @spec SILVER-GLUCOSE-CHECKS-001
 @asset_check(asset=silver_glucose, name="glucose_reading_unique_nonnull")
 @alerting_check
 def glucose_reading_unique_nonnull() -> AssetCheckResult:
@@ -52,6 +54,7 @@ def glucose_reading_unique_nonnull() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-GLUCOSE-CHECKS-002
 @asset_check(asset=silver_glucose, name="glucose_value_range")
 @alerting_check
 def glucose_value_range() -> AssetCheckResult:
@@ -69,10 +72,11 @@ def glucose_value_range() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-GLUCOSE-CHECKS-003
 @asset_check(asset=silver_glucose, name="glucose_coverage_vs_bronze")
 @alerting_check
 def glucose_coverage_vs_bronze() -> AssetCheckResult:
-    """silver readings ≈ bronze distinct readings (UTC instants) — no silent drop."""
+    """silver readings ≥ bronze distinct readings (UTC instants) — no silent drop."""
     path = glucose_path(GLUCOSE_PARQUET)
     if not os.path.exists(path):
         return _missing(path)
@@ -90,8 +94,16 @@ def glucose_coverage_vs_bronze() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-GLUCOSE-CHECKS-004
+silver_glucose_freshness = table_freshness_check(
+    silver_glucose, lambda: glucose_path(GLUCOSE_PARQUET)
+)
+
+
+# @spec SILVER-GLUCOSE-CHECKS-005, SILVER-GLUCOSE-CHECKS-006
 GLUCOSE_CHECKS = [
     glucose_reading_unique_nonnull,
     glucose_value_range,
     glucose_coverage_vs_bronze,
+    silver_glucose_freshness,
 ]

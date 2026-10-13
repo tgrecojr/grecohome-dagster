@@ -26,6 +26,7 @@ def strain_path(filename: str) -> str:
     return os.path.join(settings.silver_root, STRAIN_SUBDIR, filename)
 
 
+# @spec SILVER-CYCLES-STRAIN-006
 @asset(name="silver_strain", group_name=GROUP, deps=[AssetKey("whoop_bronze_cycle")])
 def silver_strain(context: AssetExecutionContext) -> MaterializeResult:
     """Typed, deduped Whoop strain — one row per cycle (deduped on the latest rescore)."""

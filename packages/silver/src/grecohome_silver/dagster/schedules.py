@@ -58,6 +58,7 @@ silver_sleep_daily = ScheduleDefinition(
 
 # Daily rebuild of the glucose table (Lingo arrives via sensor; a daily rebuild keeps
 # silver a current projection without chasing each upload).
+# @spec SILVER-GLUCOSE-SCHED-001
 silver_glucose_job = define_asset_job("silver_glucose_job", selection=GLUCOSE_ASSETS)
 
 silver_glucose_daily = ScheduleDefinition(
@@ -78,6 +79,7 @@ silver_workouts_daily = ScheduleDefinition(
 )
 
 # Daily rebuild of the recovery table (Whoop recovery).
+# @spec SILVER-CYCLES-SCHED-001
 silver_recovery_job = define_asset_job("silver_recovery_job", selection=RECOVERY_ASSETS)
 
 silver_recovery_daily = ScheduleDefinition(
@@ -98,6 +100,7 @@ silver_daily_daily = ScheduleDefinition(
 )
 
 # Daily rebuild of the strain table (Whoop cycle; after the Whoop hourly capture).
+# @spec SILVER-CYCLES-SCHED-001
 silver_strain_job = define_asset_job("silver_strain_job", selection=STRAIN_ASSETS)
 
 silver_strain_daily = ScheduleDefinition(
