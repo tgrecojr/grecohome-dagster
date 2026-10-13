@@ -25,6 +25,7 @@ def gold_weather_path(filename: str) -> str:
     return os.path.join(settings.gold_root, WEATHER_SUBDIR, filename)
 
 
+# @spec GOLD-WEATHER-MART-006
 @asset(name="gold_daily_weather", group_name=GROUP, deps=[AssetKey("silver_weather")])
 def gold_daily_weather(context: AssetExecutionContext) -> MaterializeResult:
     """One row per local day: temp/GDD/frost, precip, solar, soil, humidity (imperial)."""

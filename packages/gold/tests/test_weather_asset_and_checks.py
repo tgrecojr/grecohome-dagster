@@ -32,6 +32,7 @@ def materialized(weather_silver_root, tmp_path, monkeypatch) -> str:
     return settings.gold_root
 
 
+# @spec GOLD-WEATHER-MART-001
 def test_materializes_to_parquet(materialized) -> None:
     n = int(
         connect()
@@ -52,6 +53,7 @@ def test_rebuild_idempotent(weather_silver_root, tmp_path, monkeypatch) -> None:
     assert one == two
 
 
+# @spec GOLD-WEATHER-CHECKS-001, GOLD-WEATHER-CHECKS-002, GOLD-WEATHER-CHECKS-003
 def test_checks_pass(materialized) -> None:
     assert checks_mod.weather_day_unique_nonnull().passed
     assert checks_mod.weather_value_ranges().passed

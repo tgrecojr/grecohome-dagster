@@ -421,19 +421,20 @@ dagster job execute --job silver_sleep_job   # whole-table rebuild from current 
 
 Gold is the analysis layer — derived, rebuildable marts built **from silver** (not bronze).
 It reads `SILVER_ROOT` and writes marts under a new `GOLD_ROOT`; like silver it makes **no
-source-API calls** (no auth/secrets) and stays **off** the `*_api` pools. Its first mart is
-`gold_daily_wellness` (one row per local day joining sleep + recovery + workout load + glucose
-summary; see [GOLD.md](GOLD.md)).
+source-API calls** (no auth/secrets) and stays **off** the `*_api` pools. Its marts
+(`gold_daily_wellness`, `gold_daily_weather`) and the run monitors it hosts are designed in
+[docs/intent/gold/](intent/gold/gold-design.md).
 
 - **Image:** `ghcr.io/tgrecojr/grecohome-dagster-gold`, serving `grecohome_gold.dagster.definitions`.
   Depends only on `grecohome-core` + DuckDB.
 - **Cross-code-location lineage:** the wellness mart declares its silver upstreams (`silver_sleep`,
   `silver_recovery`, `silver_workouts`, `silver_glucose`, `silver_strain`, `silver_daily`,
-  `silver_body`) by `AssetKey`; the reads are
+  `silver_body`, `silver_whoop_workouts`) by `AssetKey`; the reads are
   **filesystem reads of `SILVER_ROOT`**, not gRPC calls.
 - **Runs after silver.** `gold_wellness_daily` (07:30 UTC) rebuilds the mart once silver's daily
   rebuilds (≤ 06:55) and silver checks (07:00) have run; `gold_checks_daily` (08:00 UTC) runs the
-  gold checks. Enable both in the UI. On-demand: `dagster job execute --job gold_wellness_job`.
+  gold checks (it starts running). Enable the rebuild schedules in the UI. On-demand:
+  `dagster job execute --job gold_wellness_job`.
 
 ### Host container (`dagster_gold`)
 
@@ -472,7 +473,7 @@ state across redeploys. Checks schedules start **running** and need nothing.
 | `lingo_ingest` | sensor `lingo_drive_sensor` (after the service-account setup) | `lingo_bronze_checks_hourly` |
 | `soil_ingest` | `uscrn_schedule`, `uscrn_correction_schedule` | `uscrn_bronze_checks_hourly` |
 | silver | `silver_sleep_daily`, `silver_glucose_daily`, `silver_workouts_daily`, `silver_recovery_daily`, `silver_weather_daily`, `silver_daily_daily`, `silver_strain_daily`, `silver_body_daily`, `silver_fitness_daily`, `silver_workout_splits_daily`, `silver_whoop_workouts_daily` | `silver_checks_daily` |
-| gold | `gold_wellness_daily`, `gold_weather_daily`; sensor `run_queue_monitor` (the queue-depth alert) | `gold_checks_daily` |
+| gold | `gold_wellness_daily`, `gold_weather_daily` | `gold_checks_daily`; sensors `run_failure_monitor` and `run_queue_monitor` |
 
 ## Observability and alerting
 
@@ -487,6 +488,7 @@ Design: `docs/high-level-design.md` (*Failures page through Loki and Grafana to 
   |---|---|---|
   | Dagster asset check failing | any `asset_check_failed` line (a failing ERROR check, any layer; includes `whoop_token_health`, `garmin_tokenstore_health` and `lingo_drive_folder_health`) | 10 m |
   | Whoop token refresh failing | more than 3 `token refresh failed` / `invalid_grant` lines in 1 h | 15 m |
+  | Dagster run failing | any `dagster_run_failed` line (gold's `run_failure_monitor`, any code location), grouped by job | immediately |
   | Dagster run queue backed up | `run_queue_backed_up` (gold's queue-depth monitor) | 30 m |
 
 - **Dashboard:** "Data Platform Health" (check failures, token failures, queue backups,

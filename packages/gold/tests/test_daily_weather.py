@@ -23,16 +23,19 @@ def _rows(silver_root: str, min_valid_hours: int = 1) -> dict[str, dict]:
     }
 
 
+# @spec GOLD-WEATHER-MART-001
 def test_continuous_daily_spine(weather_silver_root: str) -> None:
     """One row per local day across the range, the 2026-04-21 gap included."""
     assert sorted(_rows(weather_silver_root)) == ["2026-04-20", "2026-04-21", "2026-04-22"]
 
 
+# @spec GOLD-WEATHER-MART-005
 def test_missing_silver_weather_yields_empty(tmp_path) -> None:
     """A not-yet-materialized silver_weather builds to zero rows rather than erroring."""
     assert _rows(str(tmp_path / "absent_silver")) == {}
 
 
+# @spec GOLD-WEATHER-MART-001, GOLD-WEATHER-MART-002
 def test_frost_day_aggregates_imperial(weather_silver_root: str) -> None:
     """Daily max/min in °F, frost vs hard-freeze flags, precip in inches."""
     r = _rows(weather_silver_root)["2026-04-20"]
@@ -51,6 +54,7 @@ def test_frost_day_aggregates_imperial(weather_silver_root: str) -> None:
     assert r["soil_moisture_5_mean"] == pytest.approx(0.40)
 
 
+# @spec GOLD-WEATHER-MART-002
 def test_warm_day_growing_degree_days(weather_silver_root: str) -> None:
     r = _rows(weather_silver_root)["2026-04-22"]
     assert r["frost"] is False
@@ -60,6 +64,7 @@ def test_warm_day_growing_degree_days(weather_silver_root: str) -> None:
     assert r["soil_temp_5_f_mean"] == pytest.approx(66.2)  # avg(18,20)=19 °C
 
 
+# @spec GOLD-WEATHER-MART-003
 def test_gap_day_is_null(weather_silver_root: str) -> None:
     """A spine day with no observations: provenance false, aggregates null, 0 hours."""
     r = _rows(weather_silver_root)["2026-04-21"]
@@ -112,10 +117,12 @@ def gappy_silver_root(tmp_path) -> str:
     return root
 
 
+# @spec GOLD-WEATHER-MART-004
 def test_default_gate_is_ncei_like() -> None:
     assert MIN_VALID_HOURS == 22
 
 
+# @spec GOLD-WEATHER-MART-003, GOLD-WEATHER-MART-004
 def test_gate_nulls_incomplete_fields_but_keeps_counts(gappy_silver_root: str) -> None:
     r = _rows(gappy_silver_root, min_valid_hours=MIN_VALID_HOURS)["2026-08-21"]
     # Two whole-row-null hours are not observations.
@@ -132,6 +139,7 @@ def test_gate_nulls_incomplete_fields_but_keeps_counts(gappy_silver_root: str) -
     assert r["soil_moisture_5_mean"] == pytest.approx(0.3)
 
 
+# @spec GOLD-WEATHER-MART-004
 def test_lowering_the_gate_reports_partial_days(gappy_silver_root: str) -> None:
     r = _rows(gappy_silver_root, min_valid_hours=12)["2026-08-21"]
     assert r["soil_temp_5_f_mean"] == pytest.approx(71.6)  # avg over the 15 valid hours

@@ -186,6 +186,21 @@ capture, for example) is accepted, because it clears itself on a later run. The 
 pool**: checks make no source calls, so they must never compete with, or be stuck behind, the
 `*_api` ingestion pools. A job can't span code locations, so there's one per code location.
 
+## Table freshness (derived layers)
+
+Silver and gold tables are whole-table rebuilds written by the atomic Parquet writer, so a
+table's age is its file's modification time. `table_freshness_check(asset, path_fn)` builds an
+ERROR check named **`<asset>_freshness`** that:
+
+- **fails when the Parquet at `path_fn()` was last modified more than 36 hours** before the check
+  runs, and passes at 36 hours or less, reporting the age and the limit;
+- **fails at ERROR when the file doesn't exist**;
+- alerts through `alerting_check`;
+- calls `path_fn` when the check runs, so a layer root is read at check time.
+
+It measures rebuilds, not data. Bronze freshness reads sidecar capture times instead (above),
+because bronze is append-only, not rebuilt. Why 36 hours: see the silver design, *Asset checks*.
+
 ## Standalone scripts
 
 `scripts/verify_bronze.py` (integrity, validity, consistency, completeness) and

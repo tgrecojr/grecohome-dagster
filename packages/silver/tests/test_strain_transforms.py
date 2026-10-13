@@ -74,14 +74,24 @@ def test_step_count_typed_when_present(tmp_path) -> None:
 
 
 # @spec SILVER-CYCLES-STRAIN-002
-def test_local_start_date_can_roll_back_a_day(tmp_path) -> None:
-    """An early-UTC start maps to the previous local day."""
+def test_evening_sleep_onset_dates_strain_to_the_next_day(tmp_path) -> None:
+    """A cycle starts at sleep onset: 22:00 local on 06-09 -> its strain accrues on 06-10."""
     root = str(tmp_path / "bronze")
     _write(root, "2026-06-10", 1_700_000_000000, [
         _cycle(1002, "2026-06-10T02:00:00.000Z", "2026-06-10T20:00:00.000Z"),
     ])
     (r,) = _rows(root)
-    assert r["strain_date"].isoformat() == "2026-06-09"  # 02:00Z − 4h = 22:00 prev day
+    assert r["strain_date"].isoformat() == "2026-06-10"  # 22:00 local 06-09 + 12h
+
+
+# @spec SILVER-CYCLES-STRAIN-002
+def test_after_midnight_sleep_onset_dates_strain_to_the_same_day(tmp_path) -> None:
+    root = str(tmp_path / "bronze")
+    _write(root, "2026-06-10", 1_700_000_000000, [
+        _cycle(1004, "2026-06-10T05:30:00.000Z", "2026-06-11T02:00:00.000Z"),
+    ])
+    (r,) = _rows(root)
+    assert r["strain_date"].isoformat() == "2026-06-10"  # 01:30 local 06-10 + 12h
 
 
 # @spec SILVER-CYCLES-STRAIN-003

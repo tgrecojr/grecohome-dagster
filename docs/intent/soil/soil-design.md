@@ -181,10 +181,6 @@ not ingest problems: the source itself carries sentinels for those hours.
    2010→2025 backfill (2026-09-22) found none, apart from each year's Jan 1 `0000` row.
 2. **`daily01` as a cross-check collection.** Capturing NOAA's own daily product alongside
    `hourly02` would let silver compare against it. Not needed so far.
-3. **A leftover bronze folder.** `uscrn/pa_avondale_2_n/` (42 files, `dt=2026-06-10`) predates
-   the collection's rename to `uscrn/hourly`. Nothing reads it, and silver reads only
-   `uscrn/hourly`. Removing it is an operator decision, after confirming its rows are all in
-   `uscrn/hourly`, since bronze is the source of truth.
 
 ## References
 

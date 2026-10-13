@@ -13,9 +13,9 @@ import os
 from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 
 from grecohome_core.checks import alerting_check
+from grecohome_core.checks.table_freshness import table_freshness_check
 from grecohome_core.silver import connect, list_payload_files
 from grecohome_silver.config import settings
-from grecohome_silver.dagster.freshness import table_freshness_check
 from grecohome_silver.dagster.weather_assets import WEATHER_PARQUET, silver_weather, weather_path
 from grecohome_silver.weather import bronze_obs_count_sql
 

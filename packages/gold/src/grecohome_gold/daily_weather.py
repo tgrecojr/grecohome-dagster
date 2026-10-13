@@ -166,6 +166,8 @@ def _agg_sql(weather: str, gdd_base_f: int, frost_f: int, hard_freeze_f: int) ->
     """
 
 
+# @spec GOLD-WEATHER-MART-001, GOLD-WEATHER-MART-002, GOLD-WEATHER-MART-003
+# @spec GOLD-WEATHER-MART-004, GOLD-WEATHER-MART-005
 def daily_weather_sql(
     silver_root: str,
     *,

@@ -14,6 +14,7 @@ import os
 from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 
 from grecohome_core.checks import alerting_check
+from grecohome_core.checks.table_freshness import table_freshness_check
 from grecohome_core.silver import (
     connect,
     json_date,
@@ -30,7 +31,6 @@ from grecohome_silver.dagster.assets import (
     silver_sleep_garmin,
     silver_sleep_whoop,
 )
-from grecohome_silver.dagster.freshness import table_freshness_check
 
 WHOOP_OWNED_SINCE = "2025-12-18"  # user acquired the Whoop; no whoop_* before this.
 

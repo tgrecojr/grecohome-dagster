@@ -1,7 +1,8 @@
 # Bronze checks — EARS specs
 
 Design: [checks-design.md](checks-design.md). Prefix `CORE-CHECKS`. Facets: none (config,
-building, general behavior), `FRESH`, `COMPLETE`, `SCHEMA`, `CONTENT`, `ALERT`, `JOB`.
+building, general behavior), `FRESH`, `COMPLETE`, `SCHEMA`, `CONTENT`, `ALERT`, `JOB`, `TABLE`
+(derived-layer table freshness).
 
 ## Configuration and building
 
@@ -49,3 +50,9 @@ building, general behavior), `FRESH`, `COMPLETE`, `SCHEMA`, `CONTENT`, `ALERT`, 
 
 - [x] **CORE-CHECKS-JOB-001**: When `build_bronze_checks_job` builds a job from asset checks, the job shall run those checks without materializing their assets, and use no concurrency pool.
 - [x] **CORE-CHECKS-JOB-002**: When `build_bronze_checks_schedule` builds a schedule for a checks-only job, the schedule shall run hourly at minute 0 UTC unless another cron is given, be named `<job>_schedule` unless named explicitly, and start running.
+
+## Table freshness (derived layers)
+
+- [x] **CORE-CHECKS-TABLE-001**: When a check built by `table_freshness_check(asset, path_fn)` runs, it shall be named `<asset>_freshness`, pass when the Parquet at `path_fn()` was last modified at most 36 hours earlier, and otherwise fail, at ERROR severity in both cases, reporting the age and the limit.
+- [x] **CORE-CHECKS-TABLE-002**: If the Parquet at `path_fn()` doesn't exist, then a check built by `table_freshness_check` shall fail at ERROR severity.
+- [x] **CORE-CHECKS-TABLE-003**: The system shall wrap every check built by `table_freshness_check` in `alerting_check`.

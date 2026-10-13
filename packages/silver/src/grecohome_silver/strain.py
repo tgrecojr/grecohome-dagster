@@ -15,12 +15,9 @@ captures lack it, so ``step_count`` is nullable and never back-filled.
   ``updated_at`` (Whoop rescores a cycle as the day fills) — exactly the recovery idiom.
   The ``cycle_id`` is the join key into ``silver_recovery.cycle_id`` and
   ``silver_sleep.whoop_cycle_id``, so gold can put strain next to recovery for the day.
-* **Day:** ``strain_date`` is the **local date of ``start``** (a Whoop cycle begins at
-  wake, so its start-day is the day the strain accumulated). Derived by shifting the UTC
-  ``start`` by the record's own ``timezone_offset`` (``±HH:MM``, minutes inheriting the
-  hours' sign), mirroring the sleep wake-date idiom; falls back to the UTC date of
-  ``start`` if the offset is missing. ``strain_date`` is informational (a day can hold two
-  short cycles) — uniqueness is on ``cycle_id``.
+* **Day:** ``strain_date`` is the day the strain accrued: the local date 12 hours after
+  ``start`` (a cycle starts at sleep onset; see ``_local_start_date``). Informational —
+  uniqueness is on ``cycle_id``.
 * **Units:** kept canonical to the source — ``kilojoules`` as Whoop reports it (gold
   converts to kcal). Strain is the unitless 0–21 Whoop scale.
 """
@@ -29,7 +26,6 @@ from __future__ import annotations
 
 from grecohome_core.silver import (
     dedup_latest_sql,
-    json_date,
     json_num,
     json_str,
     payloads_relation_sql,
@@ -49,11 +45,14 @@ def _cycle_relation(payloads_sql: str) -> str:
 
 
 def _local_start_date(rec: str) -> str:
-    """The local calendar date of a cycle's ``start`` (the day the strain accrued).
+    """The day a cycle's strain accrued: the local date 12 hours after its ``start``.
 
-    ``start`` is UTC; shift by the record's ``timezone_offset`` (``±HH:MM``, the minutes
-    field inheriting the hours' sign — ``-04:30`` → −4h −30m) and take the date. Falls
-    back to the UTC date of ``start`` if the offset is missing/unparseable.
+    A Whoop cycle starts at **sleep onset** (evening, or just after midnight) and runs to
+    the next sleep onset, so its strain accrues on the day after an evening start or the
+    same day as an after-midnight one; 12 hours after ``start`` lands on that day for any
+    night-time onset. ``start`` is UTC, shifted by the record's ``timezone_offset``
+    (``±HH:MM``, minutes inheriting the hours' sign); no offset is applied when it's
+    missing or unparseable.
     """
     start_ts = f"TRY_CAST({json_str(rec, 'start')} AS TIMESTAMP)"
     tz = json_str(rec, "timezone_offset")
@@ -62,8 +61,8 @@ def _local_start_date(rec: str) -> str:
         f"+ (CASE WHEN substr({tz}, 1, 1) = '-' THEN -1 ELSE 1 END) "
         f"* COALESCE(TRY_CAST(substr({tz}, 5, 2) AS INTEGER), 0))"
     )
-    local_date = f"TRY_CAST(({start_ts} + {offset_min} * INTERVAL 1 MINUTE) AS DATE)"
-    return f"COALESCE({local_date}, {json_date(rec, 'start')})"
+    shifted = f"({start_ts} + COALESCE({offset_min}, 0) * INTERVAL 1 MINUTE + INTERVAL 12 HOUR)"
+    return f"TRY_CAST({shifted} AS DATE)"
 
 
 # @spec SILVER-CYCLES-STRAIN-001, SILVER-CYCLES-STRAIN-002, SILVER-CYCLES-STRAIN-003

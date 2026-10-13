@@ -17,7 +17,7 @@ Design: [cycles-design.md](cycles-design.md). Prefix `SILVER-CYCLES`. Facets: `R
 ## Strain table
 
 - [x] **SILVER-CYCLES-STRAIN-001**: When `silver_strain` materializes, the system shall read every element of the `records` array of every `whoop/cycle` bronze payload, skipping payloads without `records`, and write `{SILVER_ROOT}/strain/silver_strain.parquet` with one row per `cycle_id` (the record's `id`) holding the strain columns of the cycles design's schema.
-- [x] **SILVER-CYCLES-STRAIN-002**: The `silver_strain` table shall set `strain_date` to the date of the record's UTC `start` shifted by its `timezone_offset` (`±HH:MM`, the minutes taking the hours' sign), and to the UTC date of `start` when the offset is missing or unparseable.
+- [x] **SILVER-CYCLES-STRAIN-002**: The `silver_strain` table shall set `strain_date` to the date of the record's UTC `start` shifted by its `timezone_offset` (`±HH:MM`, the minutes taking the hours' sign) plus 12 hours, using no offset when it is missing or unparseable.
 - [x] **SILVER-CYCLES-STRAIN-003**: When several captures hold the same strain `cycle_id`, `silver_strain` shall keep the one with the latest `updated_at`.
 - [x] **SILVER-CYCLES-STRAIN-004**: If a Whoop cycle record's `id` is missing or JSON null, then `silver_strain` shall leave it out; if it is present but not numeric, then `silver_strain` shall keep the record with `cycle_id` null.
 - [x] **SILVER-CYCLES-STRAIN-005**: The `silver_strain` table shall keep a cycle whose `end` or `score` is absent, with `end_ts` or the score metrics null, and shall carry `score_state` and `step_count` as reported.

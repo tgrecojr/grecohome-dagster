@@ -11,6 +11,7 @@ import os
 from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 
 from grecohome_core.checks import alerting_check
+from grecohome_core.checks.table_freshness import table_freshness_check
 from grecohome_core.silver import connect
 from grecohome_gold.dagster.assets import WELLNESS_PARQUET, gold_daily_wellness, gold_path
 
@@ -32,6 +33,7 @@ def _src() -> str:
     return f"read_parquet('{path.replace(chr(39), chr(39) * 2)}')"
 
 
+# @spec GOLD-WELLNESS-CHECKS-001
 @asset_check(asset=gold_daily_wellness, name="wellness_day_unique_nonnull")
 @alerting_check
 def wellness_day_unique_nonnull() -> AssetCheckResult:
@@ -49,6 +51,7 @@ def wellness_day_unique_nonnull() -> AssetCheckResult:
     )
 
 
+# @spec GOLD-WELLNESS-CHECKS-002
 @asset_check(asset=gold_daily_wellness, name="wellness_value_ranges")
 @alerting_check
 def wellness_value_ranges() -> AssetCheckResult:
@@ -79,6 +82,7 @@ def wellness_value_ranges() -> AssetCheckResult:
     )
 
 
+# @spec GOLD-WELLNESS-CHECKS-003
 @asset_check(asset=gold_daily_wellness, name="wellness_coverage")
 @alerting_check
 def wellness_coverage() -> AssetCheckResult:
@@ -109,4 +113,16 @@ def wellness_coverage() -> AssetCheckResult:
     )
 
 
-ALL_CHECKS = [wellness_day_unique_nonnull, wellness_value_ranges, wellness_coverage]
+# @spec GOLD-WELLNESS-CHECKS-004
+gold_daily_wellness_freshness = table_freshness_check(
+    gold_daily_wellness, lambda: gold_path(WELLNESS_PARQUET)
+)
+
+
+# @spec GOLD-WELLNESS-CHECKS-005, GOLD-WELLNESS-CHECKS-006
+ALL_CHECKS = [
+    wellness_day_unique_nonnull,
+    wellness_value_ranges,
+    wellness_coverage,
+    gold_daily_wellness_freshness,
+]

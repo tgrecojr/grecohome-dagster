@@ -23,6 +23,7 @@ def _rows(silver_root: str) -> dict[str, dict]:
     }
 
 
+# @spec GOLD-WELLNESS-MART-001
 def test_continuous_daily_spine(silver_root: str) -> None:
     """One row per day across the full union range, gaps included."""
     rows = _rows(silver_root)
@@ -31,6 +32,7 @@ def test_continuous_daily_spine(silver_root: str) -> None:
     ]
 
 
+# @spec GOLD-WELLNESS-MART-003
 def test_sleep_joins_one_to_one(silver_root: str) -> None:
     r = _rows(silver_root)["2026-01-01"]
     assert r["has_sleep"] is True and r["garmin_sleep_score"] == 80
@@ -39,6 +41,7 @@ def test_sleep_joins_one_to_one(silver_root: str) -> None:
     assert _rows(silver_root)["2026-01-03"]["garmin_sleep_score"] is None
 
 
+# @spec GOLD-WELLNESS-MART-003
 def test_recovery_deduped_to_latest_per_day(silver_root: str) -> None:
     """Two recoveries on 2026-01-02 collapse to the latest created_at (score 70)."""
     r = _rows(silver_root)["2026-01-02"]
@@ -46,6 +49,7 @@ def test_recovery_deduped_to_latest_per_day(silver_root: str) -> None:
     assert r["recovery_score"] == pytest.approx(70.0)
 
 
+# @spec GOLD-WELLNESS-MART-005
 def test_workouts_aggregated_per_day(silver_root: str) -> None:
     r = _rows(silver_root)["2026-01-02"]
     assert r["workout_count"] == 2
@@ -54,6 +58,7 @@ def test_workouts_aggregated_per_day(silver_root: str) -> None:
     assert r["workout_calories"] == pytest.approx(500.0)
 
 
+# @spec GOLD-WELLNESS-MART-007
 def test_glucose_aggregation_and_tir(silver_root: str) -> None:
     r = _rows(silver_root)["2026-01-03"]
     assert r["has_glucose"] is True and r["glucose_readings"] == 4
@@ -64,6 +69,7 @@ def test_glucose_aggregation_and_tir(silver_root: str) -> None:
     assert r["glucose_pct_above"] == pytest.approx(25.0)
 
 
+# @spec GOLD-WELLNESS-MART-001, GOLD-WELLNESS-MART-009
 def test_gap_day_all_null(silver_root: str) -> None:
     """A day with no source data: flags false, aggregates null, workout_count 0."""
     # 2026-01-01 has sleep+recovery but no workout/glucose; build a true gap by checking
@@ -75,12 +81,14 @@ def test_gap_day_all_null(silver_root: str) -> None:
     assert r["has_glucose"] is False and r["glucose_mean"] is None
 
 
+# @spec GOLD-WELLNESS-MART-005
 def test_workout_only_day(silver_root: str) -> None:
     r = _rows(silver_root)["2026-01-04"]
     assert r["has_workout"] is True and r["workout_count"] == 1
     assert r["has_sleep"] is False and r["has_recovery"] is False and r["has_glucose"] is False
 
 
+# @spec GOLD-WELLNESS-MART-004
 def test_strain_joined_via_recovery_cycle(silver_root: str) -> None:
     """Strain attaches to the day's recovery cycle; kilojoules → kcal."""
     rows = _rows(silver_root)
@@ -95,6 +103,7 @@ def test_strain_joined_via_recovery_cycle(silver_root: str) -> None:
     assert rows["2026-01-03"]["has_strain"] is False
 
 
+# @spec GOLD-WELLNESS-MART-003
 def test_daily_activity_joined(silver_root: str) -> None:
     r = _rows(silver_root)["2026-01-01"]
     assert r["has_daily"] is True and r["steps"] == 9000
@@ -106,6 +115,7 @@ def test_daily_activity_joined(silver_root: str) -> None:
     assert _rows(silver_root)["2026-01-02"]["has_daily"] is False
 
 
+# @spec GOLD-WELLNESS-MART-008
 def test_weight_carried_forward(silver_root: str) -> None:
     """Sparse weigh-ins carry forward (ASOF): 80 kg until the 2026-01-03 weigh-in (81 kg)."""
     rows = _rows(silver_root)
@@ -117,6 +127,7 @@ def test_weight_carried_forward(silver_root: str) -> None:
     assert rows["2026-01-05"]["weight_kg"] == pytest.approx(81.0)  # carried from 01-03
 
 
+# @spec GOLD-WELLNESS-MART-002
 def test_missing_silver_tables_degrade_to_nulls(silver_root: str) -> None:
     """A not-yet-materialized silver table must degrade to NULLs, not fail the build."""
     for table in ("strain", "daily", "body"):
@@ -136,6 +147,7 @@ def test_missing_silver_tables_degrade_to_nulls(silver_root: str) -> None:
     assert r["has_recovery"] is True
 
 
+# @spec GOLD-WELLNESS-MART-002
 def test_all_silver_tables_missing_yields_empty(tmp_path) -> None:
     """With no silver Parquet at all, the mart builds to zero rows rather than erroring."""
     assert _rows(str(tmp_path / "absent_silver")) == {}
