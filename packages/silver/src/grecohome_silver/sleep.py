@@ -79,6 +79,8 @@ def _whoop_local_wake_night(rec: str) -> str:
 # ---------------------------------------------------------------------------
 # Garmin: bronze garmin/sleep -> one typed row per night
 # ---------------------------------------------------------------------------
+# @spec SILVER-SLEEP-GARMIN-001, SILVER-SLEEP-GARMIN-002, SILVER-SLEEP-GARMIN-003
+# @spec SILVER-SLEEP-GARMIN-004
 def garmin_sleep_sql(payloads_sql: str) -> str:
     """Typed, deduped Garmin sleep — one row per ``night_date`` (calendarDate).
 
@@ -116,6 +118,8 @@ def garmin_sleep_sql(payloads_sql: str) -> str:
 # ---------------------------------------------------------------------------
 # Whoop: bronze whoop/sleep -> one typed row per sleep id (naps flagged)
 # ---------------------------------------------------------------------------
+# @spec SILVER-SLEEP-WHOOP-001, SILVER-SLEEP-WHOOP-002, SILVER-SLEEP-WHOOP-003
+# @spec SILVER-SLEEP-WHOOP-004, SILVER-SLEEP-WHOOP-005
 def whoop_sleep_sql(payloads_sql: str) -> str:
     """Typed, deduped Whoop sleep — one row per ``id``, naps flagged (``is_nap``).
 
@@ -195,13 +199,14 @@ _GARMIN_UNIFIED_COLS = (
 # ---------------------------------------------------------------------------
 # Unified: FULL OUTER JOIN on the night, both sides side by side
 # ---------------------------------------------------------------------------
+# @spec SILVER-SLEEP-JOIN-001, SILVER-SLEEP-JOIN-002
 def unified_sleep_sql(garmin_sql: str, whoop_sql: str) -> str:
     """FULL OUTER JOIN of the two source assets on ``night_date`` — one row/night.
 
     Both sources' columns are kept side by side and nullable; nothing is coalesced
     and no "primary/best" value is synthesized. ``has_garmin``/``has_whoop`` make
     every null explainable. The Whoop side is collapsed to one non-nap record per
-    night (latest ``updated_at``) so the join stays one-to-one per night.
+    night (latest ``whoop_start``) so the join stays one-to-one per night.
     """
     # Whoop night spine: real nights only (no naps), one row per night.
     whoop_nights = dedup_latest_sql(

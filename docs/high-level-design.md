@@ -1,8 +1,9 @@
 # High-Level Design: grecohome-dagster
 
 LID runs in **Scoped** mode here. Under the arrow: all four bronze subjects (Garmin, Whoop,
-Soil/USCRN, Lingo: `packages/{garmin,whoop,soil,lingo}/**`), and the shared core's bronze writer and bronze
-checks (`grecohome_core.bronze`, `grecohome_core.checks`). Sections that describe other parts of the system are short
+Soil/USCRN, Lingo: `packages/{garmin,whoop,soil,lingo}/**`), the silver layer (`packages/silver/**`),
+and the shared core's bronze writer, bronze checks and silver helpers (`grecohome_core.bronze`,
+`grecohome_core.checks`, `grecohome_core.silver`). Sections that describe other parts of the system are short
 orientation summaries. The detailed design for those parts lives in `docs/ARCHITECTURE.md`,
 `docs/SILVER.md`, `docs/GOLD.md` and `docs/adr/`.
 
@@ -76,7 +77,8 @@ are applied in silver at read time.
 
 | Component | Design | Role |
 |---|---|---|
-| Shared core (bronze writer, bronze checks) | `docs/intent/core/` | The capture and data-quality contracts every bronze subject relies on |
+| Shared core (bronze writer, bronze checks, silver helpers) | `docs/intent/core/` | The capture and data-quality contracts every bronze subject relies on, and the read/dedup/write helpers silver is built from |
+| Silver | `docs/intent/silver/` | Typed, deduplicated Parquet projections of bronze, one table family per child doc |
 | Garmin | `docs/intent/garmin/` | Garmin Connect bronze subject (capture, authentication) |
 | Whoop | `docs/intent/whoop/` | Whoop bronze subject (capture, token lifecycle) |
 | Soil/USCRN | `docs/intent/soil/` | NOAA USCRN station bronze subject (day-slice capture, late corrections) |

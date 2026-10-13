@@ -24,8 +24,8 @@ factory over `catalog.CATALOG`.
 
 A daily partition key is a calendar date. The asset passes it to Garmin as the request's
 `cdate`, or as both `start` and `end`, and Garmin interprets that as the user's **local**
-calendar day. Partitions open on UTC day boundaries. The 07:00 UTC schedule runs after the
-user's local day has also ended. Further local-day semantics (for example, a sleep night is
+calendar day. Partitions open on UTC day boundaries. The 05:30 UTC schedule runs after the
+user's local day has also ended (01:30 EDT, 00:30 EST). Further local-day semantics (for example, a sleep night is
 keyed by local wake date) are applied in silver, never in this package.
 
 The `activities` asset captures the day's activity list (`get_activities_by_date(d, d)`), then
@@ -36,7 +36,8 @@ own collection. No two collections share a folder.
 
 ## Capture cadence: daily re-capture window
 
-Two schedules run at 07:00 UTC:
+Two schedules run at 05:30 UTC, so a tick (about ten minutes) finishes before silver's daily
+rebuilds start at 06:00 UTC and a day's capture reaches silver the same morning:
 
 - **`garmin_daily`** emits one run per partition in the trailing `LOOKBACK_DAYS` (default 14)
   **completed** daily partitions. The current, still-open day is never captured. Each tick
@@ -199,7 +200,8 @@ How skip-identical interacts with each family:
 | Schedule `run_key` | `<partition>-<YYYYMMDDTHH>` (tick-scoped) | `run_key = partition_key` | Matches Whoop and USCRN, and states in code that re-emitting a partition each tick is intended. A partition-only key reads as capture-once and becomes capture-once under a sensor. |
 | Asset granularity | One asset per catalog collection (about 60), built by a factory | One asset per endpoint kind; a single "garmin" asset | Per-collection failures are visible and retryable on their own, matching Whoop's per-collection observability. |
 | Duplicate captures already in bronze | Leave them | Delete identical older captures | Bronze is immutable and append-only. Silver already picks the latest capture, so the extra files are harmless. |
-| Partition range | Completed days only (`end_offset=0`), captured at 07:00 UTC | Include the in-progress day | A partial "today" would be captured repeatedly while still incomplete. The trailing window picks the day up once it has closed, and 07:00 UTC is after the user's local day ends. |
+| Partition range | Completed days only (`end_offset=0`), captured at 05:30 UTC | Include the in-progress day | A partial "today" would be captured repeatedly while still incomplete. The trailing window picks the day up once it has closed, and 05:30 UTC is after the user's local day ends. |
+| Tick time | 05:30 UTC | 07:00 UTC (after silver's 06:00–06:55 rebuilds) | Silver reads bronze once a day; a capture landing after silver's rebuilds reaches silver, gold and the dashboards a day late. 05:30 is still after local midnight in both EDT and EST, and the trailing window absorbs anything synced later. |
 
 ## Open Questions & Future Decisions
 

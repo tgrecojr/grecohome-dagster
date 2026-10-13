@@ -151,8 +151,8 @@ table reads `BRONZE_ROOT` via DuckDB and writes a typed, deduplicated Parquet un
 are declared by `AssetKey` (cross-location lineage); the reads are filesystem reads. Tables:
 
 - **`silver_sleep`** — FULL OUTER JOIN of `silver_sleep_garmin` + `silver_sleep_whoop` on the
-  night; both devices side by side, neither authoritative (ADR 0007). Whoop night = local wake
-  date.
+  night; both devices side by side, neither authoritative. Whoop night = local wake date
+  ([silver sleep design](intent/silver/sleep/sleep-design.md)).
 - **`silver_glucose`** — one row per CGM reading; dedup on the **UTC instant** (the local string
   repeats under different offsets) (ADR 0008).
 - **`silver_workouts`** — one row per Garmin activity (ADR 0009).

@@ -37,7 +37,7 @@ garmin_reference_job = define_asset_job(
 
 # @spec GARMIN-CAPTURE-SCHED-001, GARMIN-CAPTURE-SCHED-002
 # @spec GARMIN-CAPTURE-SCHED-003, GARMIN-CAPTURE-SCHED-004
-@schedule(cron_schedule="0 7 * * *", job=garmin_daily_job, execution_timezone="UTC")
+@schedule(cron_schedule="30 5 * * *", job=garmin_daily_job, execution_timezone="UTC")
 def garmin_daily(context: ScheduleEvaluationContext) -> Iterator[RunRequest]:
     """Daily: re-capture every trailing completed partition, every tick."""
     now = context.scheduled_execution_time
@@ -48,7 +48,7 @@ def garmin_daily(context: ScheduleEvaluationContext) -> Iterator[RunRequest]:
 
 
 # @spec GARMIN-CAPTURE-SCHED-005
-@schedule(cron_schedule="0 7 * * *", job=garmin_reference_job, execution_timezone="UTC")
+@schedule(cron_schedule="30 5 * * *", job=garmin_reference_job, execution_timezone="UTC")
 def garmin_reference(context: ScheduleEvaluationContext) -> RunRequest:
     """Daily: refresh the reference/snapshot collections."""
     return RunRequest(run_key=f"garmin-reference-{context.scheduled_execution_time:%Y%m%d}")

@@ -75,3 +75,31 @@ def test_logging_failure_never_breaks_the_check():
     with patch("grecohome_core.checks.alerting._logger.error", side_effect=RuntimeError("boom")):
         result = chk()  # must not raise
     assert result.passed is False
+
+
+# @spec CORE-CHECKS-ALERT-004
+def test_raising_check_logs_signal_and_reraises():
+    # A check that crashes (a corrupt file it reads, say) must page, not just fail a step.
+    @alerting_check(name="x_coverage", asset="AssetKey(['x'])")
+    def chk() -> AssetCheckResult:
+        raise RuntimeError("corrupt input")
+
+    with patch("grecohome_core.checks.alerting._logger.error") as err:
+        with pytest.raises(RuntimeError, match="corrupt input"):
+            chk()
+
+    err.assert_called_once()
+    assert err.call_args.args[0] == "asset_check_failed"
+    assert err.call_args.kwargs["check"] == "x_coverage"
+    assert err.call_args.kwargs["asset"] == "AssetKey(['x'])"
+
+
+# @spec CORE-CHECKS-ALERT-004
+def test_raising_check_reraises_even_if_logging_fails():
+    @alerting_check
+    def chk() -> AssetCheckResult:
+        raise ValueError("boom")
+
+    with patch("grecohome_core.checks.alerting._logger.error", side_effect=OSError("down")):
+        with pytest.raises(ValueError, match="boom"):
+            chk()

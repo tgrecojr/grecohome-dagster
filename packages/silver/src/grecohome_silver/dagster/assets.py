@@ -34,8 +34,8 @@ from grecohome_silver.sleep import garmin_sleep_sql, unified_sleep_sql, whoop_sl
 
 GROUP = "silver_sleep"
 
-# Layout under SILVER_ROOT (documented in docs/SILVER.md). The unified table is the
-# product; the two source intermediates are named with a leading underscore.
+# Layout under SILVER_ROOT (see docs/intent/silver/sleep/sleep-design.md). The unified
+# table is the product; the two source intermediates are named with a leading underscore.
 SLEEP_SUBDIR = "sleep"
 GARMIN_PARQUET = "_garmin.parquet"
 WHOOP_PARQUET = "_whoop.parquet"
@@ -52,6 +52,7 @@ def _read_parquet_sql(path: str) -> str:
     return f"SELECT * FROM read_parquet('{path.replace(chr(39), chr(39) * 2)}')"
 
 
+# @spec SILVER-SLEEP-GARMIN-005
 @asset(name="silver_sleep_garmin", group_name=GROUP, deps=[AssetKey("garmin_bronze_sleep")])
 def silver_sleep_garmin(context: AssetExecutionContext) -> MaterializeResult:
     """Typed, deduped Garmin sleep — one row per night (~4 years of history)."""
@@ -64,6 +65,7 @@ def silver_sleep_garmin(context: AssetExecutionContext) -> MaterializeResult:
     return MaterializeResult(metadata={"rows": rows, "bronze_files": len(files), "path": dest})
 
 
+# @spec SILVER-SLEEP-WHOOP-006
 @asset(name="silver_sleep_whoop", group_name=GROUP, deps=[AssetKey("whoop_bronze_sleep")])
 def silver_sleep_whoop(context: AssetExecutionContext) -> MaterializeResult:
     """Typed, deduped Whoop sleep — one row per sleep id, naps flagged (``is_nap``)."""
@@ -76,6 +78,7 @@ def silver_sleep_whoop(context: AssetExecutionContext) -> MaterializeResult:
     return MaterializeResult(metadata={"rows": rows, "bronze_files": len(files), "path": dest})
 
 
+# @spec SILVER-SLEEP-JOIN-003
 @asset(
     name="silver_sleep",
     group_name=GROUP,

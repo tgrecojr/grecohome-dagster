@@ -95,8 +95,10 @@ Paths in scope:
 - `packages/whoop/**`
 - `packages/soil/**`
 - `packages/lingo/**`
+- `packages/silver/**`
 - `packages/core/src/grecohome_core/bronze/**`
 - `packages/core/src/grecohome_core/checks/**`
+- `packages/core/src/grecohome_core/silver/**`
 
 ## Linked-Intent Development (MANDATORY)
 

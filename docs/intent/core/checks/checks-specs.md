@@ -43,6 +43,7 @@ building, general behavior), `FRESH`, `COMPLETE`, `SCHEMA`, `CONTENT`, `ALERT`, 
 - [x] **CORE-CHECKS-ALERT-001**: When an asset check wrapped by `alerting_check` returns a failing result at ERROR severity, the system shall log one `asset_check_failed` line at ERROR level with the check name and asset; a passing or WARN result shall log nothing.
 - [x] **CORE-CHECKS-ALERT-002**: If logging the `asset_check_failed` line fails, then `alerting_check` shall swallow the error and return the check's result unchanged.
 - [x] **CORE-CHECKS-ALERT-003**: The system shall wrap the bronze freshness, schema-drift and content-health checks with `alerting_check`.
+- [x] **CORE-CHECKS-ALERT-004**: If an asset check wrapped by `alerting_check` raises, then the system shall log one `asset_check_failed` line at ERROR level with the check name and asset, and re-raise the exception.
 
 ## Checks-only job and schedule
 
