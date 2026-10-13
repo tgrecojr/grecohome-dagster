@@ -10,6 +10,7 @@ from grecohome_core.checks import bronze_reads as br
 
 @pytest.mark.unit
 class TestPayloadDiscovery:
+    # @spec CORE-CHECKS-004
     def test_iter_payloads_excludes_sidecars(self, capture, bronze_root):
         capture("whoop", "sleep", {"records": [{"start": "2024-12-01T08:00:00Z"}]},
                 dt="2024-12-01")
@@ -56,6 +57,7 @@ class TestNewestFetch:
 
 @pytest.mark.unit
 class TestEventDates:
+    # @spec CORE-CHECKS-COMPLETE-002
     def test_partition_source_uses_dt(self, capture, bronze_root):
         for d in ("2024-12-01", "2024-12-03"):  # a one-day interior gap
             capture("soil", "hourly", "row\n", dt=d, content_type="text/plain", ext="txt")
@@ -95,6 +97,7 @@ class TestEventDates:
 
 @pytest.mark.unit
 class TestSchemaSignature:
+    # @spec CORE-CHECKS-004
     def test_flat_json_signature_excludes_sidecar_fields(self, capture, bronze_root):
         # REGRESSION (§1.2): the signature must NOT contain sidecar field names.
         capture("garmin", "sleep",
@@ -192,6 +195,7 @@ class TestIntegrity:
 
 @pytest.mark.unit
 class TestSampling:
+    # @spec CORE-CHECKS-CONTENT-001
     def test_sample_spreads_and_caps(self, capture, bronze_root):
         for i in range(1, 11):
             capture("whoop", "sleep", {"records": [{"n": i}]}, dt=f"2024-12-{i:02d}",

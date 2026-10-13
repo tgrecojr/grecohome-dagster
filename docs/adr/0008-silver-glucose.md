@@ -44,4 +44,4 @@ each reading recurs in many files. Two profiling facts (against live bronze) sha
 - Daily glucose aggregates remain a gold concern, joinable to `silver_sleep` by local date.
 
 ## Related
-[[0001-bronze-only]], [[0005-lingo-port]], [[0007-silver-sleep]]. Layer guide: `docs/SILVER.md`.
+[HLD](../high-level-design.md), [[0005-lingo-port]], [[0007-silver-sleep]]. Layer guide: `docs/SILVER.md`.

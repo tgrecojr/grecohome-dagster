@@ -42,4 +42,4 @@ delta). `glucose-loader` tracked which Drive files it had already processed in a
   + delete old; instant revocation = un-share the folder.
 
 ## Related
-[[0001-bronze-only]], [[0002-dagster-pins]], [[0004-garmin-port]].
+[HLD](../high-level-design.md), [Garmin design](../intent/garmin/garmin-design.md).

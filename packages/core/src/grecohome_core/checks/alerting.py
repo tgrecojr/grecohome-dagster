@@ -33,6 +33,7 @@ from grecohome_core.logging_config import get_logger
 _logger = get_logger("grecohome_core.checks.alerting")
 
 
+# @spec CORE-CHECKS-ALERT-001, CORE-CHECKS-ALERT-002
 def alerting_check(_fn: Callable | None = None, *, name: str | None = None, asset: object = None):
     """Decorate an asset-check function so a failing ERROR result logs ``asset_check_failed``.
 

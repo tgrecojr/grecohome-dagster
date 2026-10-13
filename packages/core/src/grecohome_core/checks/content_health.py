@@ -46,6 +46,8 @@ DEFAULT_SAMPLE = 5
 _ERROR_CLASSES = frozenset({"HTTP_ERROR", "ERROR_LIKE", "UNPARSEABLE"})
 
 
+# @spec CORE-CHECKS-CONTENT-002, CORE-CHECKS-CONTENT-003, CORE-CHECKS-CONTENT-004
+# @spec CORE-CHECKS-ALERT-003
 def build_content_health_check(
     cfg: CollectionCheckConfig, bronze_root: str, sample: int = DEFAULT_SAMPLE
 ) -> AssetChecksDefinition:

@@ -36,7 +36,8 @@ docs/      ARCHITECTURE, BRONZE, SILVER, GOLD, DEPLOYMENT, ENV_TEMPLATE, VALIDAT
 ## Docs
 
 - [Architecture](docs/ARCHITECTURE.md) — repo shape, core vs subject, orchestration model
-- [Bronze layer](docs/BRONZE.md) — capture invariants, layout, sidecar
+- [Bronze writer](docs/intent/core/bronze/bronze-design.md) — capture rules, layout, sidecar, skip-identical
+- [Bronze checks](docs/intent/core/checks/checks-design.md) — the four check families, alerting, checks-only jobs
 - [Silver layer](docs/SILVER.md) — derived/rebuildable Parquet; sleep + glucose + workouts + recovery
 - [Gold layer](docs/GOLD.md) — analysis marts from silver; daily wellness mart (sleep + recovery + workouts + glucose)
 - [Deployment](docs/DEPLOYMENT.md) — host `workspace.yaml`, concurrency pool, OAuth / service-account setup

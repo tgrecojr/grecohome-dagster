@@ -25,22 +25,26 @@ class TestContentHealth:
         assert res.passed
         assert res.severity == AssetCheckSeverity.WARN
 
+    # @spec CORE-CHECKS-CONTENT-003
     def test_unexpected_empty_warns(self, capture, bronze_root):
         capture("garmin", "hrv", [], dt="2024-12-01")  # EMPTY_LIST
         res = build_content_health_check(_cfg(expected_empty=False), bronze_root)()
         assert not res.passed
         assert res.severity == AssetCheckSeverity.WARN
 
+    # @spec CORE-CHECKS-CONTENT-003
     def test_expected_empty_passes_on_empty(self, capture, bronze_root):
         capture("garmin", "hrv", [], dt="2024-12-01")  # EMPTY_LIST
         res = build_content_health_check(_cfg(expected_empty=True), bronze_root)()
         assert res.passed  # legitimately-empty hardware-unsupported collection
 
+    # @spec CORE-CHECKS-CONTENT-003
     def test_error_envelope_warns_even_if_expected_empty(self, capture, bronze_root):
         capture("garmin", "hrv", {"error": "nope"}, dt="2024-12-01")  # ERROR_LIKE
         res = build_content_health_check(_cfg(expected_empty=True), bronze_root)()
         assert not res.passed  # an error is not the same as "empty"
 
+    # @spec CORE-CHECKS-CONTENT-002
     def test_corruption_is_error(self, capture, bronze_root):
         path = capture("garmin", "hrv", {"hrvSummary": {"v": 1}}, dt="2024-12-01")
         with open(path, "ab") as fh:  # tamper -> sha/byte_size mismatch
@@ -50,6 +54,7 @@ class TestContentHealth:
         assert res.severity == AssetCheckSeverity.ERROR
         assert res.metadata["integrity_issues"].value >= 1
 
+    # @spec CORE-CHECKS-CONTENT-004
     def test_no_payloads_passes(self, bronze_root):
         # Absence is freshness's concern, not content's.
         res = build_content_health_check(_cfg(), bronze_root)()

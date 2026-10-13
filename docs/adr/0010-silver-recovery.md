@@ -37,5 +37,5 @@ UTC `created_at`/`updated_at` (Whoop rescores), and a nested `score`
   recovery vs the night's sleep, vs next-day glucose, vs prior-day workout load.
 
 ## Related
-[[0001-bronze-only]], [[0003-token-file]], [[0007-silver-sleep]], [[0008-silver-glucose]],
+[HLD](../high-level-design.md), [Whoop token lifecycle](../intent/whoop/auth/auth-design.md), [[0007-silver-sleep]], [[0008-silver-glucose]],
 [[0009-silver-workouts]]. Layer guide: `docs/SILVER.md`.

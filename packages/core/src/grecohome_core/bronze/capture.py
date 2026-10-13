@@ -51,6 +51,7 @@ _CONTENT_TYPE_EXT = {
 }
 
 
+# @spec CORE-BRONZE-003
 def _ext_for(content_type: str | None, stored_encoding: str) -> str:
     """Pick the file extension for the *stored* bytes."""
     base = _CONTENT_TYPE_EXT.get((content_type or "").split(";")[0].strip().lower(), "bin")
@@ -118,6 +119,9 @@ def _latest_sha256(partition_dir: str) -> str | None:
         return None
 
 
+# @spec CORE-BRONZE-001, CORE-BRONZE-002, CORE-BRONZE-004, CORE-BRONZE-005, CORE-BRONZE-006
+# @spec CORE-BRONZE-007, CORE-BRONZE-008, CORE-BRONZE-009, CORE-BRONZE-010, CORE-BRONZE-011
+# @spec CORE-BRONZE-012
 def capture_bronze(
     source: str,
     collection: str,

@@ -21,6 +21,7 @@ def _cfg(**kw) -> CollectionCheckConfig:
 
 @pytest.mark.unit
 class TestFreshness:
+    # @spec CORE-CHECKS-FRESH-001
     def test_fresh_passes(self, capture, bronze_root):
         capture("whoop", "sleep", {"records": [{"a": 1}]}, dt="2024-12-01",
                 fetched="2024-12-01T10:00:00")
@@ -30,6 +31,7 @@ class TestFreshness:
         assert res.passed
         assert res.severity == AssetCheckSeverity.ERROR
 
+    # @spec CORE-CHECKS-FRESH-001
     def test_stale_fails_error(self, capture, bronze_root):
         capture("whoop", "sleep", {"records": [{"a": 1}]}, dt="2024-12-01",
                 fetched="2024-12-01T10:00:00")
@@ -39,11 +41,13 @@ class TestFreshness:
         assert not res.passed
         assert res.severity == AssetCheckSeverity.ERROR
 
+    # @spec CORE-CHECKS-FRESH-002
     def test_no_captures_fails(self, bronze_root):
         check = build_fetch_freshness_check(_cfg(), bronze_root)
         res = check()
         assert not res.passed
 
+    # @spec CORE-CHECKS-FRESH-002
     def test_no_captures_expected_empty_passes(self, bronze_root):
         check = build_fetch_freshness_check(_cfg(expected_empty=True), bronze_root)
         res = check()

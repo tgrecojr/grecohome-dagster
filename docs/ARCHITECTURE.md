@@ -33,7 +33,7 @@ depend on `grecohome-core` via the workspace. See [ADRs](adr/) for the load-bear
 | `config.py` | `BaseSubjectSettings` + `init_settings()` (friendly missing-var errors) |
 | `logging_config.py` | structlog / JSON logging setup |
 | `dagster/helpers.py` | `daily_utc_partitions`, `trailing_partition_keys`, `run_async` |
-| `checks/` | bronze asset-check families + builders (see [VALIDATION](VALIDATION.md)) |
+| `checks/` | bronze asset-check families + builders (see [bronze checks](intent/core/checks/checks-design.md)) |
 | `silver/` | silver helpers: DuckDB connection, sidecar-safe bronze reading (JSON + CSV), dedup idiom, atomic Parquet write (`protected_root` guard) |
 
 Nothing in core is source-specific; a new subject reuses the bronze framework, and the silver
@@ -123,7 +123,27 @@ How Lingo differs (it reuses core too):
   run (`run_key == file_id`, captured exactly once). **The dynamic partition set is the
   "already captured" ledger** — replacing glucose-loader's Postgres `ProcessedFile` table. The
   first tick captures the existing backlog; there is no backfill grid.
-- **Dedup on** (`dedupe=True`): re-uploading an unchanged export is a no-op.
+- **Dedup on** (`dedupe=True`): re-uploading an unchanged export is a no-op. Capture-once per
+  `file_id` is the first defence; the content hash backstops a re-upload of the same export under
+  a new `file_id`. A new export (with more records) differs and is captured.
+
+Lingo in bronze:
+- **One collection, `lingo/glucose`.** Each payload is the export's **CSV bytes**, stored
+  byte-for-byte (`text/csv` → `ext=csv`), with no reserialization.
+- **`dt` is the fetch (capture) date**, not a per-record date. Each export is a *cumulative*
+  dump of every reading to date, so the file belongs to when it arrived, and successive uploads
+  land in successive `dt=` folders.
+- **Sidecar Drive provenance:** `file_id`, `file_name`, `folder_id`, and Drive `created_time` /
+  `modified_time`. **Never** the service-account key or any credential.
+
+Lingo checks (`grecohome_lingo/dagster/checks.py`, 3 checks, `lingo_bronze_checks_job` hourly):
+- **Completeness** uses the **in-CSV reading timestamp** (the `Time of Glucose Reading [...]`
+  column), never `dt`, over distinct event dates. It runs at WARN, with `cadence_days` 14,
+  because the sensor is worn intermittently.
+- **Schema drift and content health** are on.
+- **Freshness is off.** Wear is intermittent, so "no recent upload" is usually legitimate
+  non-wear rather than a break. Gaps surface through completeness instead.
+- An auth-health check for the service account was considered and not built.
 
 ## `grecohome-soil` — a fourth data subject
 
@@ -152,6 +172,25 @@ How Soil differs (it reuses core too):
   every past year is on the server.
 - **Single station** (env-configurable; default `PA_Avondale_2_N`), consistent with the single-user
   constraint — the station is recorded in the sidecar, not the path.
+
+USCRN in bronze:
+- **One collection, `uscrn/hourly`.** Each payload is the **raw text rows** for one UTC date
+  (`text/plain` → `ext=txt`). It's pure selection: the stored lines are byte-faithful to the
+  source.
+- **`dt` is the partition's UTC date**, matched against the file's `UTC_DATE` column (field 2),
+  so re-captures of a trailing day are compared within the right folder.
+- **Dedup on.** An unchanged day-slice is skipped, and a day that gained a row is captured.
+  Today's folder can therefore hold a few progressively larger slices, each a faithful snapshot
+  of what the source showed.
+- **Sidecar provenance:** `station`, `wbanno`, `year`, `utc_date`, `row_count`, `request_url`.
+  There are no secrets: the source is public NOAA HTTP.
+
+USCRN checks (`grecohome_soil/dagster/checks.py`, 4 checks, `uscrn_bronze_checks_job` hourly):
+- **Completeness** uses the event date from the partition (`dt` is the UTC date the rows
+  cover), with `cadence_days` 2.
+- **Freshness** uses `cadence_hours` 30 (NOAA's publish lag plus the 6-hourly schedule).
+- **Schema drift** uses a text field-count signature.
+- There's no auth, so only capture freshness applies.
 
 ## `grecohome-silver` — the silver layer
 
@@ -204,7 +243,7 @@ glucose summary (time-in-range 70–140), with `has_*` provenance (ADR 0011). Fu
   **code-location image** (`dagster code-server start`) that the host registers via
   `workspace.yaml`. We never ship a Dagster instance/webserver. See [DEPLOYMENT](DEPLOYMENT.md).
 - **Daily UTC partitions** (`end_offset=1` so the in-progress day is materializable). A partition
-  is a UTC *fetch-slice*, not a semantic local day — see [ADR: bronze partitioning](adr/0001-bronze-only.md).
+  is a UTC *fetch-slice*, not a semantic local day — see the [HLD](high-level-design.md) (*Bronze partitions are daily UTC fetch-slices*).
 - **One hourly schedule** re-materializes the trailing `reconcile_window_days + 1` partitions, so
   Whoop's retroactive rescores/deletes are eventually re-captured. Correctness comes from the
   trailing window + content-hash dedup, not the cadence.

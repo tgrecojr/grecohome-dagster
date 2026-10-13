@@ -125,7 +125,28 @@ example) must not rely on this guarantee.
 
 ## Interaction with bronze checks
 
-Checks are generated from the catalog (`dagster/checks.py`).
+Checks are generated from the catalog (`dagster/checks.py`), so the catalog is the source of
+truth for which collections exist and which are legitimately empty. Garmin has about 60
+collections, so the full suite is kept for the analytically important ones:
+
+| Collection | Checks | Completeness gap tolerance |
+|---|---|---|
+| `IMPORTANT`: `sleep`, `stress`, `hrv`, `respiration`, `spo2`, `resting_heart_rate`, `heart_rates`, `steps_intraday`, `intensity_minutes`, `training_status`, `training_readiness`, `max_metrics`, `body_battery`, `user_summary` | freshness, completeness, schema drift, content health | 2 days (14 if expected-empty) |
+| Expected-empty, not important | freshness, content health | — |
+| Everything else | freshness | — |
+| Deselected (`FETCH_SELECTION` / `FETCH_EXCLUDE`) | **none**: a collection that's never pulled would otherwise age past freshness and page | — |
+
+Freshness is 26 h cadence + 6 h grace everywhere.
+
+**Expected-empty** collections are those legitimately empty on this hardware. The flag is
+`skip_if_none or skip_if_empty or collection in EMPIRICALLY_EMPTY`. The catalog's skip flags
+alone miss endpoints that write an **empty payload every day** instead of returning nothing.
+A content sweep of the live tree found those, and they're listed in `EMPIRICALLY_EMPTY`:
+`training_readiness`, `body_battery_events`, `running_tolerance`, `goals`, `max_metrics`,
+`hrv`, and `activities` (empty on about 82% of days). When the hardware or endpoints change,
+re-run `scripts/sweep_streams.py` and update the set.
+
+How skip-identical interacts with each family:
 
 - **Freshness** (every collection) reads the newest sidecar's `fetched_at` across recent
   partitions, with a tolerance of 26 h cadence + 6 h grace. Skip-identical never starves it.
@@ -154,10 +175,17 @@ Checks are generated from the catalog (`dagster/checks.py`).
 
 ## Catalog and selection
 
-*(not yet specified in detail. Summary of current design.)* The catalog is an allowlist:
-mutating and auth methods are never callable, and a drift detector surfaces new readable
-library methods for review. `FETCH_SELECTION` / `FETCH_EXCLUDE` (exclusion wins) turn
-endpoints off at runtime. A deselected asset materializes as a no-op and has no checks.
+*(not yet specified in detail. Summary of current design.)*
+
+- **Allowlist.** The catalog (`catalog.py`) is the call recipe: every call goes through it.
+  Mutating and auth methods are never callable, a unit test enforces that, and a drift
+  detector surfaces new readable library methods for review instead of calling them.
+- **Runtime switches.** `FETCH_SELECTION` / `FETCH_EXCLUDE` (exclusion wins) turn endpoints
+  off at runtime. A deselected asset materializes as a no-op and has no checks.
+- **Full surface by default.** `FETCH_EXCLUDE` defaults to empty, so everything is captured,
+  including endpoints that are empty on this hardware.
+- **Empty endpoints aren't dropped.** An empty 200 is kept as a faithful "asked, no data"
+  record, so a new device that starts producing a stream begins populating automatically.
 
 ## Decisions & Alternatives
 
@@ -169,6 +197,7 @@ endpoints off at runtime. A deselected asset materializes as a no-op and has no 
 | Which captures may be skipped | Single-request-per-folder paths whose endpoint returns a value every run | Skip-identical everywhere | Two soundness conditions. Fan-out folders would drop identical answers to different requests. Endpoints that skip no-data days would starve freshness and page falsely. The excluded paths are cheap except per-activity (next row). |
 | Per-activity fan-out storage | Keep every capture | Teach the core writer to compare against the newest capture of the **same request** (matching `request_params`) | The per-activity collections are about 38% of Garmin bronze bytes (FIT downloads dominate), so they keep growing about 7× per activity. Per-request comparison is the right fix but changes the shared writer, which every source uses. Keeping every capture is complete and safe now. The core change is deferred. |
 | Schedule `run_key` | `<partition>-<YYYYMMDDTHH>` (tick-scoped) | `run_key = partition_key` | Matches Whoop and USCRN, and states in code that re-emitting a partition each tick is intended. A partition-only key reads as capture-once and becomes capture-once under a sensor. |
+| Asset granularity | One asset per catalog collection (about 60), built by a factory | One asset per endpoint kind; a single "garmin" asset | Per-collection failures are visible and retryable on their own, matching Whoop's per-collection observability. |
 | Duplicate captures already in bronze | Leave them | Delete identical older captures | Bronze is immutable and append-only. Silver already picks the latest capture, so the extra files are harmless. |
 | Partition range | Completed days only (`end_offset=0`), captured at 07:00 UTC | Include the in-progress day | A partial "today" would be captured repeatedly while still incomplete. The trailing window picks the day up once it has closed, and 07:00 UTC is after the user's local day ends. |
 
@@ -200,6 +229,6 @@ Items 2–4 belong to the shared core writer and are tracked in issue #176.
 
 ## References
 
-- `docs/BRONZE.md`: bronze layout, sidecar and writer invariants
+- `docs/intent/core/bronze/bronze-design.md`: the bronze writer (layout, sidecar, skip-identical)
 - `packages/core/src/grecohome_core/bronze/capture.py`: `capture_bronze` and skip-identical
 - `packages/core/src/grecohome_core/silver/transform.py`: `dedup_latest_sql`

@@ -35,6 +35,7 @@ def monitor_dir(tmp_path) -> str:
 
 @pytest.mark.unit
 class TestSchemaDrift:
+    # @spec CORE-CHECKS-SCHEMA-002
     def test_first_run_sets_baseline(self, capture, bronze_root, monitor_dir):
         capture("garmin", "sleep", {"dailySleepDTO": {}, "remSleepData": True},
                 dt="2024-12-01")
@@ -56,6 +57,7 @@ class TestSchemaDrift:
         assert res.passed
         assert res.metadata["status"].value == "ok"
 
+    # @spec CORE-CHECKS-SCHEMA-003
     def test_drift_fails_error(self, capture, bronze_root, monitor_dir):
         capture("garmin", "sleep", {"dailySleepDTO": {}, "remSleepData": True},
                 dt="2024-12-01")
@@ -69,6 +71,7 @@ class TestSchemaDrift:
         assert res.severity == AssetCheckSeverity.ERROR
         assert res.metadata["status"].value == "drift"
 
+    # @spec CORE-CHECKS-SCHEMA-001
     def test_sparse_stub_on_newest_day_does_not_drift(self, capture, bronze_root, monitor_dir):
         # A full day defines the baseline...
         full = {"dailySleepDTO": {}, "remSleepData": True, "sleepHeartRate": [],
@@ -149,6 +152,7 @@ class TestSchemaDrift:
         assert res.passed
         assert res.metadata["status"].value == "ok"
 
+    # @spec CORE-CHECKS-SCHEMA-002
     def test_empty_baseline_self_heals(self, capture, bronze_root, monitor_dir):
         # The max_metrics incident: a baseline poisoned with [] (recorded during a
         # long empty stretch, before empties were skipped) must self-heal — the next
@@ -178,6 +182,7 @@ class TestSchemaDrift:
             "cycling", "generic", "heatAltitudeAcclimation", "userId"
         ]
 
+    # @spec CORE-CHECKS-SCHEMA-004
     def test_disabled_without_monitor_dir(self, capture, bronze_root):
         capture("garmin", "sleep", {"dailySleepDTO": {}}, dt="2024-12-01")
         check = build_schema_drift_check(_cfg(), bronze_root, None)
@@ -185,6 +190,7 @@ class TestSchemaDrift:
         assert res.passed
         assert res.metadata["status"].value == "disabled"
 
+    # @spec CORE-CHECKS-SCHEMA-004
     def test_refuses_baseline_inside_bronze_root(self, capture, bronze_root):
         capture("garmin", "sleep", {"dailySleepDTO": {}}, dt="2024-12-01")
         # monitor_dir pointed *inside* bronze -> the check must refuse to write.

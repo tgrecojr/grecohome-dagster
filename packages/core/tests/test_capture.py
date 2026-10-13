@@ -40,6 +40,7 @@ def _payloads(root: str) -> list[str]:
 
 @pytest.mark.unit
 class TestBronzeHelpers:
+    # @spec CORE-BRONZE-003
     def test_ext_for_json_identity(self):
         assert _ext_for("application/json", "identity") == "json"
         assert _ext_for("application/json; charset=utf-8", "identity") == "json"
@@ -57,6 +58,7 @@ class TestBronzeHelpers:
 
 @pytest.mark.unit
 class TestCaptureBronze:
+    # @spec CORE-BRONZE-001, CORE-BRONZE-012
     def test_writes_payload_byte_for_byte_with_sidecar(self, tmp_path):
         root = str(tmp_path / "bronze")
         raw = b'{"records": [{"id": 1}], "next_token": null}'
@@ -101,6 +103,7 @@ class TestCaptureBronze:
         for needle in ("authorization", "bearer", "access_token", "secret"):
             assert needle not in text
 
+    # @spec CORE-BRONZE-006
     def test_capture_failure_is_non_fatal(self, tmp_path):
         # A non-bytes payload violates the invariant but must be swallowed.
         result = capture_bronze("whoop", "recovery", "not-bytes", {}, bronze_root=str(tmp_path))
@@ -114,6 +117,7 @@ class TestCaptureBronze:
         assert p1 and p2 and p1 != p2
         assert len(_payloads(root)) == 2
 
+    # @spec CORE-BRONZE-008
     def test_non_2xx_response_is_not_persisted(self, tmp_path):
         # An HTTP error body (e.g. a 401 auth envelope) must never land in bronze,
         # or it would poison a content/integrity check.
@@ -136,6 +140,7 @@ class TestCaptureBronze:
 
 @pytest.mark.unit
 class TestContentHashDedup:
+    # @spec CORE-BRONZE-009
     def test_identical_payload_is_deduped(self, tmp_path):
         root = str(tmp_path / "bronze")
         raw = b'{"records": [{"id": 1}]}'
@@ -169,6 +174,7 @@ class TestContentHashDedup:
         assert "dt=2025-01-02" in b
         assert len(_payloads(root)) == 2
 
+    # @spec CORE-BRONZE-002
     def test_dt_override_routes_to_partition_folder(self, tmp_path):
         root = str(tmp_path / "bronze")
         path = capture_bronze(

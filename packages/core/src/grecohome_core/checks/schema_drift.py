@@ -73,6 +73,8 @@ def _write_baseline(path: str, signature: list[str], source: str, collection: st
     os.replace(tmp, path)
 
 
+# @spec CORE-CHECKS-SCHEMA-001, CORE-CHECKS-SCHEMA-002, CORE-CHECKS-SCHEMA-003
+# @spec CORE-CHECKS-SCHEMA-004, CORE-CHECKS-SCHEMA-005, CORE-CHECKS-ALERT-003
 def build_schema_drift_check(
     cfg: CollectionCheckConfig, bronze_root: str, monitor_dir: str | None
 ) -> AssetChecksDefinition:

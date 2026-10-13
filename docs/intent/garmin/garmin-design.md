@@ -42,4 +42,3 @@ every capture op in the run uses that client.
 ## References
 
 - `docs/high-level-design.md`: tenets and the bronze re-capture decision
-- `docs/adr/0004-garmin-port.md`: the original Garmin port decision record

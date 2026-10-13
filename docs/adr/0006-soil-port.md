@@ -41,4 +41,4 @@ day, bronze-only, **without re-storing the whole year** each tick.
   `meta` passthrough (proven by the Lingo port).
 
 ## Related
-[[0001-bronze-only]], [[0002-dagster-pins]], [[0004-garmin-port]], [[0005-lingo-port]].
+[HLD](../high-level-design.md), [Garmin design](../intent/garmin/garmin-design.md), [[0005-lingo-port]].

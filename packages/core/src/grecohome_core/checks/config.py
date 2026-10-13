@@ -31,6 +31,7 @@ EventDateSource = Literal["payload", "partition", "none"]
 ALL_CHECKS: frozenset[str] = frozenset({"freshness", "completeness", "schema", "content"})
 
 
+# @spec CORE-CHECKS-001
 @dataclass(frozen=True)
 class CollectionCheckConfig:
     """How to check one bronze collection.
