@@ -13,6 +13,7 @@ from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 from grecohome_core.checks import alerting_check
 from grecohome_core.silver import connect, list_payload_files
 from grecohome_silver.config import settings
+from grecohome_silver.dagster.freshness import table_freshness_check
 from grecohome_silver.dagster.whoop_workouts_assets import (
     WHOOP_WORKOUTS_PARQUET,
     silver_whoop_workouts,
@@ -37,6 +38,7 @@ def _src(path: str) -> str:
     return f"read_parquet('{path.replace(chr(39), chr(39) * 2)}')"
 
 
+# @spec SILVER-WORKOUTS-CHECKS-007
 @asset_check(asset=silver_whoop_workouts, name="whoop_workout_unique_nonnull")
 @alerting_check
 def whoop_workout_unique_nonnull() -> AssetCheckResult:
@@ -56,6 +58,7 @@ def whoop_workout_unique_nonnull() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-WORKOUTS-CHECKS-008
 @asset_check(asset=silver_whoop_workouts, name="whoop_workout_value_ranges")
 @alerting_check
 def whoop_workout_value_ranges() -> AssetCheckResult:
@@ -78,10 +81,11 @@ def whoop_workout_value_ranges() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-WORKOUTS-CHECKS-009
 @asset_check(asset=silver_whoop_workouts, name="whoop_workout_coverage_vs_bronze")
 @alerting_check
 def whoop_workout_coverage_vs_bronze() -> AssetCheckResult:
-    """silver workouts ≈ bronze distinct workouts — no silent drop."""
+    """silver workouts ≥ bronze distinct workouts — no silent drop."""
     path = whoop_workouts_path(WHOOP_WORKOUTS_PARQUET)
     if not os.path.exists(path):
         return _missing(path)
@@ -99,8 +103,16 @@ def whoop_workout_coverage_vs_bronze() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-WORKOUTS-CHECKS-010
+silver_whoop_workouts_freshness = table_freshness_check(
+    silver_whoop_workouts, lambda: whoop_workouts_path(WHOOP_WORKOUTS_PARQUET)
+)
+
+
+# @spec SILVER-WORKOUTS-CHECKS-011, SILVER-WORKOUTS-CHECKS-012
 WHOOP_WORKOUTS_CHECKS = [
     whoop_workout_unique_nonnull,
     whoop_workout_value_ranges,
     whoop_workout_coverage_vs_bronze,
+    silver_whoop_workouts_freshness,
 ]

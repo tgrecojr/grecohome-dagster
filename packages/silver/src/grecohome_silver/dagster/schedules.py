@@ -69,6 +69,7 @@ silver_glucose_daily = ScheduleDefinition(
 )
 
 # Daily rebuild of the workouts table (Garmin activities).
+# @spec SILVER-WORKOUTS-SCHED-001
 silver_workouts_job = define_asset_job("silver_workouts_job", selection=WORKOUT_ASSETS)
 
 silver_workouts_daily = ScheduleDefinition(
@@ -142,6 +143,7 @@ silver_fitness_daily = ScheduleDefinition(
 )
 
 # Daily rebuild of the workout-splits table (Garmin per-lap detail; after the daily capture).
+# @spec SILVER-WORKOUTS-SCHED-001
 silver_workout_splits_job = define_asset_job(
     "silver_workout_splits_job", selection=WORKOUT_SPLITS_ASSETS
 )
@@ -154,6 +156,7 @@ silver_workout_splits_daily = ScheduleDefinition(
 )
 
 # Daily rebuild of the Whoop-workouts table (Whoop activities; after the Whoop hourly capture).
+# @spec SILVER-WORKOUTS-SCHED-001
 silver_whoop_workouts_job = define_asset_job(
     "silver_whoop_workouts_job", selection=WHOOP_WORKOUTS_ASSETS
 )

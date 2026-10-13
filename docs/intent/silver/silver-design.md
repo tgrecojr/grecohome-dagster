@@ -112,7 +112,7 @@ past 06:00 UTC means moving this window too. Gold's rebuilds follow silver's che
 | Sleep | [sleep/sleep-design.md](sleep/sleep-design.md) | `silver_sleep_garmin`, `silver_sleep_whoop`, `silver_sleep` | Specified (`SILVER-SLEEP`). The only two-source join; the other families are single-source reductions of the same shape |
 | Glucose | [glucose/glucose-design.md](glucose/glucose-design.md) | `silver_glucose` | Specified (`SILVER-GLUCOSE`) |
 | Cycles | [cycles/cycles-design.md](cycles/cycles-design.md) | `silver_recovery`, `silver_strain` | Specified (`SILVER-CYCLES`) |
-| Workouts | — | `silver_workouts`, `silver_workout_splits`, `silver_whoop_workouts` | *(not yet specified; see `docs/SILVER.md`)* |
+| Workouts | [workouts/workouts-design.md](workouts/workouts-design.md) | `silver_workouts`, `silver_workout_splits`, `silver_whoop_workouts` | Specified (`SILVER-WORKOUTS`) |
 | Daily | — | `silver_daily`, `silver_body`, `silver_fitness` | *(not yet specified; see `docs/SILVER.md`)* |
 | Weather | — | `silver_weather` | *(not yet specified; see `docs/SILVER.md`)* |
 

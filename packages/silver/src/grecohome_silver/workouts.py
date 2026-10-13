@@ -27,14 +27,19 @@ _FETCHED_MS = r"TRY_CAST(regexp_extract(filename, '_([0-9]{13})_', 1) AS BIGINT)
 
 
 def _activities_relation(payloads_sql: str) -> str:
-    """Unnest each file's top-level activity array to one row per activity (``a``)."""
+    """Unnest each file's top-level activity array to one row per activity (``a``).
+
+    A payload that isn't an array fails the cast, and so the rebuild, rather than silently
+    emptying the table.
+    """
     return (
         f"SELECT p.filename AS filename, a "
-        f"FROM ({payloads_sql}) AS p, UNNEST(CAST(p.j AS JSON[])) AS t(a) "
-        "WHERE json_type(p.j) = 'ARRAY'"
+        f"FROM ({payloads_sql}) AS p, UNNEST(CAST(p.j AS JSON[])) AS t(a)"
     )
 
 
+# @spec SILVER-WORKOUTS-GARMIN-001, SILVER-WORKOUTS-GARMIN-002, SILVER-WORKOUTS-GARMIN-003
+# @spec SILVER-WORKOUTS-GARMIN-004, SILVER-WORKOUTS-GARMIN-005
 def workouts_sql(files: list[str]) -> str:
     """Typed, deduped Garmin activities — one row per ``activityId``."""
     rel = _activities_relation(payloads_relation_sql(files))

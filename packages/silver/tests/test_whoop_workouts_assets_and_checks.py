@@ -81,6 +81,7 @@ def test_rebuild_idempotent(whoop_workouts_bronze_root, tmp_path, monkeypatch) -
     assert one == two
 
 
+# @spec SILVER-WORKOUTS-CHECKS-007, SILVER-WORKOUTS-CHECKS-008, SILVER-WORKOUTS-CHECKS-009
 def test_checks_pass(materialized) -> None:
     assert checks_mod.whoop_workout_unique_nonnull().passed
     assert checks_mod.whoop_workout_value_ranges().passed
@@ -90,6 +91,7 @@ def test_checks_pass(materialized) -> None:
     assert cov.metadata["distinct_sports"].value == 2  # weightlifting + running
 
 
+# @spec SILVER-WORKOUTS-CHECKS-008
 def test_range_check_catches_bad_strain(materialized) -> None:
     path = whoop_workouts_path(WHOOP_WORKOUTS_PARQUET)
     con = connect()

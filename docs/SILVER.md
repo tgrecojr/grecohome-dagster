@@ -3,17 +3,11 @@
 The silver layer's intent (layer rules, architecture, storage, check and schedule conventions)
 lives in [docs/intent/silver/silver-design.md](intent/silver/silver-design.md), and the shared
 helpers in [docs/intent/core/silver/silver-design.md](intent/core/silver/silver-design.md).
-Sleep, glucose and cycles (recovery, strain) are specified under
+Sleep, glucose, cycles (recovery, strain) and workouts are specified under
 [docs/intent/silver/](intent/silver/silver-design.md).
 
 This page still describes the table families not yet specified there:
 
-- **Workouts** — `silver_workouts` (per-activity Garmin). See
-  [Workouts (Garmin activities)](#workouts-garmin-activities) below.
-- **Workout splits** — `silver_workout_splits` (per-lap Garmin detail; enriches workouts). See
-  [Workout splits (Garmin laps)](#workout-splits-garmin-laps) below.
-- **Whoop workouts** — `silver_whoop_workouts` (per-workout Whoop activities; the device's
-  own activity log, parallel to Garmin's). See [Whoop workouts](#whoop-workouts) below.
 - **Weather** — `silver_weather` (per-hour NOAA USCRN soil/weather). The first
   **line-oriented** (fixed-width text) source. See [Weather (NOAA USCRN)](#weather-noaa-uscrn)
   below.
@@ -28,109 +22,11 @@ This page still describes the table families not yet specified there:
 Layout under `SILVER_ROOT` for these families (`<family>/<table>.parquet`):
 
 ```
-{SILVER_ROOT}/workouts/silver_workouts.parquet # workouts: one row per Garmin activity
-{SILVER_ROOT}/workout_splits/silver_workout_splits.parquet # one row per Garmin lap
-{SILVER_ROOT}/whoop_workouts/silver_whoop_workouts.parquet # one row per Whoop workout
 {SILVER_ROOT}/weather/silver_weather.parquet # weather: one row per USCRN hourly observation
 {SILVER_ROOT}/daily/silver_daily.parquet     # daily summary: one row per local day (Garmin)
 {SILVER_ROOT}/body/silver_body.parquet       # body: one row per Garmin weigh-in
 {SILVER_ROOT}/fitness/silver_fitness.parquet # fitness: one row per Garmin snapshot day
 ```
-
-# Workouts (Garmin activities)
-
-`silver_workouts` is a single-source table — one row per Garmin activity.
-
-### Source & event date
-Garmin activities bronze (`garmin/activities`) is a top-level JSON **array** of activity objects
-per file (empty `[]` on days with none). Garmin appends and re-fetches overlapping windows, so the
-same activity recurs across files — dedup by **`activityId`** (keeping the latest fetch). Activities
-carry a **local** `startTimeLocal` and a UTC `startTimeGMT`, so the event date is just the local
-date — no timezone subtlety.
-
-### Schema (`silver_workouts`)
-One row per activity.
-
-| Column | Type | Note |
-|---|---|---|
-| `activity_id` | BIGINT | dedup key |
-| `activity_name` | VARCHAR | |
-| `activity_type` | VARCHAR | `activityType.typeKey` (running / cycling / yoga / …) |
-| `activity_date` | DATE | local date of `startTimeLocal` |
-| `start_time_local` / `start_time_gmt` | TIMESTAMP | local / UTC start |
-| `duration_sec` / `moving_duration_sec` / `elapsed_duration_sec` | DOUBLE | seconds |
-| `distance_m` | DOUBLE | metres (null on non-distance sports) |
-| `calories` | DOUBLE | |
-| `avg_hr` / `max_hr` | INT | bpm (`avg_hr` = 0 when HR not recorded) |
-| `hr_z1_sec` … `hr_z5_sec` | DOUBLE | seconds in each HR zone (present on a subset) |
-| `device_id` | BIGINT | |
-
-### Asset checks
-| Check | Severity | What |
-|---|---|---|
-| `workouts_id_unique_nonnull` | ERROR | one row per `activity_id`; `activity_id`/`activity_date` non-null |
-| `workouts_value_ranges` | ERROR | durations/distance/calories ≥ 0 and bounded; HR 0–240 (0 = not recorded) |
-| `workouts_coverage_vs_bronze` | WARN | silver activities ≈ bronze distinct `activityId` (no silent drop) |
-
-# Workout splits (Garmin laps)
-
-`silver_workout_splits` is the per-lap breakdown `silver_workouts` doesn't have — one row
-per **lap** (`activity_id` + `lap_index`), enriching each workout with its splits.
-
-### Source & event date
-`garmin/activity_splits` is `{activityId, lapDTOs: […], eventDTOs}` per activity; `lapDTOs`
-is the array of laps. `activityId` is in the **payload** (joins `silver_workouts.activity_id`),
-so no sidecar is needed. Garmin re-pulls an activity into several files → dedup by
-**(activity_id, lap_index)** keeping the latest fetch. Profiled live: 727 activities, ~4,255
-deduped laps. Lap richness varies by activity type (distance / speed / HR near-universal;
-calories and elevation on a subset); a missing field is NULL, the lap is kept. HR *zones* are
-**not** here — they already live in `silver_workouts` (`hr_z1_sec` …).
-
-### Schema (`silver_workout_splits`)
-One row per `(activity_id, lap_index)`: `activity_id` (BIGINT), `lap_index` (INT),
-`lap_start_gmt` (TIMESTAMP), `duration_sec`, `moving_duration_sec` (DOUBLE), `distance_m`,
-`avg_speed_mps`, `max_speed_mps` (DOUBLE), `avg_hr`, `max_hr` (INT), `calories`,
-`elevation_gain_m`, `elevation_loss_m` (DOUBLE).
-
-### Asset checks
-| Check | Severity | What |
-|---|---|---|
-| `splits_lap_unique_nonnull` | ERROR | one row per `(activity_id, lap_index)`; both keys non-null |
-| `splits_value_ranges` | ERROR | durations/distance/speed ≥ 0, HR 0–240, lap_index ≥ 0 |
-| `splits_coverage_vs_bronze` | WARN | silver laps ≈ bronze distinct laps; reports distinct activities |
-
-# Whoop workouts
-
-`silver_whoop_workouts` is Whoop's own activity log — one row per workout — kept **separate
-from `silver_workouts`** (Garmin) on purpose: two devices, neither authoritative, never
-blended (the sleep philosophy). It's where the activity story lives once Garmin's tapers off:
-since the Whoop arrived (2025-12-18) it logs strength, yard-work, walking, etc. (plus running/
-cycling that overlaps Garmin).
-
-### Source & event date
-`whoop/workout` is the same `{"records": [...]}` envelope as recovery/strain; each record has
-a UUID `id`, `start`/`end` (UTC), `timezone_offset`, `created_at`/`updated_at` (Whoop
-rescores), `sport_name`/`sport_id`, `score_state`, and a nested `score` (`strain` 0–21, avg/max
-HR, `kilojoule`, `distance_meter`, `altitude_gain_meter`, `percent_recorded`). Dedup by `id`
-keeping the latest `updated_at`. `workout_date` is the **local date of `start`** (via the
-record's `timezone_offset`, the sleep/strain idiom).
-
-### Typing & units
-Canonical to the source: `kilojoules` as Whoop reports it (gold/dashboard → kcal), distance in
-metres, strain unitless 0–21. Non-GPS sports (lifting, yard-work) have null distance — kept.
-
-### Schema (`silver_whoop_workouts`)
-One row per workout: `workout_id` (VARCHAR, key), `workout_date` (DATE), `sport_name` (VARCHAR),
-`sport_id` (INT), `start_ts`/`end_ts` (TIMESTAMP), `strain` (DOUBLE), `avg_heart_rate`/
-`max_heart_rate` (INT), `kilojoules`, `distance_m`, `altitude_gain_m`, `percent_recorded`
-(DOUBLE), `score_state` (VARCHAR).
-
-### Asset checks
-| Check | Severity | What |
-|---|---|---|
-| `whoop_workout_unique_nonnull` | ERROR | one row per `workout_id`; `workout_id`/`workout_date` non-null |
-| `whoop_workout_value_ranges` | ERROR | strain 0–21, HR 20–240, kilojoules/distance ≥ 0 |
-| `whoop_workout_coverage_vs_bronze` | WARN | silver workouts ≈ bronze distinct `id`; reports distinct sports |
 
 # Weather (NOAA USCRN)
 
@@ -304,14 +200,13 @@ One row per `snapshot_date` (DATE, key): `vo2max_running`, `vo2max_cycling` (DOU
 - `silver_glucose_daily` (06:30), `silver_recovery_daily` (06:50) and `silver_strain_daily` (06:52
   UTC); see the [glucose](intent/silver/glucose/glucose-design.md) and
   [cycles](intent/silver/cycles/cycles-design.md) designs.
-- `silver_workouts_daily` (06:45 UTC) rebuilds `silver_workouts` (after the Garmin daily capture).
+- `silver_workouts_daily` (06:45), `silver_workout_splits_daily` (06:47) and
+  `silver_whoop_workouts_daily` (06:53 UTC); see the [workouts design](intent/silver/workouts/workouts-design.md).
 - `silver_weather_daily` (06:55 UTC) rebuilds `silver_weather` (USCRN captured a few times a day;
   a daily rebuild keeps silver a current projection).
 - `silver_daily_daily` (06:40 UTC) rebuilds `silver_daily` (after the Garmin daily capture).
 - `silver_body_daily` (06:42 UTC) rebuilds `silver_body` (Garmin weigh-ins).
 - `silver_fitness_daily` (06:44 UTC) rebuilds `silver_fitness` (Garmin snapshot collections).
-- `silver_workout_splits_daily` (06:47 UTC) rebuilds `silver_workout_splits` (Garmin laps).
-- `silver_whoop_workouts_daily` (06:53 UTC) rebuilds `silver_whoop_workouts` (Whoop activities).
 - `silver_checks_daily` (07:00 UTC) runs **all** silver checks (sleep + glucose + workouts +
   recovery + weather + daily + strain + body + fitness + workout-splits + whoop-workouts)
   independently, so a *stopped* silver asset is still caught.

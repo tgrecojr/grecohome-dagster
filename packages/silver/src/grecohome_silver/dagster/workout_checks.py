@@ -13,6 +13,7 @@ from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 from grecohome_core.checks import alerting_check
 from grecohome_core.silver import connect, list_payload_files
 from grecohome_silver.config import settings
+from grecohome_silver.dagster.freshness import table_freshness_check
 from grecohome_silver.dagster.workout_assets import (
     WORKOUTS_PARQUET,
     silver_workouts,
@@ -47,6 +48,7 @@ def _src(path: str) -> str:
     return f"read_parquet('{path.replace(chr(39), chr(39) * 2)}')"
 
 
+# @spec SILVER-WORKOUTS-CHECKS-001
 @asset_check(asset=silver_workouts, name="workouts_id_unique_nonnull")
 @alerting_check
 def workouts_id_unique_nonnull() -> AssetCheckResult:
@@ -66,6 +68,7 @@ def workouts_id_unique_nonnull() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-WORKOUTS-CHECKS-002
 @asset_check(asset=silver_workouts, name="workouts_value_ranges")
 @alerting_check
 def workouts_value_ranges() -> AssetCheckResult:
@@ -85,10 +88,11 @@ def workouts_value_ranges() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-WORKOUTS-CHECKS-003
 @asset_check(asset=silver_workouts, name="workouts_coverage_vs_bronze")
 @alerting_check
 def workouts_coverage_vs_bronze() -> AssetCheckResult:
-    """silver activities ≈ bronze distinct ``activityId`` — no silent drop."""
+    """silver activities ≥ bronze distinct ``activityId`` — no silent drop."""
     path = workouts_path(WORKOUTS_PARQUET)
     if not os.path.exists(path):
         return _missing(path)
@@ -105,8 +109,16 @@ def workouts_coverage_vs_bronze() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-WORKOUTS-CHECKS-010
+silver_workouts_freshness = table_freshness_check(
+    silver_workouts, lambda: workouts_path(WORKOUTS_PARQUET)
+)
+
+
+# @spec SILVER-WORKOUTS-CHECKS-011, SILVER-WORKOUTS-CHECKS-012
 WORKOUT_CHECKS = [
     workouts_id_unique_nonnull,
     workouts_value_ranges,
     workouts_coverage_vs_bronze,
+    silver_workouts_freshness,
 ]

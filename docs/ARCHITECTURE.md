@@ -155,7 +155,8 @@ are declared by `AssetKey` (cross-location lineage); the reads are filesystem re
   ([silver sleep design](intent/silver/sleep/sleep-design.md)).
 - **`silver_glucose`** — one row per CGM reading; dedup on the **UTC instant** (the local string
   repeats under different offsets) ([silver glucose design](intent/silver/glucose/glucose-design.md)).
-- **`silver_workouts`** — one row per Garmin activity (ADR 0009).
+- **`silver_workouts`** — one row per Garmin activity; laps in `silver_workout_splits`, Whoop's
+  own log in `silver_whoop_workouts` ([silver workouts design](intent/silver/workouts/workouts-design.md)).
 - **`silver_recovery`** — one row per Whoop cycle; joins sleep via `sleep_id`/`cycle_id` ([silver cycles design](intent/silver/cycles/cycles-design.md)).
   Plus the other derived tables (weather, daily, strain, body, fitness, workout-splits,
   whoop-workouts).

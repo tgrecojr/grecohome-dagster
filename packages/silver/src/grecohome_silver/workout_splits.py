@@ -7,7 +7,7 @@ Source shape (profiled against live bronze: 727 activities, 4,613 laps): each
 ``garmin/activity_splits`` file is ``{activityId, lapDTOs: [...], eventDTOs}`` for one
 activity; ``lapDTOs`` is the array of laps. ``activityId`` is in the payload (joins
 ``silver_workouts.activity_id``), so no sidecar is needed. Garmin re-pulls an activity into
-several files, so dedup by **(activity_id, lap_index)** keeping the latest fetch.
+several files, so each activity's laps all come from its latest capture with ``lapDTOs``.
 
 Units kept canonical to the source: distance in metres, speed in m/s, durations in seconds,
 HR in bpm. Lap richness varies by activity type (distance/speed/HR near-universal; calories
@@ -26,21 +26,37 @@ _FETCHED_MS = r"TRY_CAST(regexp_extract(filename, '_([0-9]{13})_', 1) AS BIGINT)
 
 
 def _lap_relation(files: list[str]) -> str:
-    """Unnest each file's ``lapDTOs`` to one row per lap.
+    """One row per lap, taken from each activity's latest capture that has ``lapDTOs``.
 
-    Carries ``filename`` (for the fetch-millis recency, which ``UNNEST`` would otherwise
-    drop) and the payload ``activityId`` alongside each ``lap`` JSON value.
+    Every payload whose ``lapDTOs`` is present (not missing, not JSON null) is cast to an
+    array first, so a non-array ``lapDTOs`` in any capture fails the rebuild. Among those,
+    each activity's newest capture (by the filename's fetch-millis; ties all kept) supplies
+    all of its laps, so an activity re-lapped to fewer laps drops the old ones, and an empty
+    ``lapDTOs`` leaves it with none. Carries ``filename`` and the payload ``activityId``
+    alongside each ``lap`` JSON value.
     """
-    payloads_sql = payloads_relation_sql(files)
-    return (
+    lap_dtos = "p.j -> '$.lapDTOs'"
+    with_laps = (
         f"SELECT p.filename AS filename, {json_str('p.j', 'activityId')} AS activity_id_str, "
-        "lap "
-        f"FROM ({payloads_sql}) AS p, "
-        "UNNEST(CAST(p.j -> '$.lapDTOs' AS JSON[])) AS t(lap) "
-        "WHERE json_type(p.j -> '$.lapDTOs') = 'ARRAY'"
+        f"{_FETCHED_MS.replace('filename', 'p.filename')} AS fetched_ms, "
+        f"CAST({lap_dtos} AS JSON[]) AS laps "
+        f"FROM ({payloads_relation_sql(files)}) AS p "
+        f"WHERE coalesce(json_type({lap_dtos}), 'NULL') <> 'NULL'"
+    )
+    latest = (
+        "SELECT * FROM ("
+        "  SELECT *, rank() OVER ("
+        "    PARTITION BY activity_id_str ORDER BY fetched_ms DESC NULLS LAST"
+        f"  ) AS _capture_rank FROM ({with_laps})"
+        ") WHERE _capture_rank = 1"
+    )
+    return (
+        "SELECT c.filename AS filename, c.activity_id_str AS activity_id_str, lap "
+        f"FROM ({latest}) AS c, UNNEST(c.laps) AS t(lap)"
     )
 
 
+# @spec SILVER-WORKOUTS-SPLITS-001, SILVER-WORKOUTS-SPLITS-002, SILVER-WORKOUTS-SPLITS-003
 def splits_sql(files: list[str]) -> str:
     """Typed, deduped Garmin laps — one row per ``(activity_id, lap_index)`` (latest fetch)."""
     typed = f"""
@@ -69,9 +85,11 @@ def splits_sql(files: list[str]) -> str:
 
 
 def bronze_lap_count_sql(files: list[str]) -> str:
-    """Count of distinct bronze laps (distinct ``activity_id`` + ``lapIndex``) — coverage."""
+    """Distinct numeric (``activityId``, ``lapIndex``) pairs in the captures the table uses."""
+    lap_index = f"TRY_CAST({json_str('lap', 'lapIndex')} AS INTEGER)"
+    activity_id = "TRY_CAST(activity_id_str AS BIGINT)"
     return (
-        "SELECT count(DISTINCT (activity_id_str || '-' || "
-        f"{json_str('lap', 'lapIndex')})) AS n FROM ({_lap_relation(files)}) "
-        f"WHERE activity_id_str IS NOT NULL AND {json_str('lap', 'lapIndex')} IS NOT NULL"
+        f"SELECT count(DISTINCT ({activity_id}, {lap_index})) AS n "
+        f"FROM ({_lap_relation(files)}) "
+        f"WHERE {activity_id} IS NOT NULL AND {lap_index} IS NOT NULL"
     )

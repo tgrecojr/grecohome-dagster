@@ -32,11 +32,14 @@ from grecohome_core.silver import (
 
 
 def _workout_relation(payloads_sql: str) -> str:
-    """Unnest each file's ``records`` array to one row per workout (``r``)."""
+    """Unnest each file's ``records`` array to one row per workout (``r``).
+
+    A payload without ``records`` contributes nothing; a ``records`` that isn't an array
+    fails the cast, and so the rebuild, rather than silently emptying the table.
+    """
     return (
         f"SELECT p.filename AS filename, rec AS r "
-        f"FROM ({payloads_sql}) AS p, UNNEST(CAST(p.j -> '$.records' AS JSON[])) AS t(rec) "
-        "WHERE json_type(p.j -> '$.records') = 'ARRAY'"
+        f"FROM ({payloads_sql}) AS p, UNNEST(CAST(p.j -> '$.records' AS JSON[])) AS t(rec)"
     )
 
 
@@ -58,6 +61,8 @@ def _local_start_date(rec: str) -> str:
     return f"COALESCE({local_date}, {json_date(rec, 'start')})"
 
 
+# @spec SILVER-WORKOUTS-WHOOP-001, SILVER-WORKOUTS-WHOOP-002, SILVER-WORKOUTS-WHOOP-003
+# @spec SILVER-WORKOUTS-WHOOP-004, SILVER-WORKOUTS-WHOOP-005
 def whoop_workouts_sql(files: list[str]) -> str:
     """Typed, deduped Whoop workouts — one row per ``workout_id`` (latest rescore)."""
     rel = _workout_relation(payloads_relation_sql(files))
