@@ -161,8 +161,11 @@ ERROR** result, it logs one structured `asset_check_failed` line at ERROR, carry
 that line posts to Slack, so one rule covers every layer's page-worthy checks. WARN failures
 aren't emitted; they stay in the UI and don't page.
 
-- An error while logging is swallowed and never breaks the check. An exception raised by the
-  check itself isn't caught by the decorator.
+- An error while logging is swallowed and never breaks the check.
+- **A check that raises also pages.** If the wrapped check raises instead of returning a result,
+  the decorator logs the same `asset_check_failed` line and re-raises, so the run still fails as
+  it would unwrapped. A check that crashes on bad input (a corrupt file it reads, for example)
+  is at least as page-worthy as one that fails cleanly.
 - Freshness, schema drift and content health are wrapped. Completeness, which is WARN-only, is
   not.
 - Internal errors in freshness and schema drift return ERROR results, so they page. Internal
@@ -206,6 +209,7 @@ python3 scripts/sweep_streams.py  "$BRONZE_ROOT"
 | Empty baseline | Treated as no baseline and re-recorded | Fail until an operator intervenes | An empty baseline carries no schema; self-healing avoids host file surgery. |
 | Baseline location | `BRONZE_MONITOR_DIR`, refusing paths inside bronze; disabled if unset | Under `BRONZE_ROOT` | Bronze stays immutable raw capture only. |
 | Paging path | ERROR failures log `asset_check_failed` → Grafana Loki rule → Slack | Dagster+ alerting; email | Dagster OSS has no push alerts; logs already ship to Loki and Grafana already alerts from it. |
+| A check that raises | Logs `asset_check_failed`, then re-raises | Pass the exception through unlogged; have each check catch its own errors | A raised check is only a failed step in the UI, which pages no one. Catching per check is easy to forget; one place in the decorator covers every check. |
 | Stopped-asset detection | A checks-only job on an hourly schedule, unpooled | Rely on per-materialization checks | Per-run checks never run for an asset that stopped. Pool-free so ingestion wedges can't hide it. |
 | Checks schedule default | Starts running | Starts stopped (Dagster's default), enabled by hand | A safety net that depends on someone remembering to switch it on can silently never run. A first-run failure that clears itself is an acceptable cost. |
 

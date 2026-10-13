@@ -42,6 +42,7 @@ def _rows(path: str) -> list[dict]:
     return [dict(zip(cols, r, strict=True)) for r in cur.fetchall()]
 
 
+# @spec SILVER-SLEEP-JOIN-001
 def test_all_assets_materialize_and_write_parquet(materialized) -> None:
     rows = _rows(silver_path(UNIFIED_PARQUET))
     nights = {r["night_date"].isoformat() for r in rows}
@@ -59,6 +60,7 @@ def test_rebuild_is_idempotent(bronze_root, tmp_path, monkeypatch) -> None:
     assert first == second
 
 
+# @spec SILVER-SLEEP-CHECKS-001, SILVER-SLEEP-CHECKS-002, SILVER-SLEEP-CHECKS-003
 def test_uniqueness_checks_pass(materialized) -> None:
     for check in (
         checks_mod.garmin_night_unique_nonnull,
@@ -69,12 +71,14 @@ def test_uniqueness_checks_pass(materialized) -> None:
         assert r.passed, check.__name__
 
 
+# @spec SILVER-SLEEP-CHECKS-004
 def test_range_check_passes(materialized) -> None:
     r = checks_mod.sleep_value_ranges()
     assert r.passed
     assert r.metadata["out_of_range_rows"].value == 0
 
 
+# @spec SILVER-SLEEP-CHECKS-005, SILVER-SLEEP-CHECKS-006
 def test_join_sanity_and_coverage_split(materialized) -> None:
     sanity = checks_mod.sleep_join_sanity()
     assert sanity.passed  # no fully-null rows
@@ -86,6 +90,7 @@ def test_join_sanity_and_coverage_split(materialized) -> None:
     assert split.metadata["whoop_only"].value == 1
 
 
+# @spec SILVER-SLEEP-CHECKS-007
 def test_garmin_coverage_matches_bronze(materialized) -> None:
     r = checks_mod.garmin_coverage_vs_bronze()
     assert r.passed
@@ -94,6 +99,7 @@ def test_garmin_coverage_matches_bronze(materialized) -> None:
     assert r.metadata["bronze_distinct_nights"].value == 3
 
 
+# @spec SILVER-SLEEP-CHECKS-004
 def test_range_check_catches_unit_bug(materialized, monkeypatch) -> None:
     """Sanity that the range check actually fails on an out-of-range value."""
     # Rewrite the unified parquet with an impossible percentage, then re-check.

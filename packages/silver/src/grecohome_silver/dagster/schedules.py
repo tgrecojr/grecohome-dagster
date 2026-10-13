@@ -46,12 +46,13 @@ ALL_CHECKS = (
 )
 
 # Daily rebuild of the three sleep assets (source intermediates + unified table).
+# @spec SILVER-SLEEP-SCHED-001
 silver_sleep_job = define_asset_job("silver_sleep_job", selection=SLEEP_ASSETS)
 
 silver_sleep_daily = ScheduleDefinition(
     name="silver_sleep_daily",
     job=silver_sleep_job,
-    cron_schedule="0 6 * * *",  # 06:00 UTC — after the day's bronze sleep has landed
+    cron_schedule="0 6 * * *",  # 06:00 UTC — after Garmin's 05:30 tick and Whoop's hourly
     execution_timezone="UTC",
 )
 

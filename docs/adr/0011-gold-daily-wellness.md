@@ -40,5 +40,5 @@ per event"); gold is where those live. We need a first deliverable and a layer s
   joinable by date / `sleep_id` / `cycle_id`.
 
 ## Related
-[[0007-silver-sleep]], [[0008-silver-glucose]], [[0009-silver-workouts]], [[0010-silver-recovery]].
+[silver sleep design](../intent/silver/sleep/sleep-design.md), [[0008-silver-glucose]], [[0009-silver-workouts]], [[0010-silver-recovery]].
 Layer guide: `docs/GOLD.md`.

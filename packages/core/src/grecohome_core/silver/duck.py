@@ -28,6 +28,7 @@ import duckdb
 META_SUFFIX = ".meta.json"
 
 
+# @spec CORE-SILVER-001
 def connect() -> duckdb.DuckDBPyConnection:
     """An in-memory DuckDB connection for a single silver materialization.
 
@@ -37,6 +38,7 @@ def connect() -> duckdb.DuckDBPyConnection:
     return duckdb.connect(database=":memory:")
 
 
+# @spec CORE-SILVER-002
 def list_payload_files(bronze_root: str, source: str, collection: str) -> list[str]:
     """Every payload file for a collection across all ``dt=`` partitions, sorted.
 
@@ -57,6 +59,7 @@ def _sql_str_list(files: list[str]) -> str:
     return "[" + ", ".join("'" + f.replace("'", "''") + "'" for f in files) + "]"
 
 
+# @spec CORE-SILVER-003, CORE-SILVER-006
 def payloads_relation_sql(files: list[str]) -> str:
     """A SQL subquery yielding ``(filename VARCHAR, j JSON)`` for the given files.
 
@@ -73,6 +76,7 @@ def payloads_relation_sql(files: list[str]) -> str:
     )
 
 
+# @spec CORE-SILVER-004
 def csv_relation_sql(files: list[str], columns: dict[str, str]) -> str:
     """A SQL subquery selecting named CSV columns (+ ``filename``) for the given files.
 
@@ -94,6 +98,7 @@ def csv_relation_sql(files: list[str], columns: dict[str, str]) -> str:
     )
 
 
+# @spec CORE-SILVER-005
 def text_lines_relation_sql(files: list[str]) -> str:
     """A SQL subquery yielding ``(filename VARCHAR, line VARCHAR)`` — one row per line.
 
@@ -115,6 +120,7 @@ def text_lines_relation_sql(files: list[str]) -> str:
     )
 
 
+# @spec CORE-SILVER-009, CORE-SILVER-010, CORE-SILVER-011
 def write_parquet_atomic(
     con: duckdb.DuckDBPyConnection,
     select_sql: str,
@@ -130,12 +136,14 @@ def write_parquet_atomic(
     Parquet where readers expect a complete one.
 
     Refuses to write anywhere under ``protected_root`` — the immutable source a layer
-    must never write into (bronze for silver; silver for gold). Returns the row count,
+    must never write into (bronze for silver; silver for gold). Both paths are compared
+    after resolving symlinks, so a symlinked root can't slip a write past the guard.
+    Returns the row count,
     read back from the written Parquet so ``select_sql`` (often the whole multi-join
     transform) runs exactly once, not a second time just to count.
     """
-    dest_abs = os.path.abspath(dest_path)
-    protected_abs = os.path.abspath(protected_root)
+    dest_abs = os.path.realpath(dest_path)
+    protected_abs = os.path.realpath(protected_root)
     if dest_abs == protected_abs or dest_abs.startswith(protected_abs + os.sep):
         raise ValueError(
             f"refusing to write under protected_root: {dest_abs} is inside {protected_abs}"

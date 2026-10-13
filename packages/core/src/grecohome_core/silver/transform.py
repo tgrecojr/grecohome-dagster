@@ -9,6 +9,7 @@ typing, and the dedup-to-latest projection.
 from __future__ import annotations
 
 
+# @spec CORE-SILVER-007
 def json_str(expr: str, path: str) -> str:
     """Extract a JSON path as text (VARCHAR), NULL if the path is absent.
 
@@ -34,6 +35,7 @@ def json_date(expr: str, path: str) -> str:
     return f"TRY_CAST(substr({json_str(expr, path)}, 1, 10) AS DATE)"
 
 
+# @spec CORE-SILVER-008
 def dedup_latest_sql(inner_sql: str, *, partition_key: str, order_by: str) -> str:
     """Keep one row per ``partition_key`` — the latest by ``order_by``.
 

@@ -377,10 +377,10 @@ of the Garmin and Whoop sleep streams; see [SILVER.md](SILVER.md)).
   code locations. The reads themselves are **filesystem reads of `BRONZE_ROOT`**, not gRPC
   calls into the subject locations.
 - **Whole-table rebuild.** Assets are unpartitioned; each run overwrites its Parquet from
-  current bronze (idempotent — last run wins). `silver_sleep_daily` (06:00 UTC, after the
-  day's bronze sleep lands) rebuilds the three sleep assets; `silver_checks_daily` (07:00
-  UTC) runs the silver asset checks independently. Enable both in the UI (schedules are off
-  by default).
+  current bronze (idempotent — last run wins). `silver_sleep_daily` (06:00 UTC, after
+  Garmin's 05:30 daily capture and Whoop's hourly capture) rebuilds the three sleep assets;
+  `silver_checks_daily` (07:00 UTC) runs the silver asset checks independently. The rebuild
+  schedules default to stopped and are enabled in the UI; the checks schedule starts running.
 
 ### Host container (`dagster_silver`)
 
@@ -431,7 +431,7 @@ summary; see [GOLD.md](GOLD.md)).
   `silver_recovery`, `silver_workouts`, `silver_glucose`) by `AssetKey`; the reads are
   **filesystem reads of `SILVER_ROOT`**, not gRPC calls.
 - **Runs after silver.** `gold_wellness_daily` (07:30 UTC) rebuilds the mart once silver's daily
-  rebuilds (≤ 06:50) and silver checks (07:00) have run; `gold_checks_daily` (08:00 UTC) runs the
+  rebuilds (≤ 06:55) and silver checks (07:00) have run; `gold_checks_daily` (08:00 UTC) runs the
   gold checks. Enable both in the UI. On-demand: `dagster job execute --job gold_wellness_job`.
 
 ### Host container (`dagster_gold`)

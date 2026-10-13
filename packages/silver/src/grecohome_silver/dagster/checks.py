@@ -30,6 +30,7 @@ from grecohome_silver.dagster.assets import (
     silver_sleep_garmin,
     silver_sleep_whoop,
 )
+from grecohome_silver.dagster.freshness import table_freshness_check
 
 WHOOP_OWNED_SINCE = "2025-12-18"  # user acquired the Whoop; no whoop_* before this.
 
@@ -73,6 +74,7 @@ def _src(path: str) -> str:
 # ---------------------------------------------------------------------------
 # Uniqueness + non-null key (ERROR) — dedup correctness
 # ---------------------------------------------------------------------------
+# @spec SILVER-SLEEP-CHECKS-001
 @asset_check(asset=silver_sleep_garmin, name="garmin_night_unique_nonnull")
 @alerting_check
 def garmin_night_unique_nonnull() -> AssetCheckResult:
@@ -90,6 +92,7 @@ def garmin_night_unique_nonnull() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-SLEEP-CHECKS-002
 @asset_check(asset=silver_sleep_whoop, name="whoop_id_unique_night_nonnull")
 @alerting_check
 def whoop_id_unique_night_nonnull() -> AssetCheckResult:
@@ -107,6 +110,7 @@ def whoop_id_unique_night_nonnull() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-SLEEP-CHECKS-003
 @asset_check(asset=silver_sleep, name="sleep_night_unique_nonnull")
 @alerting_check
 def sleep_night_unique_nonnull() -> AssetCheckResult:
@@ -127,6 +131,7 @@ def sleep_night_unique_nonnull() -> AssetCheckResult:
 # ---------------------------------------------------------------------------
 # Range validity (ERROR) — catches a parsing/unit bug
 # ---------------------------------------------------------------------------
+# @spec SILVER-SLEEP-CHECKS-004
 @asset_check(asset=silver_sleep, name="sleep_value_ranges")
 @alerting_check
 def sleep_value_ranges() -> AssetCheckResult:
@@ -148,6 +153,7 @@ def sleep_value_ranges() -> AssetCheckResult:
 # ---------------------------------------------------------------------------
 # Join sanity (WARN) — no fully-null rows; recent single-source soft flag
 # ---------------------------------------------------------------------------
+# @spec SILVER-SLEEP-CHECKS-005
 @asset_check(asset=silver_sleep, name="sleep_join_sanity")
 @alerting_check
 def sleep_join_sanity() -> AssetCheckResult:
@@ -176,6 +182,7 @@ def sleep_join_sanity() -> AssetCheckResult:
 # ---------------------------------------------------------------------------
 # Coverage split (WARN) — make the source mix visible each run
 # ---------------------------------------------------------------------------
+# @spec SILVER-SLEEP-CHECKS-006
 @asset_check(asset=silver_sleep, name="sleep_coverage_split")
 @alerting_check
 def sleep_coverage_split() -> AssetCheckResult:
@@ -196,10 +203,11 @@ def sleep_coverage_split() -> AssetCheckResult:
 # ---------------------------------------------------------------------------
 # Coverage vs bronze (WARN) — a big drop means dedup/filter is wrong
 # ---------------------------------------------------------------------------
+# @spec SILVER-SLEEP-CHECKS-007
 @asset_check(asset=silver_sleep_garmin, name="garmin_coverage_vs_bronze")
 @alerting_check
 def garmin_coverage_vs_bronze() -> AssetCheckResult:
-    """silver_sleep_garmin nights ≈ bronze distinct ``calendarDate`` (no silent drop)."""
+    """silver_sleep_garmin nights ≥ bronze distinct ``calendarDate`` (no silent drop)."""
     path = silver_path(GARMIN_PARQUET)
     if not os.path.exists(path):
         return _missing(path)
@@ -217,6 +225,20 @@ def garmin_coverage_vs_bronze() -> AssetCheckResult:
     )
 
 
+# ---------------------------------------------------------------------------
+# Table freshness (ERROR) — a failed or never-enabled rebuild
+# ---------------------------------------------------------------------------
+# @spec SILVER-SLEEP-CHECKS-010
+silver_sleep_garmin_freshness = table_freshness_check(
+    silver_sleep_garmin, lambda: silver_path(GARMIN_PARQUET)
+)
+silver_sleep_whoop_freshness = table_freshness_check(
+    silver_sleep_whoop, lambda: silver_path(WHOOP_PARQUET)
+)
+silver_sleep_freshness = table_freshness_check(silver_sleep, lambda: silver_path(UNIFIED_PARQUET))
+
+
+# @spec SILVER-SLEEP-CHECKS-008, SILVER-SLEEP-CHECKS-009
 SLEEP_CHECKS = [
     garmin_night_unique_nonnull,
     whoop_id_unique_night_nonnull,
@@ -225,4 +247,7 @@ SLEEP_CHECKS = [
     sleep_join_sanity,
     sleep_coverage_split,
     garmin_coverage_vs_bronze,
+    silver_sleep_garmin_freshness,
+    silver_sleep_whoop_freshness,
+    silver_sleep_freshness,
 ]

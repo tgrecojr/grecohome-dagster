@@ -17,10 +17,11 @@ class TestDefinitions:
         assert "AssetKey(['garmin_bronze_activities'])" in keys
         assert "AssetKey(['garmin_bronze_devices'])" in keys
 
+    # @spec GARMIN-CAPTURE-SCHED-001, GARMIN-CAPTURE-SCHED-005
     def test_schedules_are_daily_utc(self):
         for name in ("garmin_daily", "garmin_reference"):
             s = defs.get_schedule_def(name)
-            assert s.cron_schedule == "0 7 * * *"
+            assert s.cron_schedule == "30 5 * * *"
             assert str(s.execution_timezone) == "UTC"
 
     def test_jobs_resolve(self):

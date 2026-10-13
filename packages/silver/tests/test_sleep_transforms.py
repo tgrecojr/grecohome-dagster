@@ -61,6 +61,7 @@ def test_sidecars_excluded(bronze_root: str) -> None:
     assert all(not f.endswith(".meta.json") for f in files)
 
 
+# @spec SILVER-SLEEP-GARMIN-002
 def test_garmin_dedup_keeps_latest_fetch(bronze_root: str) -> None:
     """The same night captured twice collapses to one row — the latest fetch wins."""
     rows = {r["night_date"].isoformat(): r for r in _rows(_garmin_sql(bronze_root))}
@@ -72,6 +73,7 @@ def test_garmin_dedup_keeps_latest_fetch(bronze_root: str) -> None:
     assert nights.count("2024-01-01") == 1
 
 
+# @spec SILVER-SLEEP-GARMIN-001
 def test_garmin_old_night_null_score_kept(bronze_root: str) -> None:
     """An old night without an overall score is kept; the score is null."""
     rows = {r["night_date"].isoformat(): r for r in _rows(_garmin_sql(bronze_root))}
@@ -79,6 +81,7 @@ def test_garmin_old_night_null_score_kept(bronze_root: str) -> None:
     assert rows["2022-06-06"]["garmin_sleep_score"] is None
 
 
+# @spec SILVER-SLEEP-GARMIN-004
 def test_garmin_units_and_timestamps(bronze_root: str) -> None:
     """Stage seconds normalize to minutes; epoch-millis GMT parses to a timestamp."""
     r = {x["night_date"].isoformat(): x for x in _rows(_garmin_sql(bronze_root))}["2025-12-20"]
@@ -87,6 +90,7 @@ def test_garmin_units_and_timestamps(bronze_root: str) -> None:
     assert r["garmin_start_gmt"] is not None  # epoch-ms parsed, not crashed
 
 
+# @spec SILVER-SLEEP-WHOOP-003
 def test_whoop_rescore_keeps_latest(bronze_root: str) -> None:
     """One id with two updated_at collapses to one row — the latest rescore wins."""
     rows = {r["whoop_sleep_id"]: r for r in _rows(_whoop_sql(bronze_root))}
@@ -94,6 +98,7 @@ def test_whoop_rescore_keeps_latest(bronze_root: str) -> None:
     assert sum(1 for r in _rows(_whoop_sql(bronze_root)) if r["whoop_sleep_id"] == "id-c") == 1
 
 
+# @spec SILVER-SLEEP-WHOOP-001, SILVER-SLEEP-WHOOP-005
 def test_whoop_nap_flagged_in_source(bronze_root: str) -> None:
     """A nap is kept in the source asset and flagged is_nap=True."""
     rows = {r["whoop_sleep_id"]: r for r in _rows(_whoop_sql(bronze_root))}
@@ -101,12 +106,14 @@ def test_whoop_nap_flagged_in_source(bronze_root: str) -> None:
     assert rows["id-a"]["is_nap"] is False
 
 
+# @spec SILVER-SLEEP-WHOOP-005
 def test_whoop_units(bronze_root: str) -> None:
     """Whoop millis normalize to minutes (5_400_000 ms -> 90 min)."""
     r = {x["whoop_sleep_id"]: x for x in _rows(_whoop_sql(bronze_root))}["id-a"]
     assert r["whoop_deep_min"] == pytest.approx(90.0)
 
 
+# @spec SILVER-SLEEP-JOIN-001
 def test_unified_join_grain_and_nap_exclusion(bronze_root: str) -> None:
     """FULL OUTER JOIN: one row per night; naps excluded; provenance correct."""
     sql = unified_sleep_sql(_garmin_sql(bronze_root), _whoop_sql(bronze_root))
@@ -128,6 +135,7 @@ def test_unified_join_grain_and_nap_exclusion(bronze_root: str) -> None:
     assert w_only["garmin_total_min"] is None
 
 
+# @spec SILVER-SLEEP-JOIN-001
 def test_unified_unique_nights(bronze_root: str) -> None:
     """No duplicate night_date survives the join (the dedup contract)."""
     sql = unified_sleep_sql(_garmin_sql(bronze_root), _whoop_sql(bronze_root))
@@ -143,6 +151,7 @@ def test_empty_collection_yields_typed_empty(bronze_root: str) -> None:
     assert rows == []
 
 
+# @spec SILVER-SLEEP-WHOOP-002
 def test_whoop_night_is_local_wake_date_not_bedtime(tmp_path) -> None:
     """The night is the local WAKE date (end), matching Garmin's calendarDate.
 
@@ -156,6 +165,7 @@ def test_whoop_night_is_local_wake_date_not_bedtime(tmp_path) -> None:
     assert rows[0]["night_date"].isoformat() == "2026-01-16"
 
 
+# @spec SILVER-SLEEP-WHOOP-002
 def test_whoop_wake_night_applies_timezone_offset(tmp_path) -> None:
     """The offset is applied to end: a wake at 02:00 UTC with -05:00 is the prior day.
 
@@ -169,6 +179,7 @@ def test_whoop_wake_night_applies_timezone_offset(tmp_path) -> None:
     assert rows[0]["night_date"].isoformat() == "2026-01-15"
 
 
+# @spec SILVER-SLEEP-WHOOP-002
 def test_whoop_night_falls_back_to_utc_without_offset(tmp_path) -> None:
     """A record missing timezone_offset falls back to the UTC date of end (never dropped)."""
     rec = _whoop_record("2026-01-15T18:00:00.000Z", "2026-01-16T02:00:00.000Z", tz=None)
@@ -177,3 +188,64 @@ def test_whoop_night_falls_back_to_utc_without_offset(tmp_path) -> None:
     rows = _rows(whoop_sleep_sql(payloads_relation_sql(files)))
     assert len(rows) == 1
     assert rows[0]["night_date"].isoformat() == "2026-01-16"
+
+
+def _write_files(tmp_path, source: str, payloads: list) -> str:
+    """A bronze tree with one file per payload (written as raw JSON); returns the root."""
+    root = os.path.join(str(tmp_path), "bronze")
+    pdir = os.path.join(root, source, "sleep", "dt=2026-01-16")
+    os.makedirs(pdir, exist_ok=True)
+    for i, payload in enumerate(payloads):
+        with open(os.path.join(pdir, f"sleep_{1700000000000 + i}_f{i}.json"), "w") as fh:
+            json.dump(payload, fh)
+    return root
+
+
+# @spec SILVER-SLEEP-GARMIN-003
+def test_garmin_payload_without_calendar_date_is_dropped(tmp_path) -> None:
+    good = {"dailySleepDTO": {"calendarDate": "2026-01-16", "sleepTimeSeconds": 60}}
+    root = _write_files(tmp_path, "garmin", [
+        good, {"dailySleepDTO": {"sleepTimeSeconds": 60}}, [], {}, None,
+        {"dailySleepDTO": {"calendarDate": "not-a-date"}},
+    ])
+    rows = _rows(_garmin_sql(root))
+    assert [r["night_date"].isoformat() for r in rows] == ["2026-01-16"]
+
+
+# @spec SILVER-SLEEP-GARMIN-004
+def test_garmin_gmt_accepts_iso_and_nulls_garbage(tmp_path) -> None:
+    dto = {"calendarDate": "2026-01-16", "sleepStartTimestampGMT": "2026-01-16T04:00:00.0",
+           "sleepEndTimestampGMT": "garbage"}
+    rows = _rows(_garmin_sql(_write_files(tmp_path, "garmin", [{"dailySleepDTO": dto}])))
+    assert rows[0]["garmin_start_gmt"].isoformat() == "2026-01-16T04:00:00"
+    assert rows[0]["garmin_end_gmt"] is None
+
+
+# @spec SILVER-SLEEP-WHOOP-002
+def test_whoop_offset_minutes_take_the_hours_sign(tmp_path) -> None:
+    """-04:30 is -4h30m: an 04:15 UTC wake is 23:45 the previous local day."""
+    rec = _whoop_record("2026-01-15T20:00:00.000Z", "2026-01-16T04:15:00.000Z", tz="-04:30")
+    rows = _rows(_whoop_sql(_write_whoop(tmp_path, rec)))
+    assert rows[0]["night_date"].isoformat() == "2026-01-15"
+
+
+# @spec SILVER-SLEEP-WHOOP-004
+def test_whoop_record_without_id_or_night_is_dropped(tmp_path) -> None:
+    keep = _whoop_record("2026-01-16T04:00:00.000Z", "2026-01-16T12:00:00.000Z", tz="-05:00")
+    no_id = {k: v for k, v in keep.items() if k != "id"}
+    no_end = {**keep, "id": "id-no-end", "end": None}
+    root = _write_files(tmp_path, "whoop", [{"records": [keep, no_id, no_end]}])
+    assert [r["whoop_sleep_id"] for r in _rows(_whoop_sql(root))] == ["id-x"]
+
+
+# @spec SILVER-SLEEP-JOIN-002
+def test_unified_uses_latest_start_of_two_main_sleeps(tmp_path) -> None:
+    early = _whoop_record("2026-01-16T03:00:00.000Z", "2026-01-16T07:00:00.000Z",
+                          tz="-05:00", sleep_id="id-early")
+    late = _whoop_record("2026-01-16T08:00:00.000Z", "2026-01-16T12:00:00.000Z",
+                         tz="-05:00", sleep_id="id-late")
+    root = _write_files(tmp_path, "whoop", [{"records": [early, late]}])
+    sql = unified_sleep_sql(_garmin_sql(root), _whoop_sql(root))
+    rows = _rows(sql)
+    assert len(rows) == 1
+    assert rows[0]["whoop_start"].isoformat() == "2026-01-16T08:00:00"
