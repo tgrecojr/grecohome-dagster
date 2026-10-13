@@ -15,6 +15,7 @@ from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 from grecohome_core.checks import alerting_check
 from grecohome_core.silver import connect, list_payload_files
 from grecohome_silver.config import settings
+from grecohome_silver.dagster.freshness import table_freshness_check
 from grecohome_silver.dagster.weather_assets import WEATHER_PARQUET, silver_weather, weather_path
 from grecohome_silver.weather import bronze_obs_count_sql
 
@@ -58,6 +59,7 @@ def _src(path: str) -> str:
     return f"read_parquet('{path.replace(chr(39), chr(39) * 2)}')"
 
 
+# @spec SILVER-WEATHER-CHECKS-001
 @asset_check(asset=silver_weather, name="weather_obs_unique_nonnull")
 @alerting_check
 def weather_obs_unique_nonnull() -> AssetCheckResult:
@@ -78,6 +80,7 @@ def weather_obs_unique_nonnull() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-WEATHER-CHECKS-002
 @asset_check(asset=silver_weather, name="weather_value_ranges")
 @alerting_check
 def weather_value_ranges() -> AssetCheckResult:
@@ -100,10 +103,11 @@ def weather_value_ranges() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-WEATHER-CHECKS-003
 @asset_check(asset=silver_weather, name="weather_coverage_vs_bronze")
 @alerting_check
 def weather_coverage_vs_bronze() -> AssetCheckResult:
-    """silver obs ≈ bronze distinct obs (UTC instants) — no silent drop."""
+    """silver obs ≥ bronze distinct obs (UTC instants) — no silent drop."""
     path = weather_path(WEATHER_PARQUET)
     if not os.path.exists(path):
         return _missing(path)
@@ -123,8 +127,16 @@ def weather_coverage_vs_bronze() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-WEATHER-CHECKS-004
+silver_weather_freshness = table_freshness_check(
+    silver_weather, lambda: weather_path(WEATHER_PARQUET)
+)
+
+
+# @spec SILVER-WEATHER-CHECKS-005, SILVER-WEATHER-CHECKS-006
 WEATHER_CHECKS = [
     weather_obs_unique_nonnull,
     weather_value_ranges,
     weather_coverage_vs_bronze,
+    silver_weather_freshness,
 ]

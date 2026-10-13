@@ -32,6 +32,7 @@ def fitness_path(filename: str) -> str:
     return os.path.join(settings.silver_root, FITNESS_SUBDIR, filename)
 
 
+# @spec SILVER-DAILY-FITNESS-005
 @asset(name="silver_fitness", group_name=GROUP, deps=_DEPS)
 def silver_fitness(context: AssetExecutionContext) -> MaterializeResult:
     """Typed Garmin fitness snapshots — one row per snapshot day (VO2max / status / race)."""
@@ -46,7 +47,9 @@ def silver_fitness(context: AssetExecutionContext) -> MaterializeResult:
         f"silver_fitness: {rows} snapshot days from {len(mm) + len(ts) + len(rp)} bronze files "
         f"-> {dest}"
     )
-    return MaterializeResult(metadata={"rows": rows, "path": dest})
+    return MaterializeResult(
+        metadata={"rows": rows, "bronze_files": len(mm) + len(ts) + len(rp), "path": dest}
+    )
 
 
 FITNESS_ASSETS = [silver_fitness]

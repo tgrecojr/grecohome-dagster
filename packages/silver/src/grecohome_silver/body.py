@@ -32,15 +32,20 @@ _FETCHED_MS = r"TRY_CAST(regexp_extract(filename, '_([0-9]{13})_', 1) AS BIGINT)
 
 
 def _weighin_relation(payloads_sql: str) -> str:
-    """Unnest each file's ``dateWeightList`` array to one row per weigh-in (``w``)."""
+    """Unnest each file's ``dateWeightList`` array to one row per weigh-in (``w``).
+
+    A payload without ``dateWeightList`` contributes nothing; one that isn't an array fails
+    the cast, and so the rebuild, rather than silently emptying the table.
+    """
     return (
         "SELECT p.filename AS filename, wi AS w "
         f"FROM ({payloads_sql}) AS p, "
-        "UNNEST(CAST(p.j -> '$.dateWeightList' AS JSON[])) AS t(wi) "
-        "WHERE json_type(p.j -> '$.dateWeightList') = 'ARRAY'"
+        "UNNEST(CAST(p.j -> '$.dateWeightList' AS JSON[])) AS t(wi)"
     )
 
 
+# @spec SILVER-DAILY-BODY-001, SILVER-DAILY-BODY-002, SILVER-DAILY-BODY-003
+# @spec SILVER-DAILY-BODY-004, SILVER-DAILY-BODY-005
 def body_sql(files: list[str]) -> str:
     """Typed, deduped Garmin weigh-ins — one row per ``sample_pk`` (latest fetch)."""
     rel = _weighin_relation(payloads_relation_sql(files))

@@ -23,6 +23,7 @@ from grecohome_core.checks import alerting_check
 MAX_AGE_HOURS = 36.0
 
 
+# @spec SILVER-CHECKS-FRESH-001, SILVER-CHECKS-FRESH-002, SILVER-CHECKS-FRESH-003
 def table_freshness_check(asset: AssetsDefinition, path_fn: Callable[[], str]):
     """An ERROR check ``<asset>_freshness`` on ``path_fn()``'s Parquet modification time.
 

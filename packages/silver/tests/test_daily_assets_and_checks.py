@@ -56,6 +56,7 @@ def _count(path: str) -> int:
     return int(connect().execute(f"SELECT count(*) FROM read_parquet('{path}')").fetchone()[0])
 
 
+# @spec SILVER-DAILY-SUMMARY-001, SILVER-DAILY-SUMMARY-002
 def test_materializes_and_dedups(materialized) -> None:
     assert _count(daily_path(DAILY_PARQUET)) == 2  # 06-10 deduped, 06-11
 
@@ -72,6 +73,7 @@ def test_rebuild_idempotent(daily_bronze_root, tmp_path, monkeypatch) -> None:
     assert one == two
 
 
+# @spec SILVER-DAILY-CHECKS-001, SILVER-DAILY-CHECKS-002, SILVER-DAILY-CHECKS-003
 def test_checks_pass(materialized) -> None:
     assert checks_mod.daily_date_unique_nonnull().passed
     assert checks_mod.daily_value_ranges().passed
@@ -80,6 +82,7 @@ def test_checks_pass(materialized) -> None:
     assert cov.metadata["silver_days"].value == 2
 
 
+# @spec SILVER-DAILY-CHECKS-002
 def test_range_check_catches_bad_steps(materialized) -> None:
     path = daily_path(DAILY_PARQUET)
     con = connect()

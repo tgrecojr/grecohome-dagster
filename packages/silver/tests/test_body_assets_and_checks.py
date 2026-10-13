@@ -53,6 +53,7 @@ def _count(path: str) -> int:
     return int(connect().execute(f"SELECT count(*) FROM read_parquet('{path}')").fetchone()[0])
 
 
+# @spec SILVER-DAILY-BODY-001, SILVER-DAILY-BODY-003
 def test_materializes_and_dedups(materialized) -> None:
     assert _count(body_path(BODY_PARQUET)) == 2  # weigh-in 1 deduped, weigh-in 2
 
@@ -69,6 +70,7 @@ def test_rebuild_idempotent(body_bronze_root, tmp_path, monkeypatch) -> None:
     assert one == two
 
 
+# @spec SILVER-DAILY-CHECKS-004, SILVER-DAILY-CHECKS-005, SILVER-DAILY-CHECKS-006
 def test_checks_pass(materialized) -> None:
     assert checks_mod.body_sample_unique_nonnull().passed
     assert checks_mod.body_value_ranges().passed
@@ -77,6 +79,7 @@ def test_checks_pass(materialized) -> None:
     assert cov.metadata["silver_weighins"].value == 2
 
 
+# @spec SILVER-DAILY-CHECKS-005
 def test_range_check_catches_grams_as_kg(materialized) -> None:
     """The unit guard fires if weight is left in grams (80000 'kg')."""
     path = body_path(BODY_PARQUET)

@@ -23,20 +23,23 @@ def _write(root: str, coll: str, dt: str, ms: int, obj, short: str = "aa") -> No
         json.dump(obj, fh)
 
 
-def _status(code: int = 3, load: int = 250) -> dict:
+def _status(day: str, code: int = 3, load: int = 250) -> dict:
     return {"mostRecentTrainingStatus": {"latestTrainingStatusData": {
-        "3381453277": {"trainingStatus": code, "weeklyTrainingLoad": load}}}}
+        "3381453277": {"calendarDate": day, "deviceId": 3381453277, "trainingStatus": code,
+                       "weeklyTrainingLoad": load, "primaryTrainingDevice": False}}}}
 
 
 @pytest.fixture
 def fitness_bronze_root(tmp_path) -> str:
     root = str(tmp_path / "bronze")
     _write(root, "max_metrics", "2026-06-06", 1_700_000_000000,
-           [{"generic": {"vo2MaxValue": 48.0}, "cycling": {"vo2MaxValue": None}}])
+           [{"generic": {"vo2MaxValue": 48.0, "calendarDate": "2026-06-06"},
+             "cycling": {"vo2MaxValue": None}}])
     _write(root, "max_metrics", "2026-06-06", 1_700_000_999000,
-           [{"generic": {"vo2MaxValue": 52.0}, "cycling": {"vo2MaxValue": None}}], short="late")
-    _write(root, "training_status", "2026-06-06", 1_700_000_000000, _status())
-    _write(root, "training_status", "2026-06-07", 1_700_001_000000, _status())
+           [{"generic": {"vo2MaxValue": 52.0, "calendarDate": "2026-06-06"},
+             "cycling": {"vo2MaxValue": None}}], short="late")
+    _write(root, "training_status", "2026-06-06", 1_700_000_000000, _status("2026-06-06"))
+    _write(root, "training_status", "2026-06-07", 1_700_001_000000, _status("2026-06-07"))
     _write(root, "race_predictions", "2026-06-07", 1_700_001_000000,
            {"time5K": 1541, "time10K": 3200, "timeHalfMarathon": 7100, "timeMarathon": 15000})
     return root
@@ -54,6 +57,7 @@ def _count(path: str) -> int:
     return int(connect().execute(f"SELECT count(*) FROM read_parquet('{path}')").fetchone()[0])
 
 
+# @spec SILVER-DAILY-FITNESS-001
 def test_materializes_two_snapshot_days(materialized) -> None:
     assert _count(fitness_path(FITNESS_PARQUET)) == 2  # 2026-06-06 and -07
 
@@ -70,6 +74,7 @@ def test_rebuild_idempotent(fitness_bronze_root, tmp_path, monkeypatch) -> None:
     assert one == two
 
 
+# @spec SILVER-DAILY-CHECKS-007, SILVER-DAILY-CHECKS-008, SILVER-DAILY-CHECKS-009
 def test_checks_pass(materialized) -> None:
     assert checks_mod.fitness_day_unique_nonnull().passed
     assert checks_mod.fitness_value_ranges().passed
@@ -79,6 +84,7 @@ def test_checks_pass(materialized) -> None:
     assert cov.metadata["days_with_vo2max"].value == 1  # only 2026-06-06 has VO2max
 
 
+# @spec SILVER-DAILY-CHECKS-008
 def test_range_check_catches_bad_vo2max(materialized) -> None:
     path = fitness_path(FITNESS_PARQUET)
     con = connect()

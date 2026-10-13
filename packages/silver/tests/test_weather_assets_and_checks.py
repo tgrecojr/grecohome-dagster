@@ -95,6 +95,7 @@ def _count(path: str) -> int:
     return int(connect().execute(f"SELECT count(*) FROM read_parquet('{path}')").fetchone()[0])
 
 
+# @spec SILVER-WEATHER-TABLE-001, SILVER-WEATHER-TABLE-004
 def test_materializes_and_dedups(materialized) -> None:
     # 3 distinct obs (17:00 deduped, 18:00, plus the 06-14 sentinel row).
     assert _count(weather_path(WEATHER_PARQUET)) == 3
@@ -111,6 +112,7 @@ def test_rebuild_is_idempotent(weather_bronze_root, tmp_path, monkeypatch) -> No
     assert one == two
 
 
+# @spec SILVER-WEATHER-CHECKS-001, SILVER-WEATHER-CHECKS-002, SILVER-WEATHER-CHECKS-003
 def test_checks_pass(materialized) -> None:
     assert checks_mod.weather_obs_unique_nonnull().passed
     assert checks_mod.weather_value_ranges().passed
@@ -119,6 +121,7 @@ def test_checks_pass(materialized) -> None:
     assert cov.metadata["silver_obs"].value == 3
 
 
+# @spec SILVER-WEATHER-CHECKS-002
 def test_range_check_catches_unit_bug(materialized) -> None:
     """Sanity: the range check fails on an impossible soil-moisture value."""
     path = weather_path(WEATHER_PARQUET)
@@ -131,6 +134,7 @@ def test_range_check_catches_unit_bug(materialized) -> None:
     assert not r.passed and r.severity == AssetCheckSeverity.ERROR
 
 
+# @spec SILVER-WEATHER-TABLE-005
 def test_surface_temp_error_sentinel_nulled(tmp_path, monkeypatch) -> None:
     """SUR_TEMP error code 99999.0 becomes NULL (not a 99999 °C reading).
 
@@ -152,6 +156,7 @@ def test_surface_temp_error_sentinel_nulled(tmp_path, monkeypatch) -> None:
     assert checks_mod.weather_value_ranges().passed
 
 
+# @spec SILVER-WEATHER-TABLE-006
 def test_qc_flagged_value_nulled(tmp_path, monkeypatch) -> None:
     """A failed-QC SOLARAD value becomes NULL (not a -13107 W/m² reading).
 

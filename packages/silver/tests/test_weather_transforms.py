@@ -59,6 +59,7 @@ def _rows(root: str, tz: str = "America/New_York") -> list[dict]:
     return [dict(zip(cols, r, strict=True)) for r in cur.fetchall()]
 
 
+# @spec SILVER-WEATHER-TABLE-001
 def test_typing_keeps_metric_units(tmp_path) -> None:
     """Values are typed but never unit-converted (silver stays canonical SI)."""
     root = str(tmp_path / "bronze")
@@ -75,6 +76,7 @@ def test_typing_keeps_metric_units(tmp_path) -> None:
     assert r["obs_ts_utc"].isoformat() == "2026-06-13T17:00:00"
 
 
+# @spec SILVER-WEATHER-TABLE-002
 def test_local_day_is_dst_aware_and_can_differ_from_utc(tmp_path) -> None:
     """Local day derives from the UTC instant via the station tz; it can roll back a day."""
     root = str(tmp_path / "bronze")
@@ -92,6 +94,7 @@ def test_local_day_is_dst_aware_and_can_differ_from_utc(tmp_path) -> None:
     assert winter["obs_ts_local"].isoformat() == "2026-01-12T21:00:00"
 
 
+# @spec SILVER-WEATHER-TABLE-005
 def test_sentinels_become_null_but_row_is_kept(tmp_path) -> None:
     """A fully-sentinel observation keeps its keys but nulls every measurement."""
     root = str(tmp_path / "bronze")
@@ -103,6 +106,7 @@ def test_sentinels_become_null_but_row_is_kept(tmp_path) -> None:
         assert r[col] is None, col
 
 
+# @spec SILVER-WEATHER-TABLE-004
 def test_dedup_keeps_latest_capture(tmp_path) -> None:
     """The same observation re-captured in two files collapses to the latest fetch."""
     root = str(tmp_path / "bronze")
@@ -114,6 +118,7 @@ def test_dedup_keeps_latest_capture(tmp_path) -> None:
     assert len(rows) == 1 and rows[0]["air_temp_c"] == 21.0
 
 
+# @spec SILVER-WEATHER-TABLE-001
 def test_nul_byte_corruption_is_stripped(tmp_path) -> None:
     """A NUL-padded line (seen on DST-transition rows) parses with a clean WBANNO."""
     root = str(tmp_path / "bronze")
@@ -123,6 +128,7 @@ def test_nul_byte_corruption_is_stripped(tmp_path) -> None:
     assert r["wbanno"] == "03761" and r["air_temp_c"] == 3.0
 
 
+# @spec SILVER-WEATHER-TABLE-001
 def test_bronze_obs_count_and_sidecars_excluded(tmp_path) -> None:
     root = str(tmp_path / "bronze")
     _write(root, "2026-06-13", 1_700_000_000000, [
@@ -134,6 +140,16 @@ def test_bronze_obs_count_and_sidecars_excluded(tmp_path) -> None:
     assert int(connect().execute(bronze_obs_count_sql(files)).fetchone()[0]) == 2
 
 
+# @spec SILVER-WEATHER-TABLE-001
 def test_empty_yields_no_rows(tmp_path) -> None:
     """A not-yet-captured collection produces zero rows, not an error."""
     assert _rows(str(tmp_path / "bronze")) == []
+
+
+# @spec SILVER-WEATHER-TABLE-003
+def test_line_with_fewer_than_three_fields_is_dropped(tmp_path) -> None:
+    root = str(tmp_path / "bronze")
+    _write(root, "2026-06-10", 1_700_000_000000,
+           [_uscrn_row("20260610", "1200", t_avg=20.0), "03761 20260610"])
+    rows = _rows(root)
+    assert len(rows) == 1 and rows[0]["air_temp_c"] == 20.0

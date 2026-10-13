@@ -52,7 +52,7 @@ can be dropped and regenerated); bronze is the only source of truth.
 - Cross-layer lineage is declared by `AssetKey` (silver→bronze, gold→silver); the reads are
   **filesystem reads** of the upstream root, not gRPC calls. Each layer ships its own gRPC
   code-location image; the host registers them via `workspace.yaml`. We ship code locations
-  only — never a Dagster instance/webserver. See `docs/SILVER.md`, `docs/GOLD.md`.
+  only — never a Dagster instance/webserver. See `docs/intent/silver/`, `docs/GOLD.md`.
 
 ## Hard constraints
 

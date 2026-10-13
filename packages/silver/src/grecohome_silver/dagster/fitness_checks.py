@@ -14,6 +14,7 @@ from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 from grecohome_core.checks import alerting_check
 from grecohome_core.silver import connect
 from grecohome_silver.dagster.fitness_assets import FITNESS_PARQUET, fitness_path, silver_fitness
+from grecohome_silver.dagster.freshness import table_freshness_check
 
 
 def _missing(path: str) -> AssetCheckResult:
@@ -32,6 +33,7 @@ def _src(path: str) -> str:
     return f"read_parquet('{path.replace(chr(39), chr(39) * 2)}')"
 
 
+# @spec SILVER-DAILY-CHECKS-007
 @asset_check(asset=silver_fitness, name="fitness_day_unique_nonnull")
 @alerting_check
 def fitness_day_unique_nonnull() -> AssetCheckResult:
@@ -49,6 +51,7 @@ def fitness_day_unique_nonnull() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-DAILY-CHECKS-008
 @asset_check(asset=silver_fitness, name="fitness_value_ranges")
 @alerting_check
 def fitness_value_ranges() -> AssetCheckResult:
@@ -71,6 +74,7 @@ def fitness_value_ranges() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-DAILY-CHECKS-009
 @asset_check(asset=silver_fitness, name="fitness_coverage")
 @alerting_check
 def fitness_coverage() -> AssetCheckResult:
@@ -98,8 +102,16 @@ def fitness_coverage() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-DAILY-CHECKS-010
+silver_fitness_freshness = table_freshness_check(
+    silver_fitness, lambda: fitness_path(FITNESS_PARQUET)
+)
+
+
+# @spec SILVER-DAILY-CHECKS-011, SILVER-DAILY-CHECKS-012
 FITNESS_CHECKS = [
     fitness_day_unique_nonnull,
     fitness_value_ranges,
     fitness_coverage,
+    silver_fitness_freshness,
 ]

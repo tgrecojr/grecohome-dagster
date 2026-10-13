@@ -82,6 +82,8 @@ def _int(path: str) -> str:
     return f"TRY_CAST({json_str('j', path)} AS INTEGER)"
 
 
+# @spec SILVER-DAILY-SUMMARY-001, SILVER-DAILY-SUMMARY-002, SILVER-DAILY-SUMMARY-003
+# @spec SILVER-DAILY-SUMMARY-004
 def daily_sql(files: list[str]) -> str:
     """Typed, deduped Garmin daily summary — one row per ``activity_date`` (latest fetch)."""
     cols = [f"{_int(p)} AS {a}" for a, p in _INT_FIELDS]

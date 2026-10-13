@@ -162,7 +162,7 @@ are declared by `AssetKey` (cross-location lineage); the reads are filesystem re
   whoop-workouts).
 
 Each table has `@asset_check`s (uniqueness/ranges = ERROR, coverage = WARN) and a daily rebuild
-schedule; a shared checks-only job catches a stopped asset. Full guide: [SILVER](SILVER.md).
+schedule; a shared checks-only job catches a stopped asset. Design: [docs/intent/silver/](intent/silver/silver-design.md).
 
 ## `grecohome-gold` — the gold layer
 

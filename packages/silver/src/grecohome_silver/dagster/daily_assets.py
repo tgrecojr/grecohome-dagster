@@ -26,6 +26,7 @@ def daily_path(filename: str) -> str:
     return os.path.join(settings.silver_root, DAILY_SUBDIR, filename)
 
 
+# @spec SILVER-DAILY-SUMMARY-005
 @asset(name="silver_daily", group_name=GROUP, deps=[AssetKey("garmin_bronze_user_summary")])
 def silver_daily(context: AssetExecutionContext) -> MaterializeResult:
     """Typed, deduped Garmin daily summary — one row per local day (latest fetch)."""

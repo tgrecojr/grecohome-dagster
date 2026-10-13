@@ -136,6 +136,12 @@ frost days — consistent with SE Pennsylvania.
 All off by default; enable in the UI. Rebuild on demand with
 `dagster job execute --job gold_wellness_job` (or `--job gold_weather_job`).
 
+## Future marts
+Not built; ideas to revisit when wanted:
+- **Fitness mart** over `silver_fitness`: VO2max trend, training load, readiness.
+- **Weekly rollups** (steps, stress, intensity minutes) derived from `silver_daily`, rather than
+  projecting Garmin's weekly collections into silver.
+
 ## Deployment
 See [DEPLOYMENT.md → Gold](DEPLOYMENT.md#gold-cross-layer-marts) and
 [ENV_TEMPLATE.md](ENV_TEMPLATE.md): `SILVER_ROOT` mounted **read-only**, `GOLD_ROOT` writable on a
