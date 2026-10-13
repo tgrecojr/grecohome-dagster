@@ -57,6 +57,7 @@ def _count(path: str) -> int:
     return int(connect().execute(f"SELECT count(*) FROM read_parquet('{path}')").fetchone()[0])
 
 
+# @spec SILVER-CYCLES-STRAIN-001, SILVER-CYCLES-STRAIN-003
 def test_materializes_and_dedups(materialized) -> None:
     assert _count(strain_path(STRAIN_PARQUET)) == 2  # cycle 1 deduped, cycle 2
 
@@ -72,6 +73,7 @@ def test_rebuild_idempotent(strain_bronze_root, tmp_path, monkeypatch) -> None:
     assert one == two
 
 
+# @spec SILVER-CYCLES-CHECKS-004, SILVER-CYCLES-CHECKS-005, SILVER-CYCLES-CHECKS-006
 def test_checks_pass(materialized) -> None:
     assert checks_mod.strain_cycle_unique_nonnull().passed
     assert checks_mod.strain_value_ranges().passed
@@ -80,6 +82,7 @@ def test_checks_pass(materialized) -> None:
     assert cov.metadata["silver_cycles"].value == 2
 
 
+# @spec SILVER-CYCLES-CHECKS-005
 def test_range_check_catches_bad_strain(materialized) -> None:
     path = strain_path(STRAIN_PARQUET)
     con = connect()

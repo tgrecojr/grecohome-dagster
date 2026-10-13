@@ -13,6 +13,7 @@ from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 from grecohome_core.checks import alerting_check
 from grecohome_core.silver import connect, list_payload_files
 from grecohome_silver.config import settings
+from grecohome_silver.dagster.freshness import table_freshness_check
 from grecohome_silver.dagster.recovery_assets import (
     RECOVERY_PARQUET,
     recovery_path,
@@ -46,6 +47,7 @@ def _src(path: str) -> str:
     return f"read_parquet('{path.replace(chr(39), chr(39) * 2)}')"
 
 
+# @spec SILVER-CYCLES-CHECKS-001
 @asset_check(asset=silver_recovery, name="recovery_cycle_unique_nonnull")
 @alerting_check
 def recovery_cycle_unique_nonnull() -> AssetCheckResult:
@@ -65,6 +67,7 @@ def recovery_cycle_unique_nonnull() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-CYCLES-CHECKS-002
 @asset_check(asset=silver_recovery, name="recovery_value_ranges")
 @alerting_check
 def recovery_value_ranges() -> AssetCheckResult:
@@ -83,10 +86,11 @@ def recovery_value_ranges() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-CYCLES-CHECKS-003
 @asset_check(asset=silver_recovery, name="recovery_coverage_vs_bronze")
 @alerting_check
 def recovery_coverage_vs_bronze() -> AssetCheckResult:
-    """silver recoveries ≈ bronze distinct ``cycle_id`` — no silent drop."""
+    """silver recoveries ≥ bronze distinct ``cycle_id`` — no silent drop."""
     path = recovery_path(RECOVERY_PARQUET)
     if not os.path.exists(path):
         return _missing(path)
@@ -100,8 +104,16 @@ def recovery_coverage_vs_bronze() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-CYCLES-CHECKS-007
+silver_recovery_freshness = table_freshness_check(
+    silver_recovery, lambda: recovery_path(RECOVERY_PARQUET)
+)
+
+
+# @spec SILVER-CYCLES-CHECKS-008, SILVER-CYCLES-CHECKS-009
 RECOVERY_CHECKS = [
     recovery_cycle_unique_nonnull,
     recovery_value_ranges,
     recovery_coverage_vs_bronze,
+    silver_recovery_freshness,
 ]

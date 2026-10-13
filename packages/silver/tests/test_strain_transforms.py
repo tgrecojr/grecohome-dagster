@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 
+import duckdb
 import pytest
 
 from grecohome_core.silver import connect, list_payload_files
@@ -45,6 +46,7 @@ def _rows(root: str) -> list[dict]:
     return [dict(zip(cols, r, strict=True)) for r in cur.fetchall()]
 
 
+# @spec SILVER-CYCLES-STRAIN-001, SILVER-CYCLES-STRAIN-002
 def test_typing_and_local_start_date(tmp_path) -> None:
     root = str(tmp_path / "bronze")
     _write(root, "2026-06-10", 1_700_000_000000, [
@@ -58,6 +60,7 @@ def test_typing_and_local_start_date(tmp_path) -> None:
     assert r["step_count"] is None  # pre-2026-09-23 payloads have no step_count
 
 
+# @spec SILVER-CYCLES-STRAIN-005
 def test_step_count_typed_when_present(tmp_path) -> None:
     """Whoop's ``step_count`` (added 2026-09-23) lands as a nullable INTEGER."""
     root = str(tmp_path / "bronze")
@@ -70,6 +73,7 @@ def test_step_count_typed_when_present(tmp_path) -> None:
     assert rows[1815757587]["step_count"] is None
 
 
+# @spec SILVER-CYCLES-STRAIN-002
 def test_local_start_date_can_roll_back_a_day(tmp_path) -> None:
     """An early-UTC start maps to the previous local day."""
     root = str(tmp_path / "bronze")
@@ -80,6 +84,7 @@ def test_local_start_date_can_roll_back_a_day(tmp_path) -> None:
     assert r["strain_date"].isoformat() == "2026-06-09"  # 02:00Z − 4h = 22:00 prev day
 
 
+# @spec SILVER-CYCLES-STRAIN-003
 def test_dedup_keeps_latest_rescore(tmp_path) -> None:
     root = str(tmp_path / "bronze")
     _write(root, "2026-06-10", 1_700_000_000000,
@@ -92,6 +97,7 @@ def test_dedup_keeps_latest_rescore(tmp_path) -> None:
     assert len(rows) == 1 and rows[0]["day_strain"] == 15.0
 
 
+# @spec SILVER-CYCLES-STRAIN-005
 def test_unscored_cycle_kept_with_null_metrics(tmp_path) -> None:
     root = str(tmp_path / "bronze")
     _write(root, "2026-06-10", 1_700_000_000000, [
@@ -103,6 +109,7 @@ def test_unscored_cycle_kept_with_null_metrics(tmp_path) -> None:
     assert r["score_state"] == "PENDING_SCORE"
 
 
+# @spec SILVER-CYCLES-STRAIN-001
 def test_bronze_count_and_empty(tmp_path) -> None:
     root = str(tmp_path / "bronze")
     assert _rows(root) == []
@@ -112,3 +119,57 @@ def test_bronze_count_and_empty(tmp_path) -> None:
     ])
     files = list_payload_files(root, "whoop", "cycle")
     assert int(connect().execute(bronze_strain_count_sql(files)).fetchone()[0]) == 2
+
+
+def _write_raw(root: str, payload) -> None:
+    pdir = os.path.join(root, "whoop", "cycle", "dt=2026-06-10")
+    os.makedirs(pdir, exist_ok=True)
+    with open(os.path.join(pdir, "cycle_1700000000000_raw.json"), "w") as fh:
+        json.dump(payload, fh)
+
+
+# @spec SILVER-CYCLES-STRAIN-001
+def test_payload_without_records_contributes_nothing(tmp_path) -> None:
+    root = str(tmp_path / "bronze")
+    _write(root, "2026-06-10", 1_700_000_100000, [_cycle(1, "2026-06-10T11:00:00.000Z", "u")])
+    _write_raw(root, {"next_token": None})
+    assert [r["cycle_id"] for r in _rows(root)] == [1]
+
+
+# @spec SILVER-CYCLES-STRAIN-007
+@pytest.mark.parametrize("records", [{"id": 1}, "oops", 5])
+def test_non_array_records_fails_the_rebuild(tmp_path, records) -> None:
+    root = str(tmp_path / "bronze")
+    _write(root, "2026-06-10", 1_700_000_100000, [_cycle(1, "2026-06-10T11:00:00.000Z", "u")])
+    _write_raw(root, {"records": records})
+    with pytest.raises(duckdb.Error):
+        _rows(root)
+
+
+# @spec SILVER-CYCLES-STRAIN-005
+def test_open_cycle_kept_with_null_end(tmp_path) -> None:
+    root = str(tmp_path / "bronze")
+    rec = {**_cycle(1, "2026-06-10T11:00:00.000Z", "u"), "end": None}
+    _write(root, "2026-06-10", 1_700_000_100000, [rec])
+    rows = _rows(root)
+    assert len(rows) == 1 and rows[0]["end_ts"] is None and rows[0]["day_strain"] == 12.5
+
+
+# @spec SILVER-CYCLES-STRAIN-002
+@pytest.mark.parametrize("offset", [None, "garbage"])
+def test_strain_date_falls_back_to_utc_date(tmp_path, offset) -> None:
+    root = str(tmp_path / "bronze")
+    rec = _cycle(1, "2026-06-10T02:00:00.000Z", "u", offset=offset)
+    _write(root, "2026-06-10", 1_700_000_100000, [rec])
+    assert _rows(root)[0]["strain_date"].isoformat() == "2026-06-10"
+
+
+# @spec SILVER-CYCLES-STRAIN-004
+def test_missing_id_dropped_non_numeric_id_kept_null(tmp_path) -> None:
+    root = str(tmp_path / "bronze")
+    base = _cycle(1, "2026-06-10T11:00:00.000Z", "u")
+    no_id = {k: v for k, v in base.items() if k != "id"}
+    _write(root, "2026-06-10", 1_700_000_100000,
+           [base, no_id, {**base, "id": None}, {**base, "id": "abc"}])
+    ids = sorted((r["cycle_id"] for r in _rows(root)), key=lambda x: (x is None, x))
+    assert ids == [1, None]

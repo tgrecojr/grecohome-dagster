@@ -28,14 +28,20 @@ from grecohome_core.silver import (
 
 
 def _recovery_relation(payloads_sql: str) -> str:
-    """Unnest each file's ``records`` array to one row per recovery (``r``)."""
+    """Unnest each file's ``records`` array to one row per recovery (``r``).
+
+    A payload without ``records`` contributes nothing; a ``records`` that isn't an array
+    fails the cast, and so the rebuild, rather than silently emptying the table.
+    """
     return (
         f"SELECT p.filename AS filename, rec AS r "
-        f"FROM ({payloads_sql}) AS p, UNNEST(CAST(p.j -> '$.records' AS JSON[])) AS t(rec) "
-        "WHERE json_type(p.j -> '$.records') = 'ARRAY'"
+        f"FROM ({payloads_sql}) AS p, UNNEST(CAST(p.j -> '$.records' AS JSON[])) AS t(rec)"
     )
 
 
+# @spec SILVER-CYCLES-RECOVERY-001, SILVER-CYCLES-RECOVERY-002, SILVER-CYCLES-RECOVERY-003
+# @spec SILVER-CYCLES-RECOVERY-004, SILVER-CYCLES-RECOVERY-005, SILVER-CYCLES-RECOVERY-006
+# @spec SILVER-CYCLES-RECOVERY-008
 def recovery_sql(files: list[str]) -> str:
     """Typed, deduped Whoop recovery — one row per ``cycle_id`` (latest rescore)."""
     rel = _recovery_relation(payloads_relation_sql(files))
@@ -53,6 +59,7 @@ def recovery_sql(files: list[str]) -> str:
             {json_num('r', score + 'skin_temp_celsius')}               AS skin_temp_celsius,
             COALESCE(TRY_CAST({json_str('r', score + 'user_calibrating')} AS BOOLEAN), FALSE)
                                                                        AS user_calibrating,
+            {json_str('r', 'score_state')}                             AS score_state,
             {json_str('r', 'updated_at')}                              AS _updated_at
         FROM ({rel})
         WHERE {json_str('r', 'cycle_id')} IS NOT NULL

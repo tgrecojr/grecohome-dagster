@@ -24,6 +24,7 @@ def recovery_path(filename: str) -> str:
     return os.path.join(settings.silver_root, RECOVERY_SUBDIR, filename)
 
 
+# @spec SILVER-CYCLES-RECOVERY-007
 @asset(name="silver_recovery", group_name=GROUP, deps=[AssetKey("whoop_bronze_recovery")])
 def silver_recovery(context: AssetExecutionContext) -> MaterializeResult:
     """Typed, deduped Whoop recovery — one row per cycle."""

@@ -36,5 +36,5 @@ elements → 727 distinct, profiled live). Each activity carries a local `startT
   day's recovery or glucose response).
 
 ## Related
-[HLD](../high-level-design.md), [Garmin design](../intent/garmin/garmin-design.md), [silver sleep design](../intent/silver/sleep/sleep-design.md), [[0008-silver-glucose]].
+[HLD](../high-level-design.md), [Garmin design](../intent/garmin/garmin-design.md), [silver sleep design](../intent/silver/sleep/sleep-design.md), [silver glucose design](../intent/silver/glucose/glucose-design.md).
 Layer guide: `docs/SILVER.md`.

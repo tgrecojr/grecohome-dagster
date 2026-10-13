@@ -154,9 +154,9 @@ are declared by `AssetKey` (cross-location lineage); the reads are filesystem re
   night; both devices side by side, neither authoritative. Whoop night = local wake date
   ([silver sleep design](intent/silver/sleep/sleep-design.md)).
 - **`silver_glucose`** — one row per CGM reading; dedup on the **UTC instant** (the local string
-  repeats under different offsets) (ADR 0008).
+  repeats under different offsets) ([silver glucose design](intent/silver/glucose/glucose-design.md)).
 - **`silver_workouts`** — one row per Garmin activity (ADR 0009).
-- **`silver_recovery`** — one row per Whoop cycle; joins sleep via `sleep_id`/`cycle_id` (ADR 0010).
+- **`silver_recovery`** — one row per Whoop cycle; joins sleep via `sleep_id`/`cycle_id` ([silver cycles design](intent/silver/cycles/cycles-design.md)).
   Plus the other derived tables (weather, daily, strain, body, fitness, workout-splits,
   whoop-workouts).
 

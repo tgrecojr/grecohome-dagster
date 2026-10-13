@@ -35,6 +35,7 @@ def _rows(root: str) -> list[dict]:
     return [dict(zip(cols, r, strict=True)) for r in cur.fetchall()]
 
 
+# @spec SILVER-GLUCOSE-TABLE-001, SILVER-GLUCOSE-TABLE-002
 def test_glucose_typing_local_utc_offset(tmp_path) -> None:
     """Local wall-clock, local date, signed offset, and derived UTC instant."""
     root = str(tmp_path / "bronze")
@@ -48,6 +49,7 @@ def test_glucose_typing_local_utc_offset(tmp_path) -> None:
     assert r["reading_ts_utc"].isoformat() == "2026-03-16T03:30:00"
 
 
+# @spec SILVER-GLUCOSE-TABLE-004
 def test_glucose_dedup_on_utc_instant_across_offset_reprs(tmp_path) -> None:
     """The same instant written under two offset spellings collapses to one reading.
 
@@ -66,6 +68,7 @@ def test_glucose_dedup_on_utc_instant_across_offset_reprs(tmp_path) -> None:
     assert rows[0]["reading_ts_local"].isoformat() == "2026-03-15T07:47:00"
 
 
+# @spec SILVER-GLUCOSE-TABLE-004
 def test_glucose_duplicate_captures_collapse(tmp_path) -> None:
     """The same reading re-exported in many files dedups to one row."""
     root = str(tmp_path / "bronze")
@@ -76,6 +79,7 @@ def test_glucose_duplicate_captures_collapse(tmp_path) -> None:
     assert rows[0]["mgdl"] == 100
 
 
+# @spec SILVER-GLUCOSE-TABLE-005
 def test_glucose_keeps_null_measurement(tmp_path) -> None:
     """A reading with a blank measurement is kept with mgdl null (never dropped)."""
     root = str(tmp_path / "bronze")
@@ -86,6 +90,7 @@ def test_glucose_keeps_null_measurement(tmp_path) -> None:
     assert rows[0]["reading_ts_utc"] is not None
 
 
+# @spec SILVER-GLUCOSE-TABLE-001
 def test_glucose_sidecars_excluded_and_count(tmp_path) -> None:
     """Sidecars are ignored; bronze_reading_count_sql counts distinct instants."""
     root = str(tmp_path / "bronze")
@@ -96,7 +101,35 @@ def test_glucose_sidecars_excluded_and_count(tmp_path) -> None:
     assert int(connect().execute(bronze_reading_count_sql(files)).fetchone()[0]) == 2
 
 
+# @spec SILVER-GLUCOSE-TABLE-001
 def test_glucose_empty_yields_no_rows(tmp_path) -> None:
     """A not-yet-captured collection produces zero rows, not an error."""
     root = str(tmp_path / "bronze")
     assert _rows(root) == []
+
+
+# @spec SILVER-GLUCOSE-TABLE-003
+def test_glucose_unparseable_local_dropped_unparseable_offset_kept(tmp_path) -> None:
+    root = str(tmp_path / "bronze")
+    _write_csv(root, "2026-03-15", 1_700_000_000000, [
+        ("2026-03-15T06:00-04:00", "100"),  # normal
+        ("garbage", "101"),                 # local time doesn't parse: dropped
+        ("2026-03-15T06:10", "102"),        # no offset: kept, instant null
+    ])
+    rows = sorted(_rows(root), key=lambda r: r["mgdl"])
+    assert [r["mgdl"] for r in rows] == [100, 102]
+    assert rows[1]["reading_ts_utc"] is None and rows[1]["tz_offset_minutes"] is None
+    assert rows[1]["reading_date"].isoformat() == "2026-03-15"
+
+
+# @spec SILVER-GLUCOSE-TABLE-004
+def test_glucose_latest_capture_wins_every_column(tmp_path) -> None:
+    """Same instant, two spellings and values: the later capture's row wins outright."""
+    root = str(tmp_path / "bronze")
+    _write_csv(root, "2026-03-15", 1_700_000_000000, [("2026-03-15T06:00-04:00", "100")],
+               short="old")
+    _write_csv(root, "2026-03-16", 1_700_000_900000, [("2026-03-15T05:00-05:00", "120")],
+               short="new")
+    rows = _rows(root)
+    assert len(rows) == 1
+    assert rows[0]["mgdl"] == 120 and rows[0]["tz_offset_minutes"] == -300

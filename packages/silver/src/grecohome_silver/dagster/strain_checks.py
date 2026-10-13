@@ -13,6 +13,7 @@ from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 from grecohome_core.checks import alerting_check
 from grecohome_core.silver import connect, list_payload_files
 from grecohome_silver.config import settings
+from grecohome_silver.dagster.freshness import table_freshness_check
 from grecohome_silver.dagster.strain_assets import STRAIN_PARQUET, silver_strain, strain_path
 from grecohome_silver.strain import bronze_strain_count_sql
 
@@ -33,6 +34,7 @@ def _src(path: str) -> str:
     return f"read_parquet('{path.replace(chr(39), chr(39) * 2)}')"
 
 
+# @spec SILVER-CYCLES-CHECKS-004
 @asset_check(asset=silver_strain, name="strain_cycle_unique_nonnull")
 @alerting_check
 def strain_cycle_unique_nonnull() -> AssetCheckResult:
@@ -52,6 +54,7 @@ def strain_cycle_unique_nonnull() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-CYCLES-CHECKS-005
 @asset_check(asset=silver_strain, name="strain_value_ranges")
 @alerting_check
 def strain_value_ranges() -> AssetCheckResult:
@@ -74,10 +77,11 @@ def strain_value_ranges() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-CYCLES-CHECKS-006
 @asset_check(asset=silver_strain, name="strain_coverage_vs_bronze")
 @alerting_check
 def strain_coverage_vs_bronze() -> AssetCheckResult:
-    """silver cycles ≈ bronze distinct cycles — no silent drop."""
+    """silver cycles ≥ bronze distinct cycles — no silent drop."""
     path = strain_path(STRAIN_PARQUET)
     if not os.path.exists(path):
         return _missing(path)
@@ -95,8 +99,14 @@ def strain_coverage_vs_bronze() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-CYCLES-CHECKS-007
+silver_strain_freshness = table_freshness_check(silver_strain, lambda: strain_path(STRAIN_PARQUET))
+
+
+# @spec SILVER-CYCLES-CHECKS-008, SILVER-CYCLES-CHECKS-009
 STRAIN_CHECKS = [
     strain_cycle_unique_nonnull,
     strain_value_ranges,
     strain_coverage_vs_bronze,
+    silver_strain_freshness,
 ]
