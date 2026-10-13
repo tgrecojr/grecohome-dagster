@@ -1,7 +1,7 @@
 # High-Level Design: grecohome-dagster
 
-LID runs in **Scoped** mode here. Under the arrow: the Garmin, Whoop and Soil/USCRN bronze
-subjects (`packages/garmin/**`, `packages/whoop/**`, `packages/soil/**`), and the shared core's bronze writer and bronze
+LID runs in **Scoped** mode here. Under the arrow: all four bronze subjects (Garmin, Whoop,
+Soil/USCRN, Lingo: `packages/{garmin,whoop,soil,lingo}/**`), and the shared core's bronze writer and bronze
 checks (`grecohome_core.bronze`, `grecohome_core.checks`). Sections that describe other parts of the system are short
 orientation summaries. The detailed design for those parts lives in `docs/ARCHITECTURE.md`,
 `docs/SILVER.md`, `docs/GOLD.md` and `docs/adr/`.
@@ -80,6 +80,7 @@ are applied in silver at read time.
 | Garmin | `docs/intent/garmin/` | Garmin Connect bronze subject (capture, authentication) |
 | Whoop | `docs/intent/whoop/` | Whoop bronze subject (capture, token lifecycle) |
 | Soil/USCRN | `docs/intent/soil/` | NOAA USCRN station bronze subject (day-slice capture, late corrections) |
+| Lingo | `docs/intent/lingo/` | Lingo CGM bronze subject (Drive-folder sensor, one partition per uploaded export) |
 
 Subjects depend on the shared core, never the reverse. So a change to a core contract is a
 cross-segment change: it cascades to every subject spec that relies on it.

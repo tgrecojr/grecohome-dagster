@@ -22,6 +22,7 @@ def _payloads(root: str) -> list[str]:
 
 @pytest.mark.integration
 class TestMaterialize:
+    # @spec LINGO-CAPTURE-001
     def test_downloads_and_captures_partition(self, isolate_lingo_bronze):
         inst = DagsterInstance.ephemeral()
         inst.add_dynamic_partitions("lingo_files", ["f1"])

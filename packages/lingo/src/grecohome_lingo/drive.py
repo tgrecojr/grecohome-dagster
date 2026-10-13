@@ -20,6 +20,7 @@ log = get_logger(__name__)
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
 
+# @spec LINGO-AUTH-001
 def get_drive_service(service_account_path: str | None = None):
     """Build a Drive v3 client from the mounted service-account key."""
     path = service_account_path or settings.gdrive_service_account_path
@@ -28,10 +29,14 @@ def get_drive_service(service_account_path: str | None = None):
     return build("drive", "v3", credentials=creds, cache_discovery=False)
 
 
+# @spec LINGO-SENSOR-001
 def list_csv_files(service, folder_id: str | None = None) -> list[dict]:
     """List the CSV files in the watched folder (id, name, created/modified times).
 
-    Paginates so a large/long-lived folder is fully enumerated.
+    Paginates so a large/long-lived folder is fully enumerated. Matches Drive's MIME
+    type ``text/csv`` exactly: a file Drive labels otherwise (``application/vnd.ms-excel``,
+    a converted Sheet) is never listed. Shared-drive items aren't requested, so the
+    folder must live in a regular My Drive.
     """
     folder_id = folder_id or settings.gdrive_folder_id
     query = f"'{folder_id}' in parents and mimeType='text/csv' and trashed=false"

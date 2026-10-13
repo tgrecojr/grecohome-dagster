@@ -2,7 +2,7 @@
 
 One dynamic-partitioned asset: each Drive file is its own partition (keyed by
 Drive ``file_id``), captured exactly once. The asset downloads that file from
-Drive and captures the raw CSV bytes to bronze. The sensor (see schedules.py)
+Drive and captures the raw CSV bytes to bronze. The sensor (see sensors.py)
 adds a partition per new file; the partition set is the "already captured" ledger.
 """
 
@@ -18,6 +18,7 @@ LINGO_FILES = DynamicPartitionsDefinition(name="lingo_files")
 LINGO_POOL = "lingo_api"
 
 
+# @spec LINGO-CAPTURE-001, LINGO-CAPTURE-003, LINGO-CAPTURE-004
 @asset(partitions_def=LINGO_FILES, pool=LINGO_POOL, group_name="lingo")
 def lingo_bronze_glucose(context: AssetExecutionContext) -> None:
     """Download one Drive glucose CSV (the partition's file_id) and capture it."""
@@ -38,6 +39,11 @@ def lingo_bronze_glucose(context: AssetExecutionContext) -> None:
         created_time=info.get("createdTime"),
         modified_time=info.get("modifiedTime"),
     )
+    if path is None:
+        # The core writer swallows write failures (it logged the cause). With dedupe
+        # off, None can only mean failure -- and a "successful" run would leave this
+        # partition looking captured, so the sensor would never request the file again.
+        raise RuntimeError(f"bronze capture failed for Lingo file {file_id}")
     context.add_output_metadata(
         {
             "file_id": file_id,

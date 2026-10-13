@@ -112,38 +112,9 @@ grecohome_lingo/
     definitions.py   the gRPC code-location target
 ```
 
-How Lingo differs (it reuses core too):
-- **File-arrival-driven, not schedule-driven** — the only such subject. The user periodically
-  exports a *cumulative* CGM CSV from the Lingo iOS app and uploads it to a watched Drive folder.
-- **Auth is a Google service account** (mounted key JSON; the folder is shared read-only with the
-  SA email) — no interactive OAuth, no rotating token file. See
-  [DEPLOYMENT](DEPLOYMENT.md#gcp-service-account-setup).
-- **A sensor + dynamic partitions.** `lingo_drive_sensor` lists the folder every
-  `GDRIVE_POLL_INTERVAL_MINUTES`; each Drive `file_id` not already a partition gets a partition + a
-  run (`run_key == file_id`, captured exactly once). **The dynamic partition set is the
-  "already captured" ledger** — replacing glucose-loader's Postgres `ProcessedFile` table. The
-  first tick captures the existing backlog; there is no backfill grid.
-- **Dedup on** (`dedupe=True`): re-uploading an unchanged export is a no-op. Capture-once per
-  `file_id` is the first defence; the content hash backstops a re-upload of the same export under
-  a new `file_id`. A new export (with more records) differs and is captured.
-
-Lingo in bronze:
-- **One collection, `lingo/glucose`.** Each payload is the export's **CSV bytes**, stored
-  byte-for-byte (`text/csv` → `ext=csv`), with no reserialization.
-- **`dt` is the fetch (capture) date**, not a per-record date. Each export is a *cumulative*
-  dump of every reading to date, so the file belongs to when it arrived, and successive uploads
-  land in successive `dt=` folders.
-- **Sidecar Drive provenance:** `file_id`, `file_name`, `folder_id`, and Drive `created_time` /
-  `modified_time`. **Never** the service-account key or any credential.
-
-Lingo checks (`grecohome_lingo/dagster/checks.py`, 3 checks, `lingo_bronze_checks_job` hourly):
-- **Completeness** uses the **in-CSV reading timestamp** (the `Time of Glucose Reading [...]`
-  column), never `dt`, over distinct event dates. It runs at WARN, with `cadence_days` 14,
-  because the sensor is worn intermittently.
-- **Schema drift and content health** are on.
-- **Freshness is off.** Wear is intermittent, so "no recent upload" is usually legitimate
-  non-wear rather than a break. Gaps surface through completeness instead.
-- An auth-health check for the service account was considered and not built.
+File-arrival-driven: a Drive-folder sensor captures each uploaded (cumulative) CGM export once, one
+dynamic partition per Drive `file_id`, authenticated with a read-only service account. Authoritative
+design (sensor, capture, auth, checks, and why): `docs/intent/lingo/lingo-design.md`.
 
 ## `grecohome-soil` — a fourth data subject
 

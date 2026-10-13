@@ -15,6 +15,7 @@ class TestDefinitions:
     def test_job_resolves(self):
         assert defs.resolve_job_def("lingo_capture_job") is not None
 
+    # @spec LINGO-SENSOR-004
     def test_sensor_config(self):
         assert lingo_drive_sensor.name == "lingo_drive_sensor"
         assert (
@@ -29,6 +30,7 @@ class TestAssetChecks:
         ag = defs.resolve_asset_graph()
         return {(str(k.asset_key), k.name) for k in ag.asset_check_keys}
 
+    # @spec LINGO-CHECKS-001
     def test_glucose_checks_no_freshness(self):
         # Intermittent wear -> freshness is intentionally disabled.
         keys = self._checks()
@@ -38,6 +40,7 @@ class TestAssetChecks:
         assert (akey, "lingo_glucose_content_health") in keys
         assert (akey, "lingo_glucose_freshness") not in keys
 
+    # @spec LINGO-CHECKS-001
     def test_event_date_uses_csv_timestamp_column(self):
         from grecohome_lingo.dagster.checks import GLUCOSE_TS_COLUMN, LINGO_CHECK_CONFIGS
 

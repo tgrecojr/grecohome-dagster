@@ -94,6 +94,7 @@ Paths in scope:
 - `packages/garmin/**`
 - `packages/whoop/**`
 - `packages/soil/**`
+- `packages/lingo/**`
 - `packages/core/src/grecohome_core/bronze/**`
 - `packages/core/src/grecohome_core/checks/**`
 
