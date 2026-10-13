@@ -18,6 +18,7 @@ def _warn(passed: bool) -> AssetCheckResult:
     return AssetCheckResult(passed=passed, severity=AssetCheckSeverity.WARN)
 
 
+# @spec CORE-CHECKS-ALERT-001
 def test_failing_error_check_logs_signal():
     @alerting_check(name="x_freshness", asset="AssetKey(['x'])")
     def chk() -> AssetCheckResult:
@@ -43,6 +44,7 @@ def test_passing_check_does_not_log():
     err.assert_not_called()
 
 
+# @spec CORE-CHECKS-ALERT-001
 def test_failing_warn_check_does_not_log():
     # WARN coverage/expectation failures stay UI-only — they must not page.
     @alerting_check
@@ -64,6 +66,7 @@ def test_bare_form_uses_function_name():
     assert err.call_args.kwargs["check"] == "my_named_check"
 
 
+# @spec CORE-CHECKS-ALERT-002
 def test_logging_failure_never_breaks_the_check():
     @alerting_check
     def chk() -> AssetCheckResult:

@@ -26,6 +26,7 @@ from grecohome_core.logging_config import get_logger
 logger = get_logger(__name__)
 
 
+# @spec CORE-CHECKS-FRESH-001, CORE-CHECKS-FRESH-002, CORE-CHECKS-ALERT-003
 def build_fetch_freshness_check(
     cfg: CollectionCheckConfig, bronze_root: str
 ) -> AssetChecksDefinition:

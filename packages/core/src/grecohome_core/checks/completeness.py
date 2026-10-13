@@ -28,6 +28,7 @@ from grecohome_core.logging_config import get_logger
 logger = get_logger(__name__)
 
 
+# @spec CORE-CHECKS-COMPLETE-001, CORE-CHECKS-COMPLETE-002, CORE-CHECKS-COMPLETE-003
 def build_event_completeness_check(
     cfg: CollectionCheckConfig, bronze_root: str
 ) -> AssetChecksDefinition:

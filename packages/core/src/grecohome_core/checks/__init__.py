@@ -44,6 +44,7 @@ __all__ = [
 ]
 
 
+# @spec CORE-CHECKS-002, CORE-CHECKS-005, CORE-CHECKS-006
 def build_checks_for(
     cfg: CollectionCheckConfig, bronze_root: str, monitor_dir: str | None = None
 ) -> list[AssetChecksDefinition]:

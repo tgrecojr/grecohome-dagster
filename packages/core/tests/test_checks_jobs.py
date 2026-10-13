@@ -24,6 +24,7 @@ def _demo_check() -> AssetCheckResult:
 
 @pytest.mark.unit
 class TestChecksJob:
+    # @spec CORE-CHECKS-JOB-001
     def test_job_runs_checks_without_materializing_asset(self):
         job = build_bronze_checks_job([_demo_check], name="demo_checks_job")
         defs = Definitions(assets=[_demo_asset], asset_checks=[_demo_check], jobs=[job])
@@ -38,6 +39,7 @@ class TestChecksJob:
             (str(AssetKey("_demo_asset")), "demo_check", True)
         ]
 
+    # @spec CORE-CHECKS-JOB-002
     def test_schedule_defaults_hourly_utc(self):
         job = build_bronze_checks_job([_demo_check], name="demo_checks_job")
         sched = build_bronze_checks_schedule(job, name="demo_checks_hourly")

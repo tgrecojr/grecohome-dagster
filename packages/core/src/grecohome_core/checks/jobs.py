@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 from dagster import (
     AssetChecksDefinition,
     AssetSelection,
+    DefaultScheduleStatus,
     ScheduleDefinition,
     define_asset_job,
 )
@@ -29,6 +30,7 @@ if TYPE_CHECKING:
     )
 
 
+# @spec CORE-CHECKS-JOB-001
 def build_bronze_checks_job(
     checks: Sequence[AssetChecksDefinition], *, name: str = "bronze_checks_job"
 ) -> UnresolvedAssetJobDefinition:
@@ -36,6 +38,7 @@ def build_bronze_checks_job(
     return define_asset_job(name=name, selection=AssetSelection.checks(*checks))
 
 
+# @spec CORE-CHECKS-JOB-002
 def build_bronze_checks_schedule(
     job: UnresolvedAssetJobDefinition,
     *,
@@ -46,10 +49,15 @@ def build_bronze_checks_schedule(
 
     Hourly is cheap (each check is a bounded, local file read) and catches a stopped
     asset quickly. Override ``cron_schedule`` for lower-frequency subjects.
+
+    Starts RUNNING: a safety net that waits for someone to switch it on can silently
+    never run. A schedule stopped deliberately in the UI stays stopped (the UI state
+    wins over this code default).
     """
     return ScheduleDefinition(
         name=name or f"{job.name}_schedule",
         job=job,
         cron_schedule=cron_schedule,
         execution_timezone="UTC",
+        default_status=DefaultScheduleStatus.RUNNING,
     )

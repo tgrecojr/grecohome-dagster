@@ -26,6 +26,7 @@ class TestCompletenessPartition:
         assert res.passed
         assert res.severity == AssetCheckSeverity.WARN
 
+    # @spec CORE-CHECKS-COMPLETE-001
     def test_interior_gap_warns(self, capture, bronze_root):
         for d in ("2024-12-01", "2024-12-05"):  # 3 missing days, cadence 1
             capture("soil", "hourly", "row\n", dt=d, content_type="text/plain", ext="txt")
@@ -59,6 +60,7 @@ class TestLingoEventDate:
         base.update(kw)
         return CollectionCheckConfig(**base)
 
+    # @spec CORE-CHECKS-COMPLETE-002
     def test_event_span_reflects_csv_not_dt(self, capture, bronze_root):
         # dt = FETCH date (Dec); the readings inside are from November.
         header = f"{LINGO_TS},Glucose Value\n"

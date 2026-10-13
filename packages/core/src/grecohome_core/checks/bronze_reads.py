@@ -69,6 +69,7 @@ def list_partition_dirs(coll_dir: str) -> list[tuple[str, str]]:
     return out
 
 
+# @spec CORE-CHECKS-003
 def trailing_partition_dirs(coll_dir: str, recent_partitions: int | None) -> list[tuple[str, str]]:
     """The trailing ``recent_partitions`` partition folders (all of them if None)."""
     parts = list_partition_dirs(coll_dir)
@@ -77,6 +78,7 @@ def trailing_partition_dirs(coll_dir: str, recent_partitions: int | None) -> lis
     return parts[-recent_partitions:]
 
 
+# @spec CORE-CHECKS-004
 def iter_payloads(partition_dir: str) -> list[str]:
     """Every payload file in one partition folder, **excluding** sidecars."""
     return sorted(
@@ -508,6 +510,7 @@ def verify_integrity(payload_path: str, sidecar: dict | None) -> list[str]:
     return issues
 
 
+# @spec CORE-CHECKS-CONTENT-001
 def sample_payloads(coll_dir: str, recent_partitions: int | None, sample: int) -> list[str]:
     """Up to ``sample`` payloads spread across the trailing partitions.
 

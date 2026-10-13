@@ -53,4 +53,4 @@ night.
   single-source reductions of this template.
 
 ## Related
-[[0001-bronze-only]], [[0002-dagster-pins]], [[0006-soil-port]]. Layer guide: `docs/SILVER.md`.
+[HLD](../high-level-design.md), [[0006-soil-port]]. Layer guide: `docs/SILVER.md`.

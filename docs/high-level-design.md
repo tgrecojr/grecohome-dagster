@@ -1,9 +1,10 @@
 # High-Level Design: grecohome-dagster
 
-LID runs in **Scoped** mode here. Only the Garmin and Whoop bronze subjects
-(`packages/garmin/**`, `packages/whoop/**`) are under the arrow. Sections that describe other parts of the system are short
+LID runs in **Scoped** mode here. Under the arrow: the Garmin and Whoop bronze subjects
+(`packages/garmin/**`, `packages/whoop/**`), and the shared core's bronze writer and bronze
+checks (`grecohome_core.bronze`, `grecohome_core.checks`). Sections that describe other parts of the system are short
 orientation summaries. The detailed design for those parts lives in `docs/ARCHITECTURE.md`,
-`docs/BRONZE.md`, `docs/SILVER.md`, `docs/GOLD.md` and `docs/adr/`.
+`docs/SILVER.md`, `docs/GOLD.md` and `docs/adr/`.
 
 ## Problem
 
@@ -71,8 +72,47 @@ flowchart LR
 Bronze partitions are UTC fetch-slices, not local days. Local-day and event-date semantics
 are applied in silver at read time.
 
+## Components under the arrow
+
+| Component | Design | Role |
+|---|---|---|
+| Shared core (bronze writer, bronze checks) | `docs/intent/core/` | The capture and data-quality contracts every bronze subject relies on |
+| Garmin | `docs/intent/garmin/` | Garmin Connect bronze subject (capture, authentication) |
+| Whoop | `docs/intent/whoop/` | Whoop bronze subject (capture, token lifecycle) |
+
+Subjects depend on the shared core, never the reverse. So a change to a core contract is a
+cross-segment change: it cascades to every subject spec that relies on it.
+
 ## Key Design Decisions
 
+- **Bronze captures only; there is no transactional database.** Each bronze subject calls its
+  source and writes the raw responses to files under `BRONZE_ROOT`, which is the subject's only
+  hard dependency. No Postgres, SQLAlchemy, Alembic or APScheduler. Reconciliation (records the
+  source later rescored or deleted) isn't done by deleting rows at capture time. Bronze only
+  appends, and silver resolves rescores and deletions at read time. The rejected alternative is
+  writing parsed rows to Postgres with a windowed delete-reconcile: it needs a database to run,
+  migrate and pool, and it destroys the record of what the source actually returned.
+- **Bronze partitions are daily UTC fetch-slices.** A partition is the fetch window
+  `[day 00:00Z, next day 00:00Z)`, not a semantic local day. Local-day semantics ("day",
+  "night") are applied at read time over bronze's raw timestamps, never inferred from the
+  partition key. Each subject chooses whether the in-progress day is a partition (`end_offset`).
+  Backfill is a Dagster partition backfill over the same assets; there's no separate backfill
+  script.
+- **Dagster is pinned to the host, and each subject ships its own code location.**
+  - **Pins:** `dagster` and every `dagster-*` package are pinned `==` to the host's versions,
+    because the daemon and webserver talk to code locations over a version-coupled gRPC
+    protocol. A patch mismatch fails code-location loading with opaque gRPC errors. So these
+    pins change deliberately, in lockstep with the host, and Renovate doesn't bump them. Other
+    libraries are pinned `==`; pure-data packages (`tzdata`) use `>=`.
+  - **Code locations:** each subject and layer is its own gRPC code-location image
+    (`ghcr.io/tgrecojr/grecohome-dagster-<subject>`), registered in the host's
+    `workspace.yaml`. This repo ships code locations only, never a Dagster instance, webserver
+    or `dagster.yaml`. Subjects deploy and fail independently, and adding a subject means
+    adding it to the CI image matrix and the workspace. Upgrading Dagster is a coordinated,
+    manual step across the host and every image.
+  - **Concurrency pools:** limits (such as `whoop_api` and `garmin_api`) are set on the host
+    instance with `dagster instance concurrency set <pool> <limit>`, not in the image; assets
+    only tag their pool. Dagster 1.13 can't name a per-pool limit in `dagster.yaml`.
 - **Bronze re-captures a trailing window; it does not capture each day once.** Sources sync
   late and restate history: Whoop rescores, Garmin back-fills data days after the fact, and
   NOAA back-corrects USCRN files. Each bronze schedule therefore re-pulls a trailing window of
@@ -98,6 +138,16 @@ are applied in silver at read time.
   The second rule is the backstop for a stray `exc_info` on a path nobody thought of.
   Relying on each code location to call a setup function was rejected: a missed call fails
   silently, open.
+- **Failures page through Loki and Grafana to Slack.** Self-hosted Dagster OSS has no push
+  alerting, so page-worthy conditions emit distinct structured log lines, which ship to Loki,
+  and Grafana alert rules route them to a Slack contact point. The signals are:
+  - `asset_check_failed`, from any failing ERROR asset check in any layer,
+  - the Whoop token-refresh failure lines,
+  - `run_queue_backed_up`, from a scheduled queue-depth monitor in the gold code location.
+
+  WARN-level check failures stay in the Dagster UI and don't page. The Slack credential
+  lives only in Grafana, never in this repo. A "Data Platform Health" Grafana dashboard
+  shows the same signals.
 - **Layers are append-only or rebuildable.** Bronze is never modified by the layers above it,
   and silver and gold never write under the layer below them (enforced by `protected_root`).
 
@@ -108,5 +158,6 @@ criteria.)*
 
 ## References
 
-- `docs/ARCHITECTURE.md`, `docs/BRONZE.md`, `docs/SILVER.md`, `docs/GOLD.md`
+- `docs/ARCHITECTURE.md`, `docs/SILVER.md`, `docs/GOLD.md`
+- `docs/intent/core/`: the bronze writer and bronze checks
 - `docs/adr/`: per-source and per-table architecture decision records

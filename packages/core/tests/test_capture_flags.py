@@ -17,6 +17,7 @@ def _files(root: str) -> list[str]:
 
 @pytest.mark.unit
 class TestDedupeFlag:
+    # @spec CORE-BRONZE-011
     def test_dedupe_false_keeps_identical_payloads(self, tmp_path):
         root = str(tmp_path / "bronze")
         meta = {"content_type": "application/json"}
@@ -38,6 +39,7 @@ class TestDedupeFlag:
 
 @pytest.mark.unit
 class TestExtFlag:
+    # @spec CORE-BRONZE-003
     def test_ext_override(self, tmp_path):
         root = str(tmp_path / "bronze")
         path = capture_bronze(

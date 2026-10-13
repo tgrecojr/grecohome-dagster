@@ -8,7 +8,7 @@ manager. **Never commit a real `.env`.**
 | Variable | Required | Default | Purpose |
 |---|---|---|---|
 | `BRONZE_ROOT` | yes | — | Root dir for bronze raw capture (mounted volume / object-store path) |
-| `BRONZE_MONITOR_DIR` | no | — | Writable dir for bronze-**check** state (schema-drift baselines), kept **outside** `BRONZE_ROOT`. Unset → schema-drift check no-ops. See [VALIDATION.md](VALIDATION.md) |
+| `BRONZE_MONITOR_DIR` | no | — | Writable dir for bronze-**check** state (schema-drift baselines), kept **outside** `BRONZE_ROOT`. Unset → schema-drift check no-ops. See [bronze checks](intent/core/checks/checks-design.md) |
 | `LOG_LEVEL` | no | `INFO` | Log level |
 | `ENVIRONMENT` | no | `development` | Environment name |
 | `WHOOP_CLIENT_ID` | yes | — | Whoop OAuth client id |

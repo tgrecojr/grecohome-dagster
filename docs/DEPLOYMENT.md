@@ -114,7 +114,7 @@ App env (read by the app's settings):
 - required: `BRONZE_ROOT`, `WHOOP_CLIENT_ID`, `WHOOP_CLIENT_SECRET`, `WHOOP_TOKEN_PATH`.
 - optional: `BRONZE_MONITOR_DIR` — enables the bronze schema-drift check by giving it a
   writable place for baselines, **outside** `BRONZE_ROOT` (bronze stays immutable raw
-  capture). Unset → schema-drift no-ops. See `docs/VALIDATION.md`.
+  capture). Unset → schema-drift no-ops. See `docs/intent/core/checks/checks-design.md`.
 
 Dagster instance env (read by Dagster, per step 3):
 - required: `DAGSTER_HOME`, `DAGSTER_POSTGRES_USER`, `DAGSTER_POSTGRES_PASSWORD`,
@@ -452,6 +452,31 @@ Mounts (silver is **read-only** here — gold never writes under it):
 ```
 
 No concurrency pool is needed — gold makes no source calls.
+
+## Observability and alerting
+
+Design: `docs/high-level-design.md` (*Failures page through Loki and Grafana to Slack*) and
+`docs/intent/core/checks/checks-design.md` (*Alerting*).
+
+- **Logs:** every code location's structlog output ships to Loki, labelled
+  `service_name="dagster_<subject>"` (for example `dagster_whoop`, `dagster_garmin`).
+- **Grafana alert rules → Slack contact point.** The Slack credential lives only in Grafana.
+
+  | Rule | Fires on | For |
+  |---|---|---|
+  | Dagster asset check failing | any `asset_check_failed` line (a failing ERROR check, any layer) | 10 m |
+  | Whoop token refresh failing | more than 3 `token refresh failed` / `invalid_grant` lines in 1 h | 15 m |
+  | Dagster run queue backed up | `run_queue_backed_up` (gold's queue-depth monitor) | 30 m |
+
+- **Dashboard:** "Data Platform Health" (check failures, token failures, queue backups,
+  per-code-location log volume).
+- **Checks-only schedules start running** on deploy: `whoop_bronze_checks_hourly`,
+  `garmin_bronze_checks_hourly`, `lingo_bronze_checks_hourly`, `uscrn_bronze_checks_hourly` (plus
+  the silver and gold checks schedules). One stopped deliberately in the UI stays stopped.
+- **Run monitoring (host `dagster.yaml`):** `run_monitoring` is enabled with
+  `max_runtime_seconds: 1800`, so a run executing for more than 30 minutes is terminated as
+  wedged. `start_timeout_seconds` and `cancel_timeout_seconds` are 300, and runs aren't
+  auto-resumed. This is the platform backstop for a stuck run holding an `*_api` pool.
 
 ## Grafana (data-lake dashboards)
 

@@ -19,7 +19,9 @@ twice**, and keeps every credential out of the logs.
 The token is plaintext JSON at `WHOOP_TOKEN_PATH`: a mounted, writable path outside
 `BRONZE_ROOT`. It holds `access_token`, `refresh_token`, `token_type`, `expires_at` (ISO
 UTC) and `scopes`. Every write replaces the whole file atomically (temp file plus rename),
-so a reader never sees a half-written token.
+so a reader never sees a half-written token, and a crash mid-write can't lose a rotated
+refresh token. The file holds one user's tokens (single-user system, `USER_ID = 1`). There's no
+app-level encryption: the mounted volume and the secrets manager protect it.
 
 ### When to refresh
 
@@ -147,6 +149,7 @@ the user to open. That URL carries only the client id, `state` and challenge.
 
 | Decision | Chosen | Alternatives Considered | Rationale |
 |---|---|---|---|
+| Token storage | Plaintext JSON at a mounted, writable `WHOOP_TOKEN_PATH`, rewritten atomically | A Fernet-encrypted Postgres table (`TOKEN_ENCRYPTION_KEY`) | There's no transactional database (HLD), and the refresh token rotates every refresh, so storage must be writable and crash-safe. Encryption at rest belongs to the volume and secrets manager, which also leaves no app key to manage. |
 | Refresh retry policy | Retry connect-phase transport errors only | Retry 5xx/429 with backoff; retry all transport errors | Retrying anything that may have reached Whoop replays `R` and revokes the grant. A 5xx retry and a read-timeout retry each killed a grant. The cost is that a transient 5xx fails one run. |
 | Refresh timeout | 30 s overall, 5 s connect | httpx default (5 s) | The endpoint routinely takes 1–4 s. A 5 s read timeout fired after rotation and lost the new token. |
 | Cross-process serialization | `fcntl` file lock next to the token file, plus re-read after lock | Rely on the host `whoop_api` pool limit; a database lock | The pool limit is host configuration and was not reliably 1. A file lock works on the single host that mounts the token directory, and needs no extra service (the HLD rules out a transactional database). |
@@ -176,6 +179,5 @@ the user to open. That URL carries only the client id, `state` and challenge.
 ## References
 
 - `docs/WHOOP_TOKEN_RUNBOOK.md`: symptoms, re-auth procedure, detection
-- `docs/adr/0003-token-file.md`: plaintext token file
 - `packages/core/src/grecohome_core/tokens/file_lock.py`: cross-process lock
 - `packages/core/src/grecohome_core/logging_config.py`: shared logger
