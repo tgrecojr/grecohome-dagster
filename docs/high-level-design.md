@@ -5,7 +5,7 @@ Soil/USCRN, Lingo: `packages/{garmin,whoop,soil,lingo}/**`), the silver layer (`
 and the shared core's bronze writer, bronze checks and silver helpers (`grecohome_core.bronze`,
 `grecohome_core.checks`, `grecohome_core.silver`). Sections that describe other parts of the system are short
 orientation summaries. The detailed design for those parts lives in `docs/ARCHITECTURE.md`,
-`docs/SILVER.md`, `docs/GOLD.md` and `docs/adr/`.
+`docs/GOLD.md` and `docs/adr/`.
 
 ## Problem
 
@@ -170,6 +170,7 @@ criteria.)*
 
 ## References
 
-- `docs/ARCHITECTURE.md`, `docs/SILVER.md`, `docs/GOLD.md`
-- `docs/intent/core/`: the bronze writer and bronze checks
+- `docs/ARCHITECTURE.md`, `docs/GOLD.md`
+- `docs/intent/core/`: the bronze writer, bronze checks and silver helpers
+- `docs/intent/silver/`: the silver layer and its table families
 - `docs/adr/`: per-source and per-table architecture decision records

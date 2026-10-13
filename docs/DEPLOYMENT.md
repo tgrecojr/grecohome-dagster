@@ -366,20 +366,20 @@ capture the recent partitions; backfill the station's history with
 Silver is **not** a data subject — it captures nothing. It's a derived, rebuildable layer
 that reads immutable bronze and writes typed, deduplicated **Parquet** for analysis. It
 makes **no source-API calls** (no auth, no secrets, no token/key mount) and stays **off**
-the `*_api` concurrency pools. Its first table is sleep (`silver_sleep`, a FULL OUTER JOIN
-of the Garmin and Whoop sleep streams; see [SILVER.md](SILVER.md)).
+the `*_api` concurrency pools. Its tables (sleep, glucose, recovery, strain, workouts, weather,
+daily, body, fitness) are designed in [docs/intent/silver/](intent/silver/silver-design.md).
 
 - **Image:** `ghcr.io/tgrecojr/grecohome-dagster-silver`, serving
   `grecohome_silver.dagster.definitions`. Depends only on `grecohome-core` + DuckDB — the
   bronze API clients are deliberately absent.
-- **Cross-code-location lineage:** the silver sleep assets declare their bronze upstreams
-  (`garmin_bronze_sleep`, `whoop_bronze_sleep`) by `AssetKey`, so lineage renders across
-  code locations. The reads themselves are **filesystem reads of `BRONZE_ROOT`**, not gRPC
+- **Cross-code-location lineage:** each silver asset declares its bronze upstreams (for example
+  `garmin_bronze_sleep`, `whoop_bronze_sleep`) by `AssetKey`, so lineage renders across code
+  locations. The reads themselves are **filesystem reads of `BRONZE_ROOT`**, not gRPC
   calls into the subject locations.
 - **Whole-table rebuild.** Assets are unpartitioned; each run overwrites its Parquet from
-  current bronze (idempotent — last run wins). `silver_sleep_daily` (06:00 UTC, after
-  Garmin's 05:30 daily capture and Whoop's hourly capture) rebuilds the three sleep assets;
-  `silver_checks_daily` (07:00 UTC) runs the silver asset checks independently. The rebuild
+  current bronze (idempotent — last run wins). Each family's daily rebuild runs between 06:00 and
+  06:55 UTC, after Garmin's 05:30 daily capture and Whoop's hourly capture;
+  `silver_checks_daily` (07:00 UTC) runs every silver asset check independently. The rebuild
   schedules default to stopped and are enabled in the UI; the checks schedule starts running.
 
 ### Host container (`dagster_silver`)
@@ -427,8 +427,9 @@ summary; see [GOLD.md](GOLD.md)).
 
 - **Image:** `ghcr.io/tgrecojr/grecohome-dagster-gold`, serving `grecohome_gold.dagster.definitions`.
   Depends only on `grecohome-core` + DuckDB.
-- **Cross-code-location lineage:** the mart declares its four silver upstreams (`silver_sleep`,
-  `silver_recovery`, `silver_workouts`, `silver_glucose`) by `AssetKey`; the reads are
+- **Cross-code-location lineage:** the wellness mart declares its silver upstreams (`silver_sleep`,
+  `silver_recovery`, `silver_workouts`, `silver_glucose`, `silver_strain`, `silver_daily`,
+  `silver_body`) by `AssetKey`; the reads are
   **filesystem reads of `SILVER_ROOT`**, not gRPC calls.
 - **Runs after silver.** `gold_wellness_daily` (07:30 UTC) rebuilds the mart once silver's daily
   rebuilds (≤ 06:55) and silver checks (07:00) have run; `gold_checks_daily` (08:00 UTC) runs the

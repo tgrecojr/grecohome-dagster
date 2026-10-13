@@ -31,7 +31,9 @@ belong to gold.
   sees a file.
 - **The event date comes from the payload, never the bronze `dt=` folder.** Bronze partitions
   are UTC fetch slices or capture dates; each table derives its own event date and local-day
-  meaning (HLD: *Bronze partitions are daily UTC fetch-slices*).
+  meaning (HLD: *Bronze partitions are daily UTC fetch-slices*). The one exception is Garmin
+  **race predictions** in `silver_fitness`: they carry no date that tracks the snapshot, so the
+  day of the once-daily capture is the meaningful day.
 - **Bronze is re-captured, so deduplication is mandatory.** Every table that reads a
   re-captured collection keeps the latest capture or restatement per logical key, and tolerates
   the same record appearing in several captures or folders.
@@ -91,7 +93,8 @@ Every table has `@asset_check`s, following the bronze convention:
   failure for every check on it.
 - **No concurrency pool.** A checks-only job (`silver_checks_job`) runs every table's checks
   daily at **07:00 UTC** (`silver_checks_daily`, which starts running), so a stopped rebuild is
-  still caught. Checks also run after each table's rebuild.
+  still caught. Checks also run after each table's rebuild. The job and the freshness builder are
+  specified in the [layer checks leaf](checks/checks-design.md).
 
 ## Schedules
 
@@ -113,10 +116,39 @@ past 06:00 UTC means moving this window too. Gold's rebuilds follow silver's che
 | Glucose | [glucose/glucose-design.md](glucose/glucose-design.md) | `silver_glucose` | Specified (`SILVER-GLUCOSE`) |
 | Cycles | [cycles/cycles-design.md](cycles/cycles-design.md) | `silver_recovery`, `silver_strain` | Specified (`SILVER-CYCLES`) |
 | Workouts | [workouts/workouts-design.md](workouts/workouts-design.md) | `silver_workouts`, `silver_workout_splits`, `silver_whoop_workouts` | Specified (`SILVER-WORKOUTS`) |
-| Daily | — | `silver_daily`, `silver_body`, `silver_fitness` | *(not yet specified; see `docs/SILVER.md`)* |
-| Weather | — | `silver_weather` | *(not yet specified; see `docs/SILVER.md`)* |
+| Daily | [daily/daily-design.md](daily/daily-design.md) | `silver_daily`, `silver_body`, `silver_fitness` | Specified (`SILVER-DAILY`) |
+| Weather | [weather/weather-design.md](weather/weather-design.md) | `silver_weather` | Specified (`SILVER-WEATHER`) |
 
-This parent doc owns no specs; each family's leaf owns its tables' specs.
+| Layer checks | [checks/checks-design.md](checks/checks-design.md) | `silver_checks_job`, the freshness builder | Specified (`SILVER-CHECKS`) |
+
+This parent doc owns no specs; each family's leaf owns its tables' specs, and the layer checks
+leaf owns the cross-family checks job and freshness builder.
+
+## Collections not projected
+
+Silver projects the bronze collections an analysis uses, not every collection captured. Not
+projected, on purpose:
+
+- **Reference and configuration** (devices, settings, profiles, goals, badges, training plans,
+  workout templates, personal records, Whoop's profile and body measurement): slowly changing
+  config, not time series.
+- **Intraday series** (`heart_rates`, `steps_intraday`, intraday `stress`, `spo2`, `respiration`,
+  `body_battery_events`, `daily_events`): heavy and high-resolution; their daily values are in
+  `silver_daily`. Projected only when a chart needs sub-daily resolution.
+- **Weekly rollups** (`weekly_steps`, `weekly_stress`, `weekly_intensity_minutes`): if wanted,
+  derived in gold from `silver_daily` rather than projected.
+- **Garmin HRV and training readiness:** captured but always empty for this user's devices;
+  overnight HRV comes from Whoop recovery.
+- **Other Garmin fitness and body collections** (`fitness_age`, `lactate_threshold`,
+  `cycling_ftp`, `running_tolerance`, `endurance_score`, `hill_score`; `body_composition` and
+  `weigh_ins`, which overlap `daily_weigh_ins`): deferred until wanted.
+- **Nutrition and hydration** (`nutrition_food_log`, `nutrition_meals`, `hydration`): deferred
+  until wanted; a natural pair with glucose.
+- **Other activity detail** (`activity_details`, `activity_summary`, `activity_hr_zones`,
+  `activity_split_summaries`, typed splits, power zones, activity weather, exercise sets, gear):
+  per-activity detail beyond laps and the activity summary; deferred until wanted.
+- **Blood pressure:** built only if used. Menstrual and pregnancy collections are excluded from
+  capture by the host's `FETCH_EXCLUDE` setting; never projected.
 
 ## Configuration
 

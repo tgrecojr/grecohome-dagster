@@ -26,6 +26,7 @@ def body_path(filename: str) -> str:
     return os.path.join(settings.silver_root, BODY_SUBDIR, filename)
 
 
+# @spec SILVER-DAILY-BODY-006
 @asset(name="silver_body", group_name=GROUP, deps=[AssetKey("garmin_bronze_daily_weigh_ins")])
 def silver_body(context: AssetExecutionContext) -> MaterializeResult:
     """Typed, deduped Garmin weigh-ins — one row per weigh-in (latest fetch)."""

@@ -15,6 +15,7 @@ from grecohome_core.checks import alerting_check
 from grecohome_core.silver import connect, list_payload_files
 from grecohome_silver.config import settings
 from grecohome_silver.dagster.daily_assets import DAILY_PARQUET, daily_path, silver_daily
+from grecohome_silver.dagster.freshness import table_freshness_check
 from grecohome_silver.daily import bronze_day_count_sql
 
 
@@ -34,6 +35,7 @@ def _src(path: str) -> str:
     return f"read_parquet('{path.replace(chr(39), chr(39) * 2)}')"
 
 
+# @spec SILVER-DAILY-CHECKS-001
 @asset_check(asset=silver_daily, name="daily_date_unique_nonnull")
 @alerting_check
 def daily_date_unique_nonnull() -> AssetCheckResult:
@@ -51,6 +53,7 @@ def daily_date_unique_nonnull() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-DAILY-CHECKS-002
 @asset_check(asset=silver_daily, name="daily_value_ranges")
 @alerting_check
 def daily_value_ranges() -> AssetCheckResult:
@@ -78,10 +81,11 @@ def daily_value_ranges() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-DAILY-CHECKS-003
 @asset_check(asset=silver_daily, name="daily_coverage_vs_bronze")
 @alerting_check
 def daily_coverage_vs_bronze() -> AssetCheckResult:
-    """silver days ≈ bronze distinct days — no silent drop."""
+    """silver days ≥ bronze distinct days — no silent drop."""
     path = daily_path(DAILY_PARQUET)
     if not os.path.exists(path):
         return _missing(path)
@@ -101,8 +105,16 @@ def daily_coverage_vs_bronze() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-DAILY-CHECKS-010
+silver_daily_freshness = table_freshness_check(
+    silver_daily, lambda: daily_path(DAILY_PARQUET)
+)
+
+
+# @spec SILVER-DAILY-CHECKS-011, SILVER-DAILY-CHECKS-012
 DAILY_CHECKS = [
     daily_date_unique_nonnull,
     daily_value_ranges,
     daily_coverage_vs_bronze,
+    silver_daily_freshness,
 ]

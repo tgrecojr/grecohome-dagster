@@ -91,6 +91,7 @@ silver_recovery_daily = ScheduleDefinition(
 )
 
 # Daily rebuild of the daily-summary table (Garmin user_summary; after the daily capture).
+# @spec SILVER-DAILY-SCHED-001
 silver_daily_job = define_asset_job("silver_daily_job", selection=DAILY_ASSETS)
 
 silver_daily_daily = ScheduleDefinition(
@@ -113,6 +114,7 @@ silver_strain_daily = ScheduleDefinition(
 
 # Daily rebuild of the weather table (USCRN hourly; bronze captured a few times a day,
 # a daily rebuild keeps silver a current projection without chasing each capture).
+# @spec SILVER-WEATHER-SCHED-001
 silver_weather_job = define_asset_job("silver_weather_job", selection=WEATHER_ASSETS)
 
 silver_weather_daily = ScheduleDefinition(
@@ -123,6 +125,7 @@ silver_weather_daily = ScheduleDefinition(
 )
 
 # Daily rebuild of the body table (Garmin weigh-ins; after the daily capture).
+# @spec SILVER-DAILY-SCHED-001
 silver_body_job = define_asset_job("silver_body_job", selection=BODY_ASSETS)
 
 silver_body_daily = ScheduleDefinition(
@@ -133,6 +136,7 @@ silver_body_daily = ScheduleDefinition(
 )
 
 # Daily rebuild of the fitness-snapshot table (Garmin VO2max / status / race predictions).
+# @spec SILVER-DAILY-SCHED-001
 silver_fitness_job = define_asset_job("silver_fitness_job", selection=FITNESS_ASSETS)
 
 silver_fitness_daily = ScheduleDefinition(
@@ -171,7 +175,9 @@ silver_whoop_workouts_daily = ScheduleDefinition(
 # One checks-only job + daily schedule across all silver tables (the tables rebuild
 # daily, so hourly checks would add nothing). Catches a silver asset that stops
 # materializing.
+# @spec SILVER-CHECKS-JOB-001
 silver_checks_job = build_bronze_checks_job(ALL_CHECKS, name="silver_checks_job")
+# @spec SILVER-CHECKS-JOB-002
 silver_checks_schedule = build_bronze_checks_schedule(
     silver_checks_job, name="silver_checks_daily", cron_schedule="0 7 * * *"
 )

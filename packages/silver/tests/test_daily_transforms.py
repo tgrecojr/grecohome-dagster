@@ -51,6 +51,7 @@ def _rows(root: str) -> dict[str, dict]:
     }
 
 
+# @spec SILVER-DAILY-SUMMARY-001
 def test_typing_of_key_fields(tmp_path) -> None:
     root = str(tmp_path / "bronze")
     _write(root, "2026-06-10", 1_700_000_000000, _summary("2026-06-10"))
@@ -61,6 +62,7 @@ def test_typing_of_key_fields(tmp_path) -> None:
     assert r["moderate_intensity_min"] == 30 and r["avg_stress_level"] == 35
 
 
+# @spec SILVER-DAILY-SUMMARY-002
 def test_dedup_keeps_latest_fetch(tmp_path) -> None:
     root = str(tmp_path / "bronze")
     _write(root, "2026-06-10", 1_700_000_000000, _summary("2026-06-10", totalSteps=9000), short="a")
@@ -70,6 +72,7 @@ def test_dedup_keeps_latest_fetch(tmp_path) -> None:
     assert len(rows) == 1 and rows["2026-06-10"]["total_steps"] == 12000
 
 
+# @spec SILVER-DAILY-SUMMARY-004
 def test_stress_no_data_sentinels_become_null(tmp_path) -> None:
     """Garmin's -1/-2 'no data' stress levels map to NULL (other fields kept)."""
     root = str(tmp_path / "bronze")
@@ -80,6 +83,7 @@ def test_stress_no_data_sentinels_become_null(tmp_path) -> None:
     assert r["total_steps"] == 9000  # the rest of the day is kept
 
 
+# @spec SILVER-DAILY-SUMMARY-001
 def test_bronze_count_and_empty(tmp_path) -> None:
     root = str(tmp_path / "bronze")
     assert _rows(root) == {}
@@ -87,3 +91,17 @@ def test_bronze_count_and_empty(tmp_path) -> None:
     _write(root, "2026-06-11", 1_700_000_000000, _summary("2026-06-11"))
     files = list_payload_files(root, "garmin", "user_summary")
     assert int(connect().execute(bronze_day_count_sql(files)).fetchone()[0]) == 2
+
+
+# @spec SILVER-DAILY-SUMMARY-003
+def test_payload_without_calendar_date_is_dropped(tmp_path) -> None:
+    root = str(tmp_path / "bronze")
+    pdir = os.path.join(root, "garmin", "user_summary", "dt=2026-01-15")
+    os.makedirs(pdir, exist_ok=True)
+    for i, payload in enumerate(({"calendarDate": "2026-01-15", "totalSteps": 10},
+                                 {"totalSteps": 20}, {"calendarDate": "nope"})):
+        with open(os.path.join(pdir, f"user_summary_{1700000000000 + i}_p{i}.json"), "w") as fh:
+            json.dump(payload, fh)
+    files = list_payload_files(root, "garmin", "user_summary")
+    rows = connect().execute(f"SELECT activity_date FROM ({daily_sql(files)})").fetchall()
+    assert [r[0].isoformat() for r in rows] == ["2026-01-15"]

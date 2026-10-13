@@ -15,6 +15,7 @@ from grecohome_core.silver import connect, list_payload_files
 from grecohome_silver.body import bronze_weighin_count_sql
 from grecohome_silver.config import settings
 from grecohome_silver.dagster.body_assets import BODY_PARQUET, body_path, silver_body
+from grecohome_silver.dagster.freshness import table_freshness_check
 
 
 def _missing(path: str) -> AssetCheckResult:
@@ -33,6 +34,7 @@ def _src(path: str) -> str:
     return f"read_parquet('{path.replace(chr(39), chr(39) * 2)}')"
 
 
+# @spec SILVER-DAILY-CHECKS-004
 @asset_check(asset=silver_body, name="body_sample_unique_nonnull")
 @alerting_check
 def body_sample_unique_nonnull() -> AssetCheckResult:
@@ -52,6 +54,7 @@ def body_sample_unique_nonnull() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-DAILY-CHECKS-005
 @asset_check(asset=silver_body, name="body_value_ranges")
 @alerting_check
 def body_value_ranges() -> AssetCheckResult:
@@ -74,10 +77,11 @@ def body_value_ranges() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-DAILY-CHECKS-006
 @asset_check(asset=silver_body, name="body_coverage_vs_bronze")
 @alerting_check
 def body_coverage_vs_bronze() -> AssetCheckResult:
-    """silver weigh-ins ≈ bronze distinct weigh-ins — no silent drop."""
+    """silver weigh-ins ≥ bronze distinct weigh-ins — no silent drop."""
     path = body_path(BODY_PARQUET)
     if not os.path.exists(path):
         return _missing(path)
@@ -95,8 +99,16 @@ def body_coverage_vs_bronze() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-DAILY-CHECKS-010
+silver_body_freshness = table_freshness_check(
+    silver_body, lambda: body_path(BODY_PARQUET)
+)
+
+
+# @spec SILVER-DAILY-CHECKS-011, SILVER-DAILY-CHECKS-012
 BODY_CHECKS = [
     body_sample_unique_nonnull,
     body_value_ranges,
     body_coverage_vs_bronze,
+    silver_body_freshness,
 ]

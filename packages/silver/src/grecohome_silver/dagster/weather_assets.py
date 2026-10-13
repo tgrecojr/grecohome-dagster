@@ -29,6 +29,7 @@ def weather_path(filename: str) -> str:
     return os.path.join(settings.silver_root, WEATHER_SUBDIR, filename)
 
 
+# @spec SILVER-WEATHER-TABLE-007
 @asset(name="silver_weather", group_name=GROUP, deps=[AssetKey("uscrn_bronze_hourly")])
 def silver_weather(context: AssetExecutionContext) -> MaterializeResult:
     """Typed, deduped USCRN hourly weather — one row per observation (UTC instant)."""

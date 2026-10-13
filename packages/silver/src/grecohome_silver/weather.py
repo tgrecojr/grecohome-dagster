@@ -108,6 +108,8 @@ def _split_sql(files: list[str]) -> str:
     )
 
 
+# @spec SILVER-WEATHER-TABLE-001, SILVER-WEATHER-TABLE-002, SILVER-WEATHER-TABLE-003
+# @spec SILVER-WEATHER-TABLE-004, SILVER-WEATHER-TABLE-005, SILVER-WEATHER-TABLE-006
 def weather_sql(files: list[str], *, timezone: str) -> str:
     """Typed, deduped USCRN hourly weather — one row per UTC observation instant."""
     tz = timezone.replace("'", "''")
