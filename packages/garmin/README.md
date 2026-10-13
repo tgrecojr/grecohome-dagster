@@ -14,7 +14,7 @@ full Garmin Connect data surface (allowlisted) to the bronze layer. Ported from
   for reference/snapshots), captured **append-only**. The daily schedule re-captures every trailing
   `LOOKBACK_DAYS` completed day on every tick (Garmin syncs late and restates days);
   identical re-captures are skipped on single-request endpoints. Backfill via
-  `dagster backfill`. Design: `docs/intent/garmin/garmin-design.md`.
+  `dagster backfill`. Design: `docs/intent/garmin/capture/capture-design.md`.
 
 Ships as a per-subject gRPC **code-location image** (`grecohome-dagster-garmin`)
 that registers with the host Dagster daemon/webserver. See `docs/DEPLOYMENT.md`.

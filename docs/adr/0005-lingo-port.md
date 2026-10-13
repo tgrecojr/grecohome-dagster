@@ -30,7 +30,7 @@ delta). `glucose-loader` tracked which Drive files it had already processed in a
 - **Content-hash dedup on** (`dedupe=True`). Capture-once-per-`file_id` is the first defense;
   content-hash dedup backstops a re-upload of an identical export under a new id. (Contrast Garmin,
   which re-captures a trailing window of date partitions daily with skip-identical on
-  single-request endpoints — amended 2026-10-12, see `docs/intent/garmin/garmin-design.md`.)
+  single-request endpoints — amended 2026-10-12, see `docs/intent/garmin/capture/capture-design.md`.)
 
 ## Consequences
 - The bronze layout gains `lingo/glucose/dt=<fetch-date>/...csv`. `dt` is the *capture* date (each

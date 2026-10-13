@@ -66,7 +66,7 @@ Provenance for each payload. Filled by the capture function: `source`, `collecti
   `(collection, dt)` folder holds several captures (silver takes the latest). Skip-identical
   (`dedupe=True`) applies only to single-request endpoints without a `skip_if_*` flag; fan-out
   paths (per activity / device / goal status) and skip-flagged endpoints keep every capture.
-  Authoritative design: `docs/intent/garmin/garmin-design.md`.
+  Authoritative design: `docs/intent/garmin/capture/capture-design.md`.
 - **Secret-screening:** profile/settings collections (`user_settings`, `userprofile_settings`)
   are run through a recursive secret-key remover before capture; dropped key paths are recorded
   in `redacted_fields`. Tokens/credentials never reach bronze (the token store is a separate

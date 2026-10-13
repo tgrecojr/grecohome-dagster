@@ -36,7 +36,7 @@ class TestGarminSettings:
         assert s.is_selected("sleep") is True
         assert s.is_selected("stress") is False
 
-    # @spec GARMIN-SCHED-006
+    # @spec GARMIN-CAPTURE-SCHED-006
     def test_lookback_days_defaults_to_fourteen(self, monkeypatch):
         # Garmin back-fills whole batches of days after a sync gap; observed batches
         # reach the 7th day back, so the re-capture window covers two weeks.

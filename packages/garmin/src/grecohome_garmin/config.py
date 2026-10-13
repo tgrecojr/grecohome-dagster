@@ -26,7 +26,7 @@ class GarminSettings(BaseSubjectSettings):
     # Trailing completed days the daily schedule re-captures every tick. Garmin
     # back-fills whole batches of days when a device syncs after a gap (observed
     # batches reach a week back), so the window covers two weeks.
-    # @spec GARMIN-SCHED-006
+    # @spec GARMIN-CAPTURE-SCHED-006
     lookback_days: int = 14
     rate_limit_seconds: float = 2.0
     # Trailing weeks requested from the weekly-aggregate endpoints.

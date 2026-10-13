@@ -164,9 +164,15 @@ a few subject-specific differences:
 
 - **Image:** `ghcr.io/tgrecojr/grecohome-dagster-garmin`, serving
   `grecohome_garmin.dagster.definitions`.
-- **Auth is delegated to `garminconnect`** — there is no token *file*; instead a token *store*
-  directory at **`GARMINTOKENS`** (mounted, writable, **separate from bronze**). The library
-  self-heals/refreshes it. Required env: `GARMINCONNECT_EMAIL`, `GARMINCONNECT_BASE64_PASSWORD`
+- **Auth is delegated to `garminconnect`**, which keeps its session in a token *store*
+  directory at **`GARMINTOKENS`** (the file `garmin_tokens.json`; mounted, writable, **separate
+  from bronze**). The library refreshes it. **`GARMINTOKENS` must be the mounted token
+  directory** — `/secrets/garmin` (the code default), mounted from
+  `/opt/docker/dagster/garmin/secrets`, writable by the container user, no symlink in the path,
+  never under `BRONZE_ROOT`. A path that doesn't exist in the container makes every run do a full
+  password login, which Garmin rate-limits; `garmin_tokenstore_unusable` /
+  `garmin_tokenstore_not_saved` (ERROR) and the `garmin_tokenstore_health` check flag it. Design:
+  `docs/intent/garmin/auth/auth-design.md`. Required env: `GARMINCONNECT_EMAIL`, `GARMINCONNECT_BASE64_PASSWORD`
   (+ optional `GARMINCONNECT_IS_CN`); tuning: `LOOKBACK_DAYS`, `FETCH_SELECTION`/`FETCH_EXCLUDE`
   (default empty = capture all), `RATE_LIMIT_SECONDS`, `WEEKLY_WEEKS`, `CAPTURE_ALT_FORMATS`.
 - **Daily re-capture** — the daily schedule re-captures every one of the trailing `LOOKBACK_DAYS`
@@ -174,7 +180,7 @@ a few subject-specific differences:
   re-captures are skipped on single-request endpoints. Days that fall out of the window during
   an outage need a manual partition backfill of `garmin_daily_job`. A second daily schedule
   refreshes the unpartitioned reference/snapshot collections. Design:
-  `docs/intent/garmin/garmin-design.md`.
+  `docs/intent/garmin/capture/capture-design.md`.
 
 ### Host container (`dagster_garmin`)
 
@@ -182,8 +188,9 @@ Mirror the `dagster_whoop` task: on the `monitoring` network, `DAGSTER_HOME` + t
 `DAGSTER_POSTGRES_*` (run worker → instance Postgres), the `GARMINCONNECT_*` env, and **three
 mounts** — the shared `dagster.yaml` (`DAGSTER_HOME`), the bronze root
 (`/opt/datalake/bronze` → `/data/bronze`; the app writes the `garmin/` source segment itself), and
-a writable **`GARMINTOKENS`** dir (e.g. `/opt/docker/dagster/garmin/tokens` → `/secrets/garmin`,
-matching Whoop's `/secrets/<subject>` convention).
+the writable **`GARMINTOKENS`** dir (`/opt/docker/dagster/garmin/secrets` → `/secrets/garmin`,
+matching Whoop's `/secrets/<subject>` convention; set `GARMINTOKENS=/secrets/garmin` or leave it
+unset).
 
 ```yaml
 # workspace.yaml
@@ -197,13 +204,15 @@ dagster instance concurrency set garmin_api 1
 
 ### One-time MFA bootstrap
 
-Garmin's first login needs an interactive MFA code; run it once to write the token store:
+Garmin's first login needs an interactive MFA code; run it once to write the token store. It
+must mount the **same** host directory as the running container. It exits non-zero if the
+session wasn't saved:
 
 ```bash
 docker run --rm -it \
   -e GARMINCONNECT_EMAIL=... -e GARMINCONNECT_BASE64_PASSWORD=... \
   -e GARMINTOKENS=/secrets/garmin -e BRONZE_ROOT=/data/bronze \
-  -v /opt/docker/dagster/garmin/tokens:/secrets/garmin \
+  -v /opt/docker/dagster/garmin/secrets:/secrets/garmin \
   --entrypoint python ghcr.io/tgrecojr/grecohome-dagster-garmin:latest \
   -m grecohome_garmin.bootstrap
 ```

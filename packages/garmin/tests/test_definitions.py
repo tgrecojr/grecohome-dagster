@@ -37,7 +37,7 @@ class TestAssetChecks:
     def _cfg(self, collection):
         return next(c for c in GARMIN_CHECK_CONFIGS if c.collection == collection)
 
-    # @spec GARMIN-CHECKS-001
+    # @spec GARMIN-CAPTURE-CHECKS-001
     def test_every_collection_has_freshness(self):
         # The universal signal is on every catalog collection that has an asset.
         keys = self._checks()

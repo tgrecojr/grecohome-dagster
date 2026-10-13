@@ -104,7 +104,9 @@ A single "data platform health" dashboard:
 ## Phase 5 — Generalize auth/health to other subjects
 
 The token-health pattern extends to the other credentialed sources:
-- **Garmin** — `garminconnect` token store at `GARMINTOKENS`; health = store present + recent.
+- **Garmin** — done: `garmin_tokenstore_health` (store usable + a token file with the session
+  fields; not recency, which the library doesn't make meaningful). See
+  `docs/intent/garmin/auth/auth-design.md`.
 - **Lingo** — Google service-account key presence + Drive list succeeding.
 - **Soil** — no auth (public NOAA); only capture-failure/freshness applies.
 Consider a shared `*_auth_health` check pattern in `grecohome_core.checks`.
