@@ -21,7 +21,7 @@ def _tick(when: datetime):
 
 @pytest.mark.unit
 class TestGarminDaily:
-    # @spec GARMIN-SCHED-001, GARMIN-SCHED-002
+    # @spec GARMIN-CAPTURE-SCHED-001, GARMIN-CAPTURE-SCHED-002
     def test_trailing_window_of_completed_partitions(self):
         rrs = _tick(datetime(2026, 6, 9, 7, tzinfo=UTC))
         keys = [r.partition_key for r in rrs]
@@ -30,7 +30,7 @@ class TestGarminDaily:
         assert keys[-1] == "2026-06-08"
         assert "2026-06-09" not in keys
 
-    # @spec GARMIN-SCHED-003
+    # @spec GARMIN-CAPTURE-SCHED-003
     def test_consecutive_ticks_recapture_overlapping_partitions_as_distinct_runs(self):
         day1 = {r.partition_key: r.run_key for r in _tick(datetime(2026, 6, 9, 7, tzinfo=UTC))}
         day2 = {r.partition_key: r.run_key for r in _tick(datetime(2026, 6, 10, 7, tzinfo=UTC))}
@@ -39,7 +39,7 @@ class TestGarminDaily:
         # A partition re-emitted on a later tick must be a new run, not deduped.
         assert all(day1[k] != day2[k] for k in overlap)
 
-    # @spec GARMIN-SCHED-004
+    # @spec GARMIN-CAPTURE-SCHED-004
     def test_run_key_is_partition_plus_tick(self):
         rrs = _tick(datetime(2026, 6, 9, 7, tzinfo=UTC))
         assert all(r.run_key == f"{r.partition_key}-20260609T07" for r in rrs)
@@ -47,7 +47,7 @@ class TestGarminDaily:
 
 @pytest.mark.unit
 class TestGarminReference:
-    # @spec GARMIN-SCHED-005
+    # @spec GARMIN-CAPTURE-SCHED-005
     def test_single_dated_request(self):
         result = garmin_reference.evaluate_tick(_ctx(datetime(2026, 6, 9, 7, tzinfo=UTC)))
         assert len(result.run_requests) == 1

@@ -6,7 +6,7 @@ fields) and call ``grecohome_core.bronze.capture_bronze`` with an explicit ``ext
 ``dedupe`` (the core skip-identical check) is a **required** argument: Garmin
 re-captures each trailing day on every tick, and whether an identical re-capture
 may be skipped depends on the capture path (see ``pull.py`` and
-``docs/intent/garmin/garmin-design.md``), so every call site must decide.
+``docs/intent/garmin/capture/capture-design.md``), so every call site must decide.
 """
 
 from typing import Any

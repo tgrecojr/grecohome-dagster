@@ -32,13 +32,18 @@ skip-flagged endpoints that can miss a day keep every capture (see ``pull.py``).
 
 from __future__ import annotations
 
+from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
+
 from grecohome_core.checks import (
     CollectionCheckConfig,
+    alerting_check,
     build_bronze_checks_job,
     build_bronze_checks_schedule,
     build_collection_checks,
 )
+from grecohome_core.logging_config import get_logger
 from grecohome_garmin import catalog
+from grecohome_garmin.auth import tokenstore_health
 from grecohome_garmin.catalog import KIND_DAILY, KIND_PER_DEVICE_RANGE, KIND_RANGE
 from grecohome_garmin.config import settings
 from grecohome_garmin.dagster.assets import ASSET_BY_COLLECTION
@@ -86,7 +91,7 @@ EMPIRICALLY_EMPTY: frozenset[str] = frozenset(
 )
 
 
-# @spec GARMIN-CHECKS-001
+# @spec GARMIN-CAPTURE-CHECKS-001
 def _config_for(ep: catalog.Endpoint) -> CollectionCheckConfig | None:
     """Derive a check config for one catalog endpoint, or None if it has no asset
     or the endpoint is excluded from capture."""
@@ -134,11 +139,34 @@ GARMIN_CHECK_CONFIGS: list[CollectionCheckConfig] = [
     cfg for ep in catalog.CATALOG if (cfg := _config_for(ep)) is not None
 ]
 
-garmin_checks = build_collection_checks(
-    GARMIN_CHECK_CONFIGS,
-    bronze_root=settings.bronze_root,
-    monitor_dir=settings.bronze_monitor_dir,
-)
+logger = get_logger(__name__)
+
+
+# @spec GARMIN-AUTH-HEALTH-001, GARMIN-AUTH-HEALTH-002
+@asset_check(asset=ASSET_BY_COLLECTION["sleep"], name="garmin_tokenstore_health")
+@alerting_check
+def garmin_tokenstore_health() -> AssetCheckResult:
+    """ERROR if the Garmin token store can't keep a session across runs.
+
+    garminconnect fails silently when it can't load or save its session, so a
+    broken store turns every run into a full password login -- which Garmin
+    rate-limits once a tick's logins pile up. Reads only the token store (no
+    Garmin API call); reports the path and a reason, never the file's contents.
+    """
+    passed, metadata = tokenstore_health(settings.garmintokens)
+    if not passed:
+        logger.warning("garmin_tokenstore_unhealthy", **metadata)
+    return AssetCheckResult(passed=passed, severity=AssetCheckSeverity.ERROR, metadata=metadata)
+
+
+garmin_checks = [
+    *build_collection_checks(
+        GARMIN_CHECK_CONFIGS,
+        bronze_root=settings.bronze_root,
+        monitor_dir=settings.bronze_monitor_dir,
+    ),
+    garmin_tokenstore_health,
+]
 
 # Checks-only job + hourly schedule (off the garmin_api pool).
 garmin_checks_job = build_bronze_checks_job(garmin_checks, name="garmin_bronze_checks_job")

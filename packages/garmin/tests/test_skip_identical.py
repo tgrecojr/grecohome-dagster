@@ -192,7 +192,7 @@ class TestKeepEveryCapture:
 
 @pytest.mark.unit
 class TestFolderPlacement:
-    # @spec GARMIN-CHECKS-002
+    # @spec GARMIN-CAPTURE-CHECKS-002
     def test_identical_payload_into_new_partition_is_written(self, tmp_path):
         # Each newly completed partition's first capture always writes, even when
         # the previous day's payload was byte-identical -- freshness stays fed.

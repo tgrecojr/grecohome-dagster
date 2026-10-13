@@ -9,7 +9,7 @@ one logged-in Garmin client. Two daily schedules:
   consecutive days. This is intentional: Garmin syncs late and restates days after
   the fact, and silver keeps the latest capture. Identical re-captures cost an API
   call but no storage (skip-identical, see ``pull.py``). Do not make this
-  capture-once -- see ``docs/intent/garmin/garmin-design.md``.
+  capture-once -- see ``docs/intent/garmin/capture/capture-design.md``.
 - ``garmin_reference`` refreshes the reference/snapshot collections once a day.
 """
 
@@ -35,7 +35,8 @@ garmin_reference_job = define_asset_job(
 )
 
 
-# @spec GARMIN-SCHED-001, GARMIN-SCHED-002, GARMIN-SCHED-003, GARMIN-SCHED-004
+# @spec GARMIN-CAPTURE-SCHED-001, GARMIN-CAPTURE-SCHED-002
+# @spec GARMIN-CAPTURE-SCHED-003, GARMIN-CAPTURE-SCHED-004
 @schedule(cron_schedule="0 7 * * *", job=garmin_daily_job, execution_timezone="UTC")
 def garmin_daily(context: ScheduleEvaluationContext) -> Iterator[RunRequest]:
     """Daily: re-capture every trailing completed partition, every tick."""
@@ -46,7 +47,7 @@ def garmin_daily(context: ScheduleEvaluationContext) -> Iterator[RunRequest]:
         yield RunRequest(run_key=f"{key}-{now:%Y%m%dT%H}", partition_key=key)
 
 
-# @spec GARMIN-SCHED-005
+# @spec GARMIN-CAPTURE-SCHED-005
 @schedule(cron_schedule="0 7 * * *", job=garmin_reference_job, execution_timezone="UTC")
 def garmin_reference(context: ScheduleEvaluationContext) -> RunRequest:
     """Daily: refresh the reference/snapshot collections."""

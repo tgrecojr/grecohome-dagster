@@ -63,7 +63,7 @@ root `pyproject.toml`, one `uv.lock`, one managed Python version.
   re-captures the trailing 8 (rescores) + content-hash dedup. Garmin: one daily schedule
   re-captures the trailing `LOOKBACK_DAYS` completed days every tick (Garmin syncs late and
   restates days) + skip-identical dedup on single-request endpoints
-  (`docs/intent/garmin/garmin-design.md`). Lingo: a Drive **sensor** + dynamic partitions
+  (`docs/intent/garmin/capture/capture-design.md`). Lingo: a Drive **sensor** + dynamic partitions
   keyed on file id (file-arrival-driven, no schedule). Soil/USCRN: daily UTC partitions where
   each stores only that day's rows sliced from the public NOAA year file, re-captured every 6h
   with dedup. Backfill (where applicable) via `dagster backfill`. **Silver/gold** rebuild

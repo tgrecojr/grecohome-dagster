@@ -8,7 +8,7 @@ Skip-identical (``dedupe``) is decided **per call site**, never from
 ``Endpoint.kind`` alone (the per-activity fan-out uses synthetic ``static``
 endpoints). It is on only where one request writes a ``(collection, dt)`` folder
 per run *and* the endpoint returns a value every run (no ``skip_if_*`` flag) --
-see :func:`skip_identical` and ``docs/intent/garmin/garmin-design.md``.
+see :func:`skip_identical` and ``docs/intent/garmin/capture/capture-design.md``.
 
 Failure model (differs from the original always-on runner): legitimate "no data"
 returns (``None``, or empty when ``skip_if_empty``) write nothing and return
@@ -40,7 +40,7 @@ from grecohome_garmin.config import GarminSettings
 log = get_logger(__name__)
 
 
-# @spec GARMIN-CAPTURE-004, GARMIN-CAPTURE-005, GARMIN-CHECKS-002
+# @spec GARMIN-CAPTURE-004, GARMIN-CAPTURE-005, GARMIN-CAPTURE-CHECKS-002
 def skip_identical(ep: Endpoint) -> bool:
     """Whether a single-request capture of ``ep`` may skip an identical payload.
 

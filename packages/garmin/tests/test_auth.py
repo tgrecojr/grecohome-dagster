@@ -23,7 +23,7 @@ def settings():
 @pytest.fixture(autouse=True)
 def no_backoff_sleep(monkeypatch):
     """Strip tenacity's wait so retries don't actually sleep during tests."""
-    monkeypatch.setattr(auth.login.retry, "wait", lambda *a, **k: 0)
+    monkeypatch.setattr(auth._login_with_retry.retry, "wait", lambda *a, **k: 0)
 
 
 def _patch_garmin(monkeypatch, login_side_effects):
@@ -35,9 +35,14 @@ def _patch_garmin(monkeypatch, login_side_effects):
     counters = {"constructed": 0, "login_calls": 0}
     effects = iter(login_side_effects)
 
+    class _Session:
+        def dumps(self):
+            return "{}"
+
     class _StubClient:
         def __init__(self, **kwargs):
             counters["constructed"] += 1
+            self.client = _Session()
 
         def login(self, tokenstore=None):
             counters["login_calls"] += 1
@@ -58,6 +63,7 @@ class TestLoginRetry:
         assert counters["login_calls"] == 1
         assert counters["constructed"] == 1
 
+    # @spec GARMIN-AUTH-004
     def test_retries_then_succeeds_on_transient_auth_error(self, monkeypatch, settings):
         # The real-world failure: JWT_WEB cookie not set after ticket consumption.
         counters = _patch_garmin(

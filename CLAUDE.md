@@ -41,7 +41,7 @@ can be dropped and regenerated); bronze is the only source of truth.
 - **Bronze subjects** — `packages/{whoop,garmin,lingo,soil}`. Each is a code
   location that captures one source to bronze: Whoop (OAuth, hourly trailing-window + dedup), Garmin
   (delegated auth, daily trailing-window re-capture + skip-identical — see
-  `docs/intent/garmin/garmin-design.md`), Lingo (Drive service-account, sensor +
+  `docs/intent/garmin/capture/capture-design.md`), Lingo (Drive service-account, sensor +
   dynamic partitions), Soil/USCRN (public file, daily row-slice + dedup).
 - `packages/silver` (`grecohome_silver`) — one cross-subject code location: typed, deduped
   Parquet tables — `silver_sleep` (Garmin+Whoop FULL OUTER JOIN), `silver_glucose`,

@@ -97,7 +97,7 @@ How Garmin differs from Whoop (both reuse core):
   `LOOKBACK_DAYS` *completed* partitions, because Garmin syncs late and restates days after the
   fact. It is **not** capture-once. Skip-identical dedup applies on single-request endpoints
   only; fan-out paths and skip-flagged endpoints keep every capture. Authoritative design:
-  `docs/intent/garmin/garmin-design.md`.
+  `docs/intent/garmin/capture/capture-design.md`.
 
 ## `grecohome-lingo` — a third data subject
 
