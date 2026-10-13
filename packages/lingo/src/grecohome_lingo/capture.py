@@ -18,6 +18,7 @@ COLLECTION = "glucose"
 PROCESSOR = "grecohome-lingo"
 
 
+# @spec LINGO-CAPTURE-001, LINGO-CAPTURE-002
 def capture_glucose(
     raw_bytes: bytes,
     *,

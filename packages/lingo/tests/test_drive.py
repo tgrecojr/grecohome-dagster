@@ -8,6 +8,7 @@ from grecohome_lingo import drive
 
 @pytest.mark.unit
 class TestGetDriveService:
+    # @spec LINGO-AUTH-001
     def test_builds_with_service_account_creds(self):
         with (
             patch("grecohome_lingo.drive.service_account") as sa,
@@ -25,6 +26,7 @@ class TestGetDriveService:
 
 @pytest.mark.unit
 class TestListCsvFiles:
+    # @spec LINGO-SENSOR-001
     def test_single_page(self):
         service = MagicMock()
         service.files.return_value.list.return_value.execute.return_value = {
@@ -34,6 +36,7 @@ class TestListCsvFiles:
         files = drive.list_csv_files(service, folder_id="folder1")
         assert files == [{"id": "f1", "name": "g.csv"}]
 
+    # @spec LINGO-SENSOR-001
     def test_paginates(self):
         service = MagicMock()
         service.files.return_value.list.return_value.execute.side_effect = [

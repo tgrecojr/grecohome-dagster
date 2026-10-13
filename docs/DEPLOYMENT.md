@@ -240,7 +240,8 @@ iOS app and uploads a cumulative CSV to a Google Drive folder; a **sensor** capt
 - **Sensor + dynamic partitions:** `lingo_drive_sensor` lists the folder and adds a partition +
   run per new Drive `file_id` (one collection: `lingo/glucose`, captured once each). **Enable the
   sensor** in the UI/daemon — sensors are off by default. No schedule, no backfill grid; the
-  sensor's first tick captures the existing folder backlog.
+  sensor's first tick captures the existing folder backlog. Design:
+  `docs/intent/lingo/lingo-design.md`.
 
 ### Host container (`dagster_lingo`)
 
@@ -483,7 +484,7 @@ Design: `docs/high-level-design.md` (*Failures page through Loki and Grafana to 
 
   | Rule | Fires on | For |
   |---|---|---|
-  | Dagster asset check failing | any `asset_check_failed` line (a failing ERROR check, any layer) | 10 m |
+  | Dagster asset check failing | any `asset_check_failed` line (a failing ERROR check, any layer; includes `whoop_token_health`, `garmin_tokenstore_health` and `lingo_drive_folder_health`) | 10 m |
   | Whoop token refresh failing | more than 3 `token refresh failed` / `invalid_grant` lines in 1 h | 15 m |
   | Dagster run queue backed up | `run_queue_backed_up` (gold's queue-depth monitor) | 30 m |
 

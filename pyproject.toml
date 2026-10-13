@@ -71,6 +71,8 @@ env = [
     "WHOOP_CLIENT_SECRET=test_client_secret",
     "WHOOP_REDIRECT_URI=http://localhost:8000/callback",
     "WHOOP_TOKEN_PATH=/tmp/grecohome-test-token.json",
+    "GDRIVE_FOLDER_ID=test_folder",
+    "GDRIVE_SERVICE_ACCOUNT_PATH=/tmp/grecohome-test-sa.json",
     "LOG_LEVEL=DEBUG",
     "ENVIRONMENT=test",
 ]

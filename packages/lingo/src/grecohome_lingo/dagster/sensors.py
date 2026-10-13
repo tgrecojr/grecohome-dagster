@@ -24,6 +24,7 @@ from grecohome_lingo.dagster.assets import LINGO_FILES, lingo_bronze_glucose
 lingo_capture_job = define_asset_job("lingo_capture_job", selection=[lingo_bronze_glucose])
 
 
+# @spec LINGO-SENSOR-002, LINGO-SENSOR-003, LINGO-SENSOR-004
 @sensor(
     job=lingo_capture_job,
     minimum_interval_seconds=settings.gdrive_poll_interval_minutes * 60,

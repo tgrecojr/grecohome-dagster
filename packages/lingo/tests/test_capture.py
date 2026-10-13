@@ -24,6 +24,7 @@ def _payloads(root: str) -> list[str]:
 
 @pytest.mark.unit
 class TestCaptureGlucose:
+    # @spec LINGO-CAPTURE-001, LINGO-CAPTURE-002
     def test_writes_csv_with_provenance(self, tmp_path):
         root = str(tmp_path / "bronze")
         path = capture_glucose(
@@ -42,6 +43,7 @@ class TestCaptureGlucose:
         assert sidecar["processor"] == "grecohome-lingo"
         assert sidecar["request_params"]["file_id"] == "abc123"
 
+    # @spec LINGO-CAPTURE-002
     def test_no_secrets_in_sidecar(self, tmp_path):
         root = str(tmp_path / "bronze")
         path = capture_glucose(
@@ -51,6 +53,7 @@ class TestCaptureGlucose:
         for needle in ("token", "authorization", "secret", "credential", "bearer"):
             assert needle not in text
 
+    # @spec LINGO-CAPTURE-001
     def test_distinct_identical_files_both_captured(self, tmp_path):
         # Two distinct Drive files (different file_id) with byte-identical content
         # must BOTH land in bronze — content dedup is off so a distinct file is
