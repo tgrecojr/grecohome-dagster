@@ -2,15 +2,15 @@
 
 Short records of the load-bearing decisions behind `grecohome-dagster`.
 
-Decisions about the bronze layer, Dagster deployment, Whoop and Garmin are recorded in the LID
+Decisions about the bronze layer, Dagster deployment, Whoop, Garmin and Soil are recorded in the LID
 design docs instead: bronze-only capture, UTC partitions, Dagster pins and one image per subject
 in the [HLD](../high-level-design.md); the plaintext token file in the
 [Whoop token lifecycle](../intent/whoop/auth/auth-design.md); the Garmin port in the
-[Garmin design](../intent/garmin/garmin-design.md). The records below cover subjects and layers
+[Garmin design](../intent/garmin/garmin-design.md); the Soil/USCRN port in the
+[Soil design](../intent/soil/soil-design.md). The records below cover subjects and layers
 not yet under LID.
 
 - [0005 — Lingo port: sensor + dynamic partitions, service-account auth](0005-lingo-port.md)
-- [0006 — Soil/USCRN port: daily row-slice + dedup over a growing year file](0006-soil-port.md)
 - [0007 — Silver sleep: two co-equal sources, FULL OUTER JOIN, neither authoritative](0007-silver-sleep.md)
 - [0008 — Silver glucose: per-reading grain, dedup on the UTC instant](0008-silver-glucose.md)
 - [0009 — Silver workouts: per-activity grain, dedup on activityId](0009-silver-workouts.md)

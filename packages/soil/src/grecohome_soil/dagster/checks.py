@@ -21,6 +21,7 @@ from grecohome_core.checks import (
 from grecohome_soil.config import settings
 from grecohome_soil.dagster.assets import uscrn_bronze_hourly
 
+# @spec SOIL-CHECKS-001
 SOIL_CHECK_CONFIGS: list[CollectionCheckConfig] = [
     CollectionCheckConfig(
         source="uscrn",

@@ -37,6 +37,7 @@ PARTITION_RANGE_END_TAG = "dagster/asset_partition_range_end"
 uscrn_capture_job = define_asset_job("uscrn_capture_job", selection=[uscrn_bronze_hourly])
 
 
+# @spec SOIL-SCHED-001
 @schedule(cron_schedule="0 */6 * * *", job=uscrn_capture_job, execution_timezone="UTC")
 def uscrn_schedule(context: ScheduleEvaluationContext) -> Iterator[RunRequest]:
     """Every 6h: re-capture the trailing daily partitions for the station."""
@@ -47,6 +48,7 @@ def uscrn_schedule(context: ScheduleEvaluationContext) -> Iterator[RunRequest]:
         yield RunRequest(run_key=f"{key}-{now:%Y%m%dT%H}", partition_key=key)
 
 
+# @spec SOIL-SCHED-002
 @schedule(
     cron_schedule="30 3 * * 0",  # Sunday 03:30 UTC, clear of the 6-hourly ticks
     job=uscrn_capture_job,

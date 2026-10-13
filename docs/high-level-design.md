@@ -1,7 +1,7 @@
 # High-Level Design: grecohome-dagster
 
-LID runs in **Scoped** mode here. Under the arrow: the Garmin and Whoop bronze subjects
-(`packages/garmin/**`, `packages/whoop/**`), and the shared core's bronze writer and bronze
+LID runs in **Scoped** mode here. Under the arrow: the Garmin, Whoop and Soil/USCRN bronze
+subjects (`packages/garmin/**`, `packages/whoop/**`, `packages/soil/**`), and the shared core's bronze writer and bronze
 checks (`grecohome_core.bronze`, `grecohome_core.checks`). Sections that describe other parts of the system are short
 orientation summaries. The detailed design for those parts lives in `docs/ARCHITECTURE.md`,
 `docs/SILVER.md`, `docs/GOLD.md` and `docs/adr/`.
@@ -79,6 +79,7 @@ are applied in silver at read time.
 | Shared core (bronze writer, bronze checks) | `docs/intent/core/` | The capture and data-quality contracts every bronze subject relies on |
 | Garmin | `docs/intent/garmin/` | Garmin Connect bronze subject (capture, authentication) |
 | Whoop | `docs/intent/whoop/` | Whoop bronze subject (capture, token lifecycle) |
+| Soil/USCRN | `docs/intent/soil/` | NOAA USCRN station bronze subject (day-slice capture, late corrections) |
 
 Subjects depend on the shared core, never the reverse. So a change to a core contract is a
 cross-segment change: it cascades to every subject spec that relies on it.
@@ -148,6 +149,14 @@ cross-segment change: it cascades to every subject spec that relies on it.
   WARN-level check failures stay in the Dagster UI and don't page. The Slack credential
   lives only in Grafana, never in this repo. A "Data Platform Health" Grafana dashboard
   shows the same signals.
+- **Capture schedules and sensors start stopped; checks schedules start running.**
+  - **Capture** (anything that calls a source or builds a layer) is switched on by hand once per
+    code location after its first deploy. A new subject may need credentials set up first, and
+    forgetting to enable capture is loud: no data arrives, and the freshness checks page.
+  - **Checks** schedules start running, because forgetting to enable a safety net is silent.
+
+  Dagster keeps a schedule's on/off state from the UI over its code default, so either way the
+  choice is made once per code location. `docs/DEPLOYMENT.md` lists exactly what to enable.
 - **Layers are append-only or rebuildable.** Bronze is never modified by the layers above it,
   and silver and gold never write under the layer below them (enforced by `protected_root`).
 

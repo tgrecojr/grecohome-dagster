@@ -10,6 +10,7 @@ class TestSoilSettings:
         # BRONZE_ROOT comes from the test env (root pyproject pytest-env).
         assert SoilSettings().bronze_root
 
+    # @spec SOIL-SCHED-003
     def test_defaults(self, monkeypatch):
         for var in (
             "USCRN_STATION",
