@@ -33,11 +33,13 @@ class TestYearFileUrl:
 
 @pytest.mark.unit
 class TestRowsForDate:
+    # @spec SOIL-CAPTURE-001
     def test_selects_only_matching_date(self):
         rows = fetch.rows_for_date(SAMPLE, "20260609")
         assert len(rows) == 2
         assert all(r.split()[1] == "20260609" for r in rows)
 
+    # @spec SOIL-CAPTURE-001
     def test_returns_lines_verbatim(self):
         rows = fetch.rows_for_date(SAMPLE, "20260608")
         assert rows == ["03761 20260608 2300 20260608 1900 2.5 2.4 2.6 2.3 0.0"]
@@ -55,12 +57,14 @@ class TestFetchYearFile:
         assert fetch.fetch_year_file(url) == SAMPLE
 
     @respx.mock
+    # @spec SOIL-CAPTURE-006
     def test_404_returns_none(self):
         url = "https://x/h02/2026/CRNH0203-2026-Missing_Station.txt"
         respx.get(url).mock(return_value=httpx.Response(404))
         assert fetch.fetch_year_file(url) is None
 
     @respx.mock
+    # @spec SOIL-CAPTURE-007
     def test_5xx_raises(self):
         url = "https://x/h02/2026/CRNH0203-2026-PA_Avondale_2_N.txt"
         respx.get(url).mock(return_value=httpx.Response(503))
@@ -74,6 +78,7 @@ class TestYearsForDate:
         assert fetch.years_for_date("20260609") == [2026]
         assert fetch.years_for_date("20261231") == [2026]
 
+    # @spec SOIL-CAPTURE-002
     def test_jan_1_also_reads_the_prior_year_file_first(self):
         assert fetch.years_for_date("20260101") == [2025, 2026]
 
@@ -81,6 +86,7 @@ class TestYearsForDate:
 @pytest.mark.unit
 class TestYearFilesAndRowsForPartition:
     @respx.mock
+    # @spec SOIL-CAPTURE-008
     def test_fetches_each_year_once_and_caches_404(self):
         r25 = respx.get(fetch.year_file_url(2025)).mock(return_value=httpx.Response(404))
         r26 = respx.get(fetch.year_file_url(2026)).mock(

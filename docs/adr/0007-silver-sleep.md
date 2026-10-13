@@ -53,4 +53,4 @@ night.
   single-source reductions of this template.
 
 ## Related
-[HLD](../high-level-design.md), [[0006-soil-port]]. Layer guide: `docs/SILVER.md`.
+[HLD](../high-level-design.md), [Soil design](../intent/soil/soil-design.md). Layer guide: `docs/SILVER.md`.

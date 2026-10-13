@@ -15,6 +15,7 @@ COLLECTION = "hourly"
 PROCESSOR = "grecohome-soil"
 
 
+# @spec SOIL-CAPTURE-003, SOIL-CAPTURE-004, SOIL-CAPTURE-005
 def capture_hourly(
     rows: list[str],
     *,

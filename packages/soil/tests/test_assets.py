@@ -62,6 +62,7 @@ class TestUscrnBronzeAsset:
         assert all(line.split()[1] == "20260609" for line in lines)
 
     @respx.mock
+    # @spec SOIL-CAPTURE-006
     def test_404_skips_without_writing(self, isolate_soil_bronze):
         root = isolate_soil_bronze
         respx.get(fetch.year_file_url(2026)).mock(return_value=httpx.Response(404))
@@ -71,6 +72,7 @@ class TestUscrnBronzeAsset:
         assert _payloads(root) == []
 
     @respx.mock
+    # @spec SOIL-CAPTURE-002
     def test_jan_1_takes_the_midnight_row_from_the_prior_year_file(self, isolate_soil_bronze):
         """The ``YYYY0101 0000`` row lives in the previous year's file; it must not be lost."""
         root = isolate_soil_bronze
@@ -96,6 +98,7 @@ class TestUscrnBronzeAsset:
         assert [ln.split()[2] for ln in _lines(files[0])] == ["0100", "0200"]
 
     @respx.mock
+    # @spec SOIL-CAPTURE-008
     def test_partition_range_run_fetches_each_year_file_once(self, isolate_soil_bronze):
         """A range run (correction sweep / backfill chunk) slices every partition
         from one download per year file and captures each day separately."""

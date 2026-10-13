@@ -93,6 +93,7 @@ See `docs/ENV_TEMPLATE.md` (and `.env.example`). Per layer:
 Paths in scope:
 - `packages/garmin/**`
 - `packages/whoop/**`
+- `packages/soil/**`
 - `packages/core/src/grecohome_core/bronze/**`
 - `packages/core/src/grecohome_core/checks/**`
 

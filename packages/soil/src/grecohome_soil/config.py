@@ -20,6 +20,7 @@ class SoilSettings(BaseSubjectSettings):
 
     # Trailing daily partitions the schedule re-captures each tick (catches the
     # UTC-midnight rollover and any late rows). Dedup keeps re-captures ~free.
+    # @spec SOIL-SCHED-003
     uscrn_lookback_days: int = 2
 
     # Trailing daily partitions the WEEKLY correction schedule re-slices in one

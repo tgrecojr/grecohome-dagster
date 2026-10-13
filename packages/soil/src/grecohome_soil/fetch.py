@@ -12,10 +12,11 @@ Two source quirks shape the helpers here:
   in later -- we have seen gaps two years old get populated -- and corrupted rows
   are repaired. So a day is never truly final; the correction schedule re-slices a
   long trailing window (see ``dagster/schedules.py``).
-* **The ``YYYY0101 0000`` row lives in the *previous* year's file** (an hourly row is
-  stamped with the hour it *ends*, and the year file is cut on the LST date of the
-  observation period). :func:`years_for_date` returns both files for Jan 1 so that
-  hour is not lost.
+* **The ``YYYY0101 0000`` row lives in the *previous* year's file.** A row is stamped
+  with the hour it *ends* (``UTC_TIME``), and NOAA publishes the hour 23:00-24:00 on
+  Dec 31 -- stamped ``YYYY0101 0000`` -- as the last row of the previous year's file;
+  every other Jan 1 row is in the new year's file. :func:`years_for_date` returns both
+  files for Jan 1 so that hour is not lost.
 """
 
 import httpx
@@ -41,6 +42,7 @@ def year_file_url(year: int, station: str | None = None, base_url: str | None = 
     return f"{base}/{year}/CRNH0203-{year}-{station}.txt"
 
 
+# @spec SOIL-CAPTURE-006, SOIL-CAPTURE-007
 def fetch_year_file(url: str, *, timeout: float = 30.0) -> str | None:
     """GET the year file as text.
 
@@ -57,6 +59,7 @@ def fetch_year_file(url: str, *, timeout: float = 30.0) -> str | None:
     return resp.text
 
 
+# @spec SOIL-CAPTURE-002
 def years_for_date(yyyymmdd: str) -> list[int]:
     """The year files that can hold rows stamped ``yyyymmdd`` (chronological order).
 
@@ -70,6 +73,7 @@ def years_for_date(yyyymmdd: str) -> list[int]:
     return [year]
 
 
+# @spec SOIL-CAPTURE-001
 def rows_for_date(text: str, yyyymmdd: str) -> list[str]:
     """Return the original lines whose UTC_DATE (field 2) equals ``yyyymmdd``.
 
@@ -86,6 +90,7 @@ def rows_for_date(text: str, yyyymmdd: str) -> list[str]:
     return matched
 
 
+# @spec SOIL-CAPTURE-008
 class YearFiles:
     """Lazily fetched, per-run cache of year files keyed by year.
 

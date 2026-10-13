@@ -15,6 +15,7 @@ from grecohome_soil.dagster.schedules import (
 
 @pytest.mark.unit
 class TestUscrnSchedule:
+    # @spec SOIL-SCHED-001
     def test_emits_trailing_lookback_partitions(self):
         ctx = build_schedule_context(scheduled_execution_time=datetime(2026, 6, 9, 12, tzinfo=UTC))
         reqs = list(uscrn_schedule(ctx))
@@ -23,6 +24,7 @@ class TestUscrnSchedule:
         keys = [r.partition_key for r in reqs]
         assert keys == ["2026-06-08", "2026-06-09"]
 
+    # @spec SOIL-SCHED-001
     def test_run_keys_carry_the_tick(self):
         ctx = build_schedule_context(scheduled_execution_time=datetime(2026, 6, 9, 12, tzinfo=UTC))
         reqs = list(uscrn_schedule(ctx))
@@ -33,6 +35,7 @@ class TestUscrnSchedule:
 
 @pytest.mark.unit
 class TestUscrnCorrectionSchedule:
+    # @spec SOIL-SCHED-002
     def test_emits_one_partition_range_run(self, monkeypatch):
         monkeypatch.setattr(settings, "uscrn_correction_lookback_days", 10)
         ctx = build_schedule_context(
@@ -46,6 +49,7 @@ class TestUscrnCorrectionSchedule:
         assert req.tags[PARTITION_RANGE_END_TAG] == "2026-06-14"
         assert req.run_key == "correction-2026-06-05-2026-06-14-20260614T03"
 
+    # @spec SOIL-SCHED-003
     def test_default_window_covers_the_prior_year_file(self, monkeypatch):
         monkeypatch.delenv("USCRN_CORRECTION_LOOKBACK_DAYS", raising=False)
         ctx = build_schedule_context(

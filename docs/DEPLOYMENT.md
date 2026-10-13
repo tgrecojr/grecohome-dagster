@@ -331,14 +331,17 @@ to deploy.
   fetches the year file and stores **only that UTC date's rows** (`uscrn/hourly`, `dedupe=True`), so a
   few-times-a-day re-capture never re-stores the whole year. A finished day stores once; today
   re-writes only when a new row appears.
-- **Schedule:** `uscrn_schedule` (every 6h, UTC) re-materializes the trailing `USCRN_LOOKBACK_DAYS`
-  partitions. Older history is reachable via `dagster backfill` over the same asset.
+- **Schedules:** `uscrn_schedule` (every 6h, UTC) re-materializes the trailing `USCRN_LOOKBACK_DAYS`
+  partitions; `uscrn_correction_schedule` (Sundays 03:30 UTC) re-slices the trailing
+  `USCRN_CORRECTION_LOOKBACK_DAYS` (400) in one range run to pick up NOAA's late corrections. Older
+  history is reachable via `dagster backfill` over the same asset. Design:
+  `docs/intent/soil/soil-design.md`.
 
 ### Host container (`dagster_soil`)
 
 Mirror the others, but **only two mounts** (no credential mount): on `monitoring`, `DAGSTER_HOME` +
 `DAGSTER_POSTGRES_*` (run worker → instance Postgres), the `USCRN_*` env (`USCRN_STATION`, optional
-`USCRN_BASE_URL` / `USCRN_LOOKBACK_DAYS` / `USCRN_START_DATE`), and the two mounts — the shared
+`USCRN_BASE_URL` / `USCRN_LOOKBACK_DAYS` / `USCRN_CORRECTION_LOOKBACK_DAYS` / `USCRN_START_DATE`), and the two mounts — the shared
 `dagster.yaml` (`DAGSTER_HOME`) and the bronze root (`/opt/datalake/bronze` → `/data/bronze`; the app
 writes the `uscrn/` source segment itself).
 
@@ -352,7 +355,8 @@ writes the `uscrn/` source segment itself).
 dagster instance concurrency set uscrn_api 1
 ```
 
-Enable `uscrn_schedule` in the UI (schedules, like sensors, are off by default). Its first ticks
+Enable `uscrn_schedule` and `uscrn_correction_schedule` in the UI (capture schedules, like sensors,
+are off by default; the checks schedule starts running). Its first ticks
 capture the recent partitions; backfill the station's history with
 `dagster backfill --partition-range 2010-01-01...<today> --job uscrn_capture_job`.
 
@@ -452,6 +456,21 @@ Mounts (silver is **read-only** here — gold never writes under it):
 ```
 
 No concurrency pool is needed — gold makes no source calls.
+
+## Schedules and sensors to enable after a first deploy
+
+Capture schedules and sensors start **stopped**; switch these on in the Dagster UI once per code
+location after its first deploy (and after its credentials are set up). Dagster remembers the
+state across redeploys. Checks schedules start **running** and need nothing.
+
+| Code location | Enable (capture: starts stopped) | Already running (checks) |
+|---|---|---|
+| `whoop_ingest` | `whoop_hourly`, `whoop_snapshots_hourly` (after the OAuth setup) | `whoop_bronze_checks_hourly` |
+| `garmin_ingest` | `garmin_daily`, `garmin_reference` (after the MFA bootstrap) | `garmin_bronze_checks_hourly` |
+| `lingo_ingest` | sensor `lingo_drive_sensor` (after the service-account setup) | `lingo_bronze_checks_hourly` |
+| `soil_ingest` | `uscrn_schedule`, `uscrn_correction_schedule` | `uscrn_bronze_checks_hourly` |
+| silver | `silver_sleep_daily`, `silver_glucose_daily`, `silver_workouts_daily`, `silver_recovery_daily`, `silver_weather_daily`, `silver_daily_daily`, `silver_strain_daily`, `silver_body_daily`, `silver_fitness_daily`, `silver_workout_splits_daily`, `silver_whoop_workouts_daily` | `silver_checks_daily` |
+| gold | `gold_wellness_daily`, `gold_weather_daily`; sensor `run_queue_monitor` (the queue-depth alert) | `gold_checks_daily` |
 
 ## Observability and alerting
 

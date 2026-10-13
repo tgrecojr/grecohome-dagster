@@ -32,6 +32,7 @@ SOIL_POOL = "uscrn_api"
 MAX_PARTITIONS_PER_RUN = 366
 
 
+# @spec SOIL-CAPTURE-009, SOIL-CAPTURE-010
 @asset(
     partitions_def=SOIL_PARTITIONS,
     pool=SOIL_POOL,

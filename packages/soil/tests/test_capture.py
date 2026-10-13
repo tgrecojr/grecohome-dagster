@@ -30,12 +30,14 @@ def _payloads(root):
 
 @pytest.mark.unit
 class TestCaptureHourly:
+    # @spec SOIL-CAPTURE-003
     def test_writes_the_days_rows(self, isolate_soil_bronze):
         root = isolate_soil_bronze
         path = _capture(ROWS, root)
         assert path and os.path.exists(path)
         assert open(path, "rb").read() == ("\n".join(ROWS) + "\n").encode("utf-8")
 
+    # @spec SOIL-CAPTURE-005
     def test_sidecar_provenance(self, isolate_soil_bronze):
         root = isolate_soil_bronze
         path = _capture(ROWS, root)
@@ -49,11 +51,13 @@ class TestCaptureHourly:
         assert meta["request_params"]["year_files"] == [2026]
         assert meta["request_params"]["row_count"] == 2
 
+    # @spec SOIL-CAPTURE-004
     def test_skips_empty(self, isolate_soil_bronze):
         root = isolate_soil_bronze
         assert _capture([], root) is None
         assert _payloads(root) == []
 
+    # @spec SOIL-CAPTURE-003
     def test_dedup_then_new_row(self, isolate_soil_bronze):
         root = isolate_soil_bronze
         assert _capture(ROWS, root) is not None

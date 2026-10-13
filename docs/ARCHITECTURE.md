@@ -158,39 +158,9 @@ grecohome_soil/
     definitions.py   the gRPC code-location target
 ```
 
-How Soil differs (it reuses core too):
-- **Public file source, no auth.** The NOAA USCRN `hourly02` product exposes one headerless,
-  whitespace-delimited file per station-year (`CRNH0203-{year}-{station}.txt`) that gains one row
-  per hour. No token, no key, no credential mount — the simplest subject to deploy.
-- **Row-slice keeps storage flat.** The whole year file changes every hour, so whole-file dedup
-  would re-store the year on every tick. Instead each **daily UTC partition** stores only *that
-  date's rows* (sliced by the `UTC_DATE` column), content-hash deduped — a finished day stores once;
-  today re-writes only when a new row appears. The stored lines are byte-faithful to the source
-  (selection, not transformation).
-- **Schedule-driven** (like Whoop/Garmin): `uscrn_schedule` re-captures the trailing
-  `USCRN_LOOKBACK_DAYS` partitions every 6h; full history is reachable via `dagster backfill` since
-  every past year is on the server.
-- **Single station** (env-configurable; default `PA_Avondale_2_N`), consistent with the single-user
-  constraint — the station is recorded in the sidecar, not the path.
-
-USCRN in bronze:
-- **One collection, `uscrn/hourly`.** Each payload is the **raw text rows** for one UTC date
-  (`text/plain` → `ext=txt`). It's pure selection: the stored lines are byte-faithful to the
-  source.
-- **`dt` is the partition's UTC date**, matched against the file's `UTC_DATE` column (field 2),
-  so re-captures of a trailing day are compared within the right folder.
-- **Dedup on.** An unchanged day-slice is skipped, and a day that gained a row is captured.
-  Today's folder can therefore hold a few progressively larger slices, each a faithful snapshot
-  of what the source showed.
-- **Sidecar provenance:** `station`, `wbanno`, `year`, `utc_date`, `row_count`, `request_url`.
-  There are no secrets: the source is public NOAA HTTP.
-
-USCRN checks (`grecohome_soil/dagster/checks.py`, 4 checks, `uscrn_bronze_checks_job` hourly):
-- **Completeness** uses the event date from the partition (`dt` is the UTC date the rows
-  cover), with `cadence_days` 2.
-- **Freshness** uses `cadence_hours` 30 (NOAA's publish lag plus the 6-hourly schedule).
-- **Schema drift** uses a text field-count signature.
-- There's no auth, so only capture freshness applies.
+A public NOAA year file (no auth), stored as one UTC day's rows per partition, re-captured every
+6 h plus a weekly 400-day correction sweep for NOAA's late in-place corrections. Authoritative
+design (capture, schedules, checks, and why): `docs/intent/soil/soil-design.md`.
 
 ## `grecohome-silver` — the silver layer
 
