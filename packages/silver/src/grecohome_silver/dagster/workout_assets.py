@@ -24,6 +24,7 @@ def workouts_path(filename: str) -> str:
     return os.path.join(settings.silver_root, WORKOUTS_SUBDIR, filename)
 
 
+# @spec SILVER-WORKOUTS-GARMIN-006
 @asset(name="silver_workouts", group_name=GROUP, deps=[AssetKey("garmin_bronze_activities")])
 def silver_workouts(context: AssetExecutionContext) -> MaterializeResult:
     """Typed, deduped Garmin activities — one row per activity."""

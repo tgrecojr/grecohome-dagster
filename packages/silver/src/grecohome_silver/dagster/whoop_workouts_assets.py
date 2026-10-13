@@ -27,6 +27,7 @@ def whoop_workouts_path(filename: str) -> str:
     return os.path.join(settings.silver_root, WHOOP_WORKOUTS_SUBDIR, filename)
 
 
+# @spec SILVER-WORKOUTS-WHOOP-006
 @asset(
     name="silver_whoop_workouts",
     group_name=GROUP,

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 
+import duckdb
 import pytest
 
 from grecohome_core.silver import connect, list_payload_files
@@ -44,6 +45,7 @@ def _rows(root: str) -> dict[str, dict]:
     return {r[cols.index("workout_id")]: dict(zip(cols, r, strict=True)) for r in cur.fetchall()}
 
 
+# @spec SILVER-WORKOUTS-WHOOP-001, SILVER-WORKOUTS-WHOOP-005
 def test_typing_and_local_workout_date(tmp_path) -> None:
     root = str(tmp_path / "bronze")
     _write(root, "2026-02-09", 1_700_000_000000, [
@@ -57,6 +59,7 @@ def test_typing_and_local_workout_date(tmp_path) -> None:
     assert r["workout_date"].isoformat() == "2026-02-09"
 
 
+# @spec SILVER-WORKOUTS-WHOOP-003
 def test_dedup_keeps_latest_rescore(tmp_path) -> None:
     root = str(tmp_path / "bronze")
     _write(root, "2026-02-09", 1_700_000_000000,
@@ -69,6 +72,7 @@ def test_dedup_keeps_latest_rescore(tmp_path) -> None:
     assert len(rows) == 1 and rows["w-2"]["strain"] == 11.0
 
 
+# @spec SILVER-WORKOUTS-WHOOP-001
 def test_non_gps_workout_kept_with_null_distance(tmp_path) -> None:
     """Lifting/yard-work have no distance — kept, distance null."""
     root = str(tmp_path / "bronze")
@@ -80,6 +84,7 @@ def test_non_gps_workout_kept_with_null_distance(tmp_path) -> None:
     assert r["sport_name"] == "weightlifting" and r["distance_m"] is None
 
 
+# @spec SILVER-WORKOUTS-WHOOP-001
 def test_bronze_count_and_empty(tmp_path) -> None:
     root = str(tmp_path / "bronze")
     assert _rows(root) == {}
@@ -89,3 +94,46 @@ def test_bronze_count_and_empty(tmp_path) -> None:
     ])
     files = list_payload_files(root, "whoop", "workout")
     assert int(connect().execute(bronze_workout_count_sql(files)).fetchone()[0]) == 2
+
+
+def _write_raw(root: str, payload) -> None:
+    pdir = os.path.join(root, "whoop", "workout", "dt=2026-01-15")
+    os.makedirs(pdir, exist_ok=True)
+    with open(os.path.join(pdir, "workout_1700000000000_raw.json"), "w") as fh:
+        json.dump(payload, fh)
+
+
+# @spec SILVER-WORKOUTS-WHOOP-001
+def test_payload_without_records_contributes_nothing(tmp_path) -> None:
+    root = str(tmp_path / "bronze")
+    _write(root, "2026-01-15", 1_700_000_100000, [_workout("w1", "2026-01-15T15:00:00.000Z", "u")])
+    _write_raw(root, {"next_token": None})
+    assert list(_rows(root)) == ["w1"]
+
+
+# @spec SILVER-WORKOUTS-WHOOP-002
+@pytest.mark.parametrize("records", [{"id": "w"}, "oops", 5])
+def test_non_array_records_fails_the_rebuild(tmp_path, records) -> None:
+    root = str(tmp_path / "bronze")
+    _write(root, "2026-01-15", 1_700_000_100000, [_workout("w1", "2026-01-15T15:00:00.000Z", "u")])
+    _write_raw(root, {"records": records})
+    with pytest.raises(duckdb.Error):
+        _rows(root)
+
+
+# @spec SILVER-WORKOUTS-WHOOP-004
+def test_record_without_id_dropped(tmp_path) -> None:
+    root = str(tmp_path / "bronze")
+    base = _workout("w1", "2026-01-15T15:00:00.000Z", "u")
+    no_id = {k: v for k, v in base.items() if k != "id"}
+    _write(root, "2026-01-15", 1_700_000_100000, [base, no_id, {**base, "id": None}])
+    assert list(_rows(root)) == ["w1"]
+
+
+# @spec SILVER-WORKOUTS-WHOOP-005
+@pytest.mark.parametrize("offset", [None, "garbage"])
+def test_workout_date_falls_back_to_utc_date(tmp_path, offset) -> None:
+    root = str(tmp_path / "bronze")
+    _write(root, "2026-01-15", 1_700_000_100000,
+           [_workout("w1", "2026-01-15T02:00:00.000Z", "u", offset=offset)])
+    assert _rows(root)["w1"]["workout_date"].isoformat() == "2026-01-15"

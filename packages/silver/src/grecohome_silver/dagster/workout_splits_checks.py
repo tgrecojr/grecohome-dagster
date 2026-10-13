@@ -13,6 +13,7 @@ from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 from grecohome_core.checks import alerting_check
 from grecohome_core.silver import connect, list_payload_files
 from grecohome_silver.config import settings
+from grecohome_silver.dagster.freshness import table_freshness_check
 from grecohome_silver.dagster.workout_splits_assets import (
     SPLITS_PARQUET,
     silver_workout_splits,
@@ -37,6 +38,7 @@ def _src(path: str) -> str:
     return f"read_parquet('{path.replace(chr(39), chr(39) * 2)}')"
 
 
+# @spec SILVER-WORKOUTS-CHECKS-004
 @asset_check(asset=silver_workout_splits, name="splits_lap_unique_nonnull")
 @alerting_check
 def splits_lap_unique_nonnull() -> AssetCheckResult:
@@ -58,10 +60,11 @@ def splits_lap_unique_nonnull() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-WORKOUTS-CHECKS-005
 @asset_check(asset=silver_workout_splits, name="splits_value_ranges")
 @alerting_check
 def splits_value_ranges() -> AssetCheckResult:
-    """Non-null metrics within plausible bounds (durations/distance ≥ 0, HR 0–240)."""
+    """Non-null metrics within plausible bounds (durations/distance ≥ 0, HR 0–240, lap ≥ 1)."""
     path = splits_path(SPLITS_PARQUET)
     if not os.path.exists(path):
         return _missing(path)
@@ -71,7 +74,7 @@ def splits_value_ranges() -> AssetCheckResult:
         "(avg_speed_mps IS NOT NULL AND avg_speed_mps < 0)",
         "(avg_hr IS NOT NULL AND (avg_hr < 0 OR avg_hr > 240))",
         "(max_hr IS NOT NULL AND (max_hr < 0 OR max_hr > 240))",
-        "(lap_index IS NOT NULL AND lap_index < 0)",
+        "(lap_index IS NOT NULL AND lap_index < 1)",
     ]
     bad = _scalar(f"SELECT count(*) FROM {_src(path)} WHERE {' OR '.join(clauses)}")
     return AssetCheckResult(
@@ -81,10 +84,11 @@ def splits_value_ranges() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-WORKOUTS-CHECKS-006
 @asset_check(asset=silver_workout_splits, name="splits_coverage_vs_bronze")
 @alerting_check
 def splits_coverage_vs_bronze() -> AssetCheckResult:
-    """silver laps ≈ bronze distinct laps — no silent drop."""
+    """silver laps ≥ bronze distinct laps — no silent drop."""
     path = splits_path(SPLITS_PARQUET)
     if not os.path.exists(path):
         return _missing(path)
@@ -104,8 +108,16 @@ def splits_coverage_vs_bronze() -> AssetCheckResult:
     )
 
 
+# @spec SILVER-WORKOUTS-CHECKS-010
+silver_workout_splits_freshness = table_freshness_check(
+    silver_workout_splits, lambda: splits_path(SPLITS_PARQUET)
+)
+
+
+# @spec SILVER-WORKOUTS-CHECKS-011, SILVER-WORKOUTS-CHECKS-012
 WORKOUT_SPLITS_CHECKS = [
     splits_lap_unique_nonnull,
     splits_value_ranges,
     splits_coverage_vs_bronze,
+    silver_workout_splits_freshness,
 ]

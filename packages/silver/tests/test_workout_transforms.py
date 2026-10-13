@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 
+import duckdb
 import pytest
 
 from grecohome_core.silver import connect, list_payload_files
@@ -51,6 +52,7 @@ def _rows(root: str) -> list[dict]:
     return [dict(zip(cols, r, strict=True)) for r in cur.fetchall()]
 
 
+# @spec SILVER-WORKOUTS-GARMIN-001, SILVER-WORKOUTS-GARMIN-005
 def test_workouts_typing_and_local_date(tmp_path) -> None:
     root = str(tmp_path / "bronze")
     _write(root, "2026-01-15", 1_700_000_000000, [_activity(111)])
@@ -64,6 +66,7 @@ def test_workouts_typing_and_local_date(tmp_path) -> None:
     assert r["avg_hr"] == 140 and r["max_hr"] == 165
 
 
+# @spec SILVER-WORKOUTS-GARMIN-003
 def test_workouts_dedup_by_activity_id(tmp_path) -> None:
     """The same activity re-captured across files collapses to one row (latest fetch)."""
     root = str(tmp_path / "bronze")
@@ -74,6 +77,7 @@ def test_workouts_dedup_by_activity_id(tmp_path) -> None:
     assert rows[0]["distance_m"] == pytest.approx(5050.0)  # latest fetch wins
 
 
+# @spec SILVER-WORKOUTS-GARMIN-001
 def test_workouts_empty_array_and_null_distance_kept(tmp_path) -> None:
     """Empty-day arrays contribute nothing; a no-distance activity is kept (null)."""
     root = str(tmp_path / "bronze")
@@ -86,12 +90,14 @@ def test_workouts_empty_array_and_null_distance_kept(tmp_path) -> None:
     assert rows[0]["activity_id"] == 222 and rows[0]["distance_m"] is None
 
 
+# @spec SILVER-WORKOUTS-GARMIN-001
 def test_workouts_multiple_per_file(tmp_path) -> None:
     root = str(tmp_path / "bronze")
     _write(root, "2026-01-15", 1_700_000_000000, [_activity(1), _activity(2), _activity(3)])
     assert len(_rows(root)) == 3
 
 
+# @spec SILVER-WORKOUTS-GARMIN-001
 def test_workouts_sidecars_excluded_and_count(tmp_path) -> None:
     root = str(tmp_path / "bronze")
     _write(root, "2026-01-15", 1_700_000_000000, [_activity(1), _activity(2)])
@@ -100,5 +106,34 @@ def test_workouts_sidecars_excluded_and_count(tmp_path) -> None:
     assert int(connect().execute(bronze_activity_count_sql(files)).fetchone()[0]) == 2
 
 
+# @spec SILVER-WORKOUTS-GARMIN-001
 def test_workouts_empty_yields_no_rows(tmp_path) -> None:
     assert _rows(str(tmp_path / "bronze")) == []
+
+
+def _write_raw(root: str, payload) -> None:
+    pdir = os.path.join(root, "garmin", "activities", "dt=2026-01-15")
+    os.makedirs(pdir, exist_ok=True)
+    with open(os.path.join(pdir, "activities_1700000000000_raw.json"), "w") as fh:
+        json.dump(payload, fh)
+
+
+# @spec SILVER-WORKOUTS-GARMIN-002
+@pytest.mark.parametrize("payload", [{"activityId": 1}, "oops", 5])
+def test_workouts_non_array_payload_fails_the_rebuild(tmp_path, payload) -> None:
+    root = str(tmp_path / "bronze")
+    _write(root, "2026-01-15", 1_700_000_100000, [_activity(1)])
+    _write_raw(root, payload)
+    with pytest.raises(duckdb.Error):
+        _rows(root)
+
+
+# @spec SILVER-WORKOUTS-GARMIN-004
+def test_workouts_missing_id_dropped_non_numeric_id_kept_null(tmp_path) -> None:
+    root = str(tmp_path / "bronze")
+    no_id = {k: v for k, v in _activity(2).items() if k != "activityId"}
+    _write(root, "2026-01-15", 1_700_000_100000,
+           [_activity(1), no_id, {**_activity(3), "activityId": None},
+            {**_activity(4), "activityId": "abc"}])
+    ids = sorted((r["activity_id"] for r in _rows(root)), key=lambda x: (x is None, x))
+    assert ids == [1, None]

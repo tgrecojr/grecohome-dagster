@@ -26,6 +26,7 @@ def splits_path(filename: str) -> str:
     return os.path.join(settings.silver_root, SPLITS_SUBDIR, filename)
 
 
+# @spec SILVER-WORKOUTS-SPLITS-004
 @asset(
     name="silver_workout_splits",
     group_name=GROUP,

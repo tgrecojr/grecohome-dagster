@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 
+import duckdb
 import pytest
 
 from grecohome_core.silver import connect, list_payload_files
@@ -45,6 +46,7 @@ def _rows(root: str) -> dict[tuple, dict]:
     return out
 
 
+# @spec SILVER-WORKOUTS-SPLITS-001
 def test_typing_one_row_per_lap(tmp_path) -> None:
     root = str(tmp_path / "bronze")
     _write(root, 555, 1_700_000_000000, [_lap(1, distance=1000.0), _lap(2, distance=1200.0)])
@@ -57,6 +59,7 @@ def test_typing_one_row_per_lap(tmp_path) -> None:
     assert rows[(555, 2)]["distance_m"] == 1200.0
 
 
+# @spec SILVER-WORKOUTS-SPLITS-001
 def test_dedup_keeps_latest_fetch(tmp_path) -> None:
     """The same activity re-pulled → dedup on (activity_id, lap_index)."""
     root = str(tmp_path / "bronze")
@@ -66,6 +69,7 @@ def test_dedup_keeps_latest_fetch(tmp_path) -> None:
     assert len(rows) == 1 and rows[(555, 1)]["distance_m"] == 1100.0
 
 
+# @spec SILVER-WORKOUTS-SPLITS-001
 def test_multiple_activities(tmp_path) -> None:
     root = str(tmp_path / "bronze")
     _write(root, 555, 1_700_000_000000, [_lap(1)], short="a")
@@ -74,9 +78,66 @@ def test_multiple_activities(tmp_path) -> None:
     assert set(rows) == {(555, 1), (777, 1), (777, 2)}
 
 
+# @spec SILVER-WORKOUTS-SPLITS-001
 def test_bronze_count_and_empty(tmp_path) -> None:
     root = str(tmp_path / "bronze")
     assert _rows(root) == {}
     _write(root, 555, 1_700_000_000000, [_lap(1), _lap(2), _lap(3)])
     files = list_payload_files(root, "garmin", "activity_splits")
     assert int(connect().execute(bronze_lap_count_sql(files)).fetchone()[0]) == 3
+
+
+def _write_payload(root: str, fetched_ms: int, payload, short: str) -> None:
+    pdir = os.path.join(root, "garmin", "activity_splits", "dt=2024-01-01")
+    os.makedirs(pdir, exist_ok=True)
+    with open(os.path.join(pdir, f"activity_splits_{fetched_ms}_{short}.json"), "w") as fh:
+        json.dump(payload, fh)
+
+
+def _lap_count(root: str) -> int:
+    files = list_payload_files(root, "garmin", "activity_splits")
+    return int(connect().execute(bronze_lap_count_sql(files)).fetchone()[0])
+
+
+# @spec SILVER-WORKOUTS-SPLITS-001, SILVER-WORKOUTS-CHECKS-006
+def test_relapped_activity_takes_every_lap_from_latest_capture(tmp_path) -> None:
+    root = str(tmp_path / "bronze")
+    _write(root, 7, 1_700_000_000000, [_lap(1), _lap(2), _lap(3)], short="old")
+    _write(root, 7, 1_700_000_900000, [_lap(1, distance=1600.0), _lap(2)], short="new")
+    rows = _rows(root)
+    assert sorted(rows) == [(7, 1), (7, 2)]  # the old capture's lap 3 is gone
+    assert rows[(7, 1)]["distance_m"] == 1600.0
+    assert _lap_count(root) == 2  # coverage counts the same captures the table uses
+
+
+# @spec SILVER-WORKOUTS-SPLITS-001, SILVER-WORKOUTS-CHECKS-006
+def test_capture_without_lapdtos_is_ignored_empty_lapdtos_clears(tmp_path) -> None:
+    root = str(tmp_path / "bronze")
+    _write(root, 7, 1_700_000_000000, [_lap(1), _lap(2)], short="a7")
+    _write_payload(root, 1_700_000_900000, {"activityId": 7}, short="b7")  # no lapDTOs
+    _write_payload(root, 1_700_000_950000, {"activityId": 7, "lapDTOs": None}, short="c7")
+    _write(root, 8, 1_700_000_000000, [_lap(1)], short="a8")
+    _write(root, 8, 1_700_000_900000, [], short="b8")  # empty: activity 8 now has no laps
+    assert sorted(_rows(root)) == [(7, 1), (7, 2)]
+    assert _lap_count(root) == 2
+
+
+# @spec SILVER-WORKOUTS-SPLITS-002
+@pytest.mark.parametrize("laps", [{"lapIndex": 1}, "oops", 5])
+def test_non_array_lapdtos_fails_the_rebuild(tmp_path, laps) -> None:
+    root = str(tmp_path / "bronze")
+    _write(root, 7, 1_700_000_000000, [_lap(1)], short="ok")
+    _write_payload(root, 1_700_000_900000, {"activityId": 9, "lapDTOs": laps}, short="bad")
+    with pytest.raises(duckdb.Error):
+        _rows(root)
+
+
+# @spec SILVER-WORKOUTS-SPLITS-003
+def test_missing_lap_index_dropped_non_numeric_kept_null(tmp_path) -> None:
+    root = str(tmp_path / "bronze")
+    no_idx = {k: v for k, v in _lap(2).items() if k != "lapIndex"}
+    _write(root, 7, 1_700_000_000000, [_lap(1), no_idx, {**_lap(3), "lapIndex": "x"}])
+    files = list_payload_files(root, "garmin", "activity_splits")
+    idx = sorted((r[0] for r in connect().execute(
+        f"SELECT lap_index FROM ({splits_sql(files)})").fetchall()), key=lambda x: (x is None, x))
+    assert idx == [1, None]
