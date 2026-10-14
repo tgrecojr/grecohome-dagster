@@ -15,7 +15,7 @@ sensor), `CAPTURE` (download and capture), `AUTH` (service account, settings), `
 - [x] **LINGO-CAPTURE-001**: When `lingo_bronze_glucose` materializes a partition, the system shall download that Drive file's content and capture it byte-for-byte to `lingo/glucose/dt=<UTC capture date>` as `text/csv` (`ext=csv`) with skip-identical off.
 - [x] **LINGO-CAPTURE-002**: The system shall record in each Lingo capture's sidecar `request_url` (the file's Drive media URL) and `request_params` holding `file_id`, `file_name`, `drive_folder_id`, `created_time` and `modified_time`, and no credentials.
 - [x] **LINGO-CAPTURE-003**: When `lingo_bronze_glucose` captures a file, the system shall record `file_id`, `file_name`, `bytes` and `bronze_path` as materialization metadata.
-- [x] **LINGO-CAPTURE-004**: If the bronze write for a Lingo file returns no path, then the system shall raise and fail the run, so the partition isn't left looking captured.
+- [x] **LINGO-CAPTURE-004**: If the bronze write for a Lingo file reports any outcome other than `written`, then the system shall raise and fail the run, so the partition isn't left looking captured.
 
 ## Authentication and settings
 

@@ -57,8 +57,9 @@ in-progress cycle, an overnight sleep) can come back for **both** days, so it's 
 two partitions. Silver deduplicates by record id.
 
 Every successful page is captured to `BRONZE_ROOT/whoop/<collection>/dt=<partition>/` with
-skip-identical on. The run records the number of records fetched (`records`) and the
-`partition` as materialization metadata.
+skip-identical on. The run records the number of records fetched (`records`), the `partition`,
+and its capture outcomes (`written`, `skipped_identical`, `failed`: counts across the run's pages)
+as materialization metadata.
 
 What is *not* captured:
 - **Pages with zero records**: the empty end-of-results page, or a window with no records.

@@ -62,3 +62,29 @@ class TestMaterialize:
         )
         assert result.success
         assert len(_payloads(isolate_garmin_bronze, "devices")) == 1
+
+    # @spec GARMIN-CAPTURE-012
+    def test_run_records_capture_outcome_counts(self, isolate_garmin_bronze):
+        client = MagicMock()
+        client.get_activities_by_date.return_value = [{"activityId": 111}]
+        for _name, method in catalog.PER_ACTIVITY:
+            setattr(client, method, MagicMock(return_value={"ok": 1}))
+        client.download_activity.return_value = b"FITDATA"
+        asset = ASSET_BY_COLLECTION["activities"]
+        first = materialize([asset], partition_key="2025-01-05", resources={"garmin": client})
+        again = materialize([asset], partition_key="2025-01-05", resources={"garmin": client})
+        captures = 1 + len(catalog.PER_ACTIVITY) + len(catalog.PER_ACTIVITY_DOWNLOAD)
+        m1 = first.asset_materializations_for_node(asset.key.to_python_identifier())[0].metadata
+        m2 = again.asset_materializations_for_node(asset.key.to_python_identifier())[0].metadata
+        assert m1["written"].value == captures and m1["failed"].value == 0
+        assert m2["written"].value == 0 and m2["skipped_identical"].value == captures
+
+    # @spec GARMIN-CAPTURE-012
+    def test_reference_run_records_capture_outcome_counts(self, isolate_garmin_bronze):
+        client = MagicMock()
+        client.get_devices.return_value = [{"deviceId": 1}]
+        asset = ASSET_BY_COLLECTION["devices"]
+        result = materialize([asset], resources={"garmin": client})
+        md = result.asset_materializations_for_node(asset.key.to_python_identifier())[0].metadata
+        assert (md["written"].value, md["skipped_identical"].value, md["failed"].value) == (1, 0, 0)
+

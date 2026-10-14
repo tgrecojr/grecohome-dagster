@@ -67,6 +67,22 @@ class TestRangeAssetRun:
         (mat,) = result.asset_materializations_for_node("whoop_bronze_sleep")
         assert mat.metadata["records"].value == 2
         assert mat.metadata["partition"].value == "2025-01-05"
+        assert mat.metadata["written"].value == 1
+        assert mat.metadata["skipped_identical"].value == 0
+        assert mat.metadata["failed"].value == 0
+
+    # @spec WHOOP-CAPTURE-006
+    @respx.mock
+    def test_identical_recapture_counts_as_skipped(self, isolate_bronze_root):
+        respx.get(f"{BASE}/developer/v2/activity/sleep").mock(
+            return_value=httpx.Response(200, json={"records": [{"id": "a"}], "next_token": None})
+        )
+        with patch(TOKEN_PATCH, new=AsyncMock(return_value="tok")):
+            materialize([bronze_sleep], partition_key="2025-01-05")
+            result = materialize([bronze_sleep], partition_key="2025-01-05")
+        (mat,) = result.asset_materializations_for_node("whoop_bronze_sleep")
+        assert mat.metadata["written"].value == 0
+        assert mat.metadata["skipped_identical"].value == 1
 
     # @spec WHOOP-CAPTURE-007
     @respx.mock

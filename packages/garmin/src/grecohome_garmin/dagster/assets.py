@@ -49,7 +49,7 @@ def _puller(context: AssetExecutionContext) -> GarminPuller:
 
 
 # @spec GARMIN-CAPTURE-009
-def _run_partitioned(context: AssetExecutionContext, ep: Endpoint) -> None:
+def _run_partitioned(context: AssetExecutionContext, ep: Endpoint) -> GarminPuller:
     d = context.partition_key
     puller = _puller(context)
     if ep.name == "activities":
@@ -60,9 +60,10 @@ def _run_partitioned(context: AssetExecutionContext, ep: Endpoint) -> None:
         puller.pull_endpoint(ep, cdate=d)
     elif ep.kind == KIND_RANGE:
         puller.pull_endpoint(ep, start=d, end=d, dt=d)
+    return puller
 
 
-def _run_reference(context: AssetExecutionContext, ep: Endpoint) -> None:
+def _run_reference(context: AssetExecutionContext, ep: Endpoint) -> GarminPuller:
     puller = _puller(context)
     if ep.kind == KIND_WEEKLY:
         end = datetime.now(UTC).date().isoformat()
@@ -73,6 +74,7 @@ def _run_reference(context: AssetExecutionContext, ep: Endpoint) -> None:
         puller.pull_per_profile(ep)
     elif ep.kind == KIND_PER_DEVICE:
         puller.pull_per_device(ep)
+    return puller
 
 
 def _make_asset(ep: Endpoint) -> AssetsDefinition:
@@ -97,7 +99,8 @@ def _make_asset(ep: Endpoint) -> AssetsDefinition:
             if not settings.is_selected(ep.name):
                 context.log.info(f"garmin endpoint not selected, skipping: {ep.name}")
                 return
-            _run_partitioned(context, ep)
+            # @spec GARMIN-CAPTURE-012
+            context.add_output_metadata(_run_partitioned(context, ep).outcome_counts())
 
         return _daily_asset
 
@@ -106,7 +109,7 @@ def _make_asset(ep: Endpoint) -> AssetsDefinition:
         if not settings.is_selected(ep.name):
             context.log.info(f"garmin endpoint not selected, skipping: {ep.name}")
             return
-        _run_reference(context, ep)
+        context.add_output_metadata(_run_reference(context, ep).outcome_counts())
 
     return _reference_asset
 

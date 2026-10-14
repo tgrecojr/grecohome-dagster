@@ -26,6 +26,12 @@ from grecohome_core.checks import (
 from grecohome_core.checks.bronze_reads import trailing_partition_dirs
 from grecohome_core.checks.config import CollectionCheckConfig
 
+
+def _path(*args, **kwargs):
+    """The written path (None when nothing was written): these tests predate outcomes."""
+    return capture_bronze(*args, **kwargs).path
+
+
 KEY = AssetKey("src_bronze_coll")
 
 
@@ -47,7 +53,7 @@ class TestBronzeWriter:
     def test_missing_or_empty_dt_uses_fetch_date_utc(self, tmp_path):
         today = datetime.now(UTC).strftime("%Y-%m-%d")
         for dt in (None, ""):
-            path = capture_bronze(
+            path = _path(
                 "s", "c", b"x", {}, bronze_root=str(tmp_path), dt=dt, dedupe=False
             )
             assert f"/dt={today}/" in path.replace(os.sep, "/")
@@ -61,7 +67,7 @@ class TestBronzeWriter:
             "schema_version": "v2",
             "request_url": "https://x/y",
         }
-        path = capture_bronze("s", "c", b"payload", meta, bronze_root=str(tmp_path))
+        path = _path("s", "c", b"payload", meta, bronze_root=str(tmp_path))
         sidecar = json.load(open(path.rsplit(".", 1)[0] + ".meta.json"))
         assert sidecar["source"] == "s" and sidecar["byte_size"] == 7
         assert sidecar["sha256"] != "bogus"
@@ -79,26 +85,26 @@ class TestBronzeWriter:
             real(path, data)
 
         with patch.object(capture_mod, "_write_atomic", side_effect=record):
-            capture_bronze("s", "c", b"payload", {}, bronze_root=str(tmp_path), dt="2025-01-05")
+            _path("s", "c", b"payload", {}, bronze_root=str(tmp_path), dt="2025-01-05")
         assert order == ["payload", "sidecar"]
         assert not [f for f in _files(tmp_path) if os.path.basename(f).startswith(".tmp_")]
 
     # @spec CORE-BRONZE-007
     def test_non_bytes_payload_is_a_logged_failure(self, tmp_path):
         with patch.object(capture_mod.logger, "warning") as warn:
-            result = capture_bronze("s", "c", "decoded text", {}, bronze_root=str(tmp_path))
+            result = _path("s", "c", "decoded text", {}, bronze_root=str(tmp_path))
         assert result is None
         assert warn.call_args.args[0] == "bronze capture failed"
         assert _files(tmp_path) == []
 
     # @spec CORE-BRONZE-010
     def test_dedupe_writes_when_newest_sidecar_lacks_sha256(self, tmp_path):
-        first = capture_bronze("s", "c", b"same", {}, bronze_root=str(tmp_path), dt="2025-01-05")
+        first = _path("s", "c", b"same", {}, bronze_root=str(tmp_path), dt="2025-01-05")
         sidecar = first.rsplit(".", 1)[0] + ".meta.json"
         data = json.load(open(sidecar))
         del data["sha256"]
         json.dump(data, open(sidecar, "w"))
-        second = capture_bronze("s", "c", b"same", {}, bronze_root=str(tmp_path), dt="2025-01-05")
+        second = _path("s", "c", b"same", {}, bronze_root=str(tmp_path), dt="2025-01-05")
         assert second is not None
 
 

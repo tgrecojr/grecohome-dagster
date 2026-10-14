@@ -35,7 +35,7 @@ class TestCaptureJson:
             "sleep", {"a": 1}, request_url="get_sleep_data",
             request_params={"cdate": "2025-01-05"}, bronze_root=root, dt="2025-01-05",
             dedupe=True,
-        )
+        ).path
         assert path is not None
         assert "/garmin/sleep/dt=2025-01-05/" in path
         assert path.endswith(".json")
@@ -55,7 +55,7 @@ class TestCaptureJson:
         root = str(tmp_path / "bronze")
         paths = [
             capture_json("sleep", {"a": 1}, request_url="get_sleep_data",
-                         request_params={}, bronze_root=root, dt="2025-01-05", dedupe=True)
+                         request_params={}, bronze_root=root, dt="2025-01-05", dedupe=True).path
             for _ in range(2)
         ]
         assert paths[0] is not None and paths[1] is None
@@ -68,7 +68,7 @@ class TestCaptureJson:
             "user_settings", {"accessToken": "x", "name": "ok"},
             request_url="get_user_profile", request_params={}, bronze_root=root,
             screen_secrets=True, dedupe=True,
-        )
+        ).path
         payload = json.load(open(path))
         assert payload == {"name": "ok"}  # secret removed from stored bytes
         assert _sidecar(path)["redacted_fields"] == ["accessToken"]
@@ -84,7 +84,7 @@ class TestCaptureRaw:
             request_url="download_activity",
             request_params={"activity_id": 1, "format": "ORIGINAL"},
             bronze_root=root, dt="2025-01-05", dedupe=False,
-        )
+        ).path
         assert path is not None and path.endswith(".zip")
         with open(path, "rb") as fh:
             assert fh.read() == b"PK\x03\x04zipbytes"  # true bytes, not reserialized

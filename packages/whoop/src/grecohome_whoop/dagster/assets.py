@@ -35,12 +35,20 @@ RANGE_COLLECTIONS: list[tuple[str, str]] = [
 ]
 
 
-async def _fetch_range(collection: str, method: str, start, end, dt: str) -> int:
-    """Fetch one collection's partition window; capture happens inside the client."""
+async def _fetch_range(
+    collection: str, method: str, start, end, dt: str
+) -> tuple[int, dict[str, int]]:
+    """Fetch one collection's partition window; capture happens inside the client.
+
+    Returns the record count and the run's bronze capture outcome counts.
+    """
     client = WhoopClient(user_id=1, bronze_dt=dt)
     try:
         records = await getattr(client, method)(start=start, end=end)
-        return len(records)
+        outcomes = client.capture_outcomes
+        return len(records), {
+            k: outcomes[k] for k in ("written", "skipped_identical", "failed")
+        }
     finally:
         await client.aclose()
 
@@ -58,8 +66,8 @@ def _make_bronze_asset(collection: str, method: str) -> AssetsDefinition:
     def _bronze_asset(context: AssetExecutionContext) -> None:
         tw = context.partition_time_window
         dt = context.partition_key
-        count = run_async(_fetch_range(collection, method, tw.start, tw.end, dt))
-        context.add_output_metadata({"records": count, "partition": dt})
+        count, outcomes = run_async(_fetch_range(collection, method, tw.start, tw.end, dt))
+        context.add_output_metadata({"records": count, "partition": dt, **outcomes})
 
     return _bronze_asset
 

@@ -18,6 +18,7 @@ propagate too.
 """
 
 import time
+from collections import Counter
 from typing import Any
 
 from garminconnect import Garmin
@@ -46,8 +47,9 @@ def skip_identical(ep: Endpoint) -> bool:
 
     Skip-flagged endpoints write nothing on no-data days, so their re-captures of
     older days are what keep the freshness check fed -- they keep every capture.
-    Callers on fan-out paths (per activity / device / goal status) pass
-    ``dedupe=False`` directly instead of calling this.
+    Single-request paths compare with the folder's newest capture; fan-out paths
+    (per activity / device / goal status) pass ``dedupe_scope="request"`` so each
+    request is compared only with its own earlier captures.
     """
     return not (ep.skip_if_empty or ep.skip_if_none)
 
@@ -59,6 +61,16 @@ class GarminPuller:
         self.client = client
         self.settings = settings
         self.bronze_root = bronze_root or settings.bronze_root
+        self.outcomes: Counter[str] = Counter()
+
+    def outcome_counts(self) -> dict[str, int]:
+        """Per-run counts of capture outcomes, for materialization metadata."""
+        return {
+            k: self.outcomes[k] for k in ("written", "skipped_identical", "failed")
+        }
+
+    def _record(self, result) -> None:
+        self.outcomes[str(result.outcome)] += 1
 
     def _pace(self) -> None:
         if self.settings.rate_limit_seconds > 0:
@@ -66,7 +78,14 @@ class GarminPuller:
 
     # @spec GARMIN-CAPTURE-001, GARMIN-CAPTURE-002, GARMIN-CAPTURE-003
     def _fetch_and_capture(
-        self, ep: Endpoint, fn, request_params: dict, *, dt: str | None, dedupe: bool
+        self,
+        ep: Endpoint,
+        fn,
+        request_params: dict,
+        *,
+        dt: str | None,
+        dedupe: bool,
+        dedupe_scope: str = "folder",
     ) -> Any:
         """Call ``fn``; capture unless it's a no-data return. Exceptions propagate.
 
@@ -80,7 +99,7 @@ class GarminPuller:
             return None
         if ep.skip_if_empty and not parsed:
             return parsed
-        capture.capture_json(
+        result = capture.capture_json(
             ep.collection,
             parsed,
             request_url=ep.method,
@@ -90,7 +109,9 @@ class GarminPuller:
             dt=dt,
             screen_secrets=ep.screen_secrets,
             dedupe=dedupe,
+            dedupe_scope=dedupe_scope,
         )
+        self._record(result)
         return parsed
 
     def pull_endpoint(
@@ -128,11 +149,11 @@ class GarminPuller:
             return self._fetch_and_capture(ep, method, {}, dt=dt, dedupe=dedupe)
         if ep.kind == KIND_STATIC_GOALS:
             # @spec GARMIN-CAPTURE-008
-            # One request per status into one folder: keep every capture.
+            # One request per status into one folder: compare per request.
             for status in GOAL_STATUSES:
                 self._fetch_and_capture(
                     ep, lambda s=status: method(status=s), {"status": status}, dt=dt,
-                    dedupe=False,
+                    dedupe=dedupe, dedupe_scope="request",
                 )
                 self._pace()
             return None
@@ -164,7 +185,8 @@ class GarminPuller:
     ) -> None:
         """Per-device endpoints, looped over the devices discovered from the API.
 
-        One request per device into one folder: keep every capture.
+        One request per device into one folder: compare per request (a skip-flagged
+        endpoint keeps every capture).
         """
         devices = self.client.get_devices()
         if not isinstance(devices, list):
@@ -179,7 +201,8 @@ class GarminPuller:
                     lambda d=device_id: getattr(self.client, ep.method)(d),
                     {"device_id": device_id},
                     dt=dt,
-                    dedupe=False,
+                    dedupe=skip_identical(ep),
+                    dedupe_scope="request",
                 )
             elif ep.kind == KIND_PER_DEVICE_RANGE:
                 self._fetch_and_capture(
@@ -187,7 +210,8 @@ class GarminPuller:
                     lambda d=device_id: getattr(self.client, ep.method)(str(d), start, end),
                     {"device_id": device_id, "start": start, "end": end},
                     dt=dt,
-                    dedupe=False,
+                    dedupe=skip_identical(ep),
+                    dedupe_scope="request",
                 )
             self._pace()
 
@@ -210,8 +234,9 @@ class GarminPuller:
 
     # @spec GARMIN-CAPTURE-006
     def _fan_out_activity(self, aid, *, dt: str | None) -> None:
-        """Per-activity captures: one request per activity into each folder, so
-        identical answers for different activities are kept (``dedupe=False``)."""
+        """Per-activity captures: one request per activity into each folder, compared
+        per request, so identical answers for different activities are kept while an
+        unchanged re-capture of the same activity is skipped."""
         for name, method in catalog.PER_ACTIVITY:
             if not self.settings.is_selected(name):
                 continue
@@ -221,7 +246,8 @@ class GarminPuller:
                 lambda m=method, a=aid: getattr(self.client, m)(a),
                 {"activity_id": aid},
                 dt=dt,
-                dedupe=False,
+                dedupe=True,
+                dedupe_scope="request",
             )
             self._pace()
 
@@ -241,7 +267,7 @@ class GarminPuller:
         if not raw:
             return
         ext, content_type = capture.DOWNLOAD_EXT.get(fmt_name, ("bin", "application/octet-stream"))
-        capture.capture_raw(
+        result = capture.capture_raw(
             collection,
             raw,
             ext=ext,
@@ -251,5 +277,7 @@ class GarminPuller:
             bronze_root=self.bronze_root,
             processor_version=self.settings.processor_version,
             dt=dt,
-            dedupe=False,
+            dedupe=True,
+            dedupe_scope="request",
         )
+        self._record(result)
