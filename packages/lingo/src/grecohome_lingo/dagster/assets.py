@@ -8,6 +8,7 @@ adds a partition per new file; the partition set is the "already captured" ledge
 
 from dagster import AssetExecutionContext, DynamicPartitionsDefinition, asset
 
+from grecohome_core.bronze import CaptureOutcome
 from grecohome_lingo import drive
 from grecohome_lingo.capture import capture_glucose
 from grecohome_lingo.config import settings
@@ -30,7 +31,7 @@ def lingo_bronze_glucose(context: AssetExecutionContext) -> None:
         .execute()
     )
     raw = drive.download_file_bytes(service, file_id)
-    path = capture_glucose(
+    result = capture_glucose(
         raw,
         file_id=file_id,
         file_name=info.get("name"),
@@ -39,16 +40,18 @@ def lingo_bronze_glucose(context: AssetExecutionContext) -> None:
         created_time=info.get("createdTime"),
         modified_time=info.get("modifiedTime"),
     )
-    if path is None:
-        # The core writer swallows write failures (it logged the cause). With dedupe
-        # off, None can only mean failure -- and a "successful" run would leave this
-        # partition looking captured, so the sensor would never request the file again.
-        raise RuntimeError(f"bronze capture failed for Lingo file {file_id}")
+    if result.outcome != CaptureOutcome.WRITTEN:
+        # The core writer swallows write failures (it logged the cause). Anything but
+        # "written" means this export isn't in bronze -- and a "successful" run would
+        # leave the partition looking captured, so the sensor would never request it.
+        raise RuntimeError(
+            f"bronze capture for Lingo file {file_id} was {result.outcome}, not written"
+        )
     context.add_output_metadata(
         {
             "file_id": file_id,
             "file_name": info.get("name"),
             "bytes": len(raw),
-            "bronze_path": path,
+            "bronze_path": result.path,
         }
     )

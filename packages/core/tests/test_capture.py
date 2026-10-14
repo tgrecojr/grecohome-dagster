@@ -10,6 +10,12 @@ import pytest
 from grecohome_core.bronze import capture_bronze
 from grecohome_core.bronze.capture import _ext_for, _utc_now_ms
 
+
+def _path(*args, **kwargs):
+    """The written path (None when nothing was written): these tests predate outcomes."""
+    return capture_bronze(*args, **kwargs).path
+
+
 # {source}/{collection}/dt=YYYY-MM-DD/{collection}_{unix_ms}_{short_id}.{ext}
 NAME_RE = re.compile(r"^whoop/recovery/dt=\d{4}-\d{2}-\d{2}/recovery_\d+_[0-9a-f]{6}\.json$")
 
@@ -71,7 +77,7 @@ class TestCaptureBronze:
             "processor_version": "1.0.0",
         }
 
-        path = capture_bronze("whoop", "recovery", raw, meta, bronze_root=root)
+        path = _path("whoop", "recovery", raw, meta, bronze_root=root)
 
         assert path is not None
         with open(path, "rb") as fh:
@@ -98,7 +104,7 @@ class TestCaptureBronze:
             "http_status": 200,
             "content_type": "application/json",
         }
-        path = capture_bronze("whoop", "recovery", b"{}", meta, bronze_root=root)
+        path = _path("whoop", "recovery", b"{}", meta, bronze_root=root)
         text = open(re.sub(r"\.json$", ".meta.json", path)).read().lower()
         for needle in ("authorization", "bearer", "access_token", "secret"):
             assert needle not in text
@@ -106,14 +112,14 @@ class TestCaptureBronze:
     # @spec CORE-BRONZE-006
     def test_capture_failure_is_non_fatal(self, tmp_path):
         # A non-bytes payload violates the invariant but must be swallowed.
-        result = capture_bronze("whoop", "recovery", "not-bytes", {}, bronze_root=str(tmp_path))
+        result = _path("whoop", "recovery", "not-bytes", {}, bronze_root=str(tmp_path))
         assert result is None
 
     def test_distinct_payloads_both_written(self, tmp_path):
         root = str(tmp_path / "bronze")
         meta = {"content_type": "application/json"}
-        p1 = capture_bronze("whoop", "recovery", b'{"a":1}', meta, bronze_root=root)
-        p2 = capture_bronze("whoop", "recovery", b'{"a":2}', meta, bronze_root=root)
+        p1 = _path("whoop", "recovery", b'{"a":1}', meta, bronze_root=root)
+        p2 = _path("whoop", "recovery", b'{"a":2}', meta, bronze_root=root)
         assert p1 and p2 and p1 != p2
         assert len(_payloads(root)) == 2
 
@@ -123,7 +129,7 @@ class TestCaptureBronze:
         # or it would poison a content/integrity check.
         root = str(tmp_path / "bronze")
         meta = {"http_status": 401, "content_type": "application/json"}
-        result = capture_bronze(
+        result = _path(
             "whoop", "profile", b'"Authorization was not valid"', meta, bronze_root=root
         )
         assert result is None
@@ -133,7 +139,7 @@ class TestCaptureBronze:
         # The guard only rejects non-2xx; a normal 200 is written as usual.
         root = str(tmp_path / "bronze")
         meta = {"http_status": 200, "content_type": "application/json"}
-        result = capture_bronze("whoop", "profile", b'{"user_id":1}', meta, bronze_root=root)
+        result = _path("whoop", "profile", b'{"user_id":1}', meta, bronze_root=root)
         assert result is not None
         assert len(_payloads(root)) == 1
 
@@ -146,8 +152,8 @@ class TestContentHashDedup:
         raw = b'{"records": [{"id": 1}]}'
         meta = {"content_type": "application/json"}
 
-        first = capture_bronze("whoop", "recovery", raw, meta, bronze_root=root)
-        second = capture_bronze("whoop", "recovery", raw, meta, bronze_root=root)
+        first = _path("whoop", "recovery", raw, meta, bronze_root=root)
+        second = _path("whoop", "recovery", raw, meta, bronze_root=root)
 
         assert first is not None
         assert second is None  # identical payload skipped
@@ -156,9 +162,9 @@ class TestContentHashDedup:
     def test_changed_payload_after_dedup_is_written(self, tmp_path):
         root = str(tmp_path / "bronze")
         meta = {"content_type": "application/json"}
-        capture_bronze("whoop", "recovery", b'{"v":1}', meta, bronze_root=root)
-        capture_bronze("whoop", "recovery", b'{"v":1}', meta, bronze_root=root)  # deduped
-        third = capture_bronze("whoop", "recovery", b'{"v":2}', meta, bronze_root=root)
+        _path("whoop", "recovery", b'{"v":1}', meta, bronze_root=root)
+        _path("whoop", "recovery", b'{"v":1}', meta, bronze_root=root)  # deduped
+        third = _path("whoop", "recovery", b'{"v":2}', meta, bronze_root=root)
         assert third is not None
         assert len(_payloads(root)) == 2
 
@@ -166,8 +172,8 @@ class TestContentHashDedup:
         root = str(tmp_path / "bronze")
         raw = b'{"same": true}'
         meta = {"content_type": "application/json"}
-        a = capture_bronze("whoop", "recovery", raw, meta, bronze_root=root, dt="2025-01-01")
-        b = capture_bronze("whoop", "recovery", raw, meta, bronze_root=root, dt="2025-01-02")
+        a = _path("whoop", "recovery", raw, meta, bronze_root=root, dt="2025-01-01")
+        b = _path("whoop", "recovery", raw, meta, bronze_root=root, dt="2025-01-02")
         # Same payload, different partition dt -> both written (separate folders).
         assert a is not None and b is not None
         assert "dt=2025-01-01" in a
@@ -177,7 +183,7 @@ class TestContentHashDedup:
     # @spec CORE-BRONZE-002
     def test_dt_override_routes_to_partition_folder(self, tmp_path):
         root = str(tmp_path / "bronze")
-        path = capture_bronze(
+        path = _path(
             "whoop", "sleep", b"{}", {"content_type": "application/json"},
             bronze_root=root, dt="2024-12-31",
         )

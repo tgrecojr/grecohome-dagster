@@ -10,7 +10,7 @@ dropping the second file's bronze record while its partition is still marked
 captured. Never records tokens/credentials.
 """
 
-from grecohome_core.bronze import capture_bronze
+from grecohome_core.bronze import CaptureResult, capture_bronze
 from grecohome_lingo import __version__
 
 SOURCE = "lingo"
@@ -29,7 +29,7 @@ def capture_glucose(
     created_time: str | None = None,
     modified_time: str | None = None,
     processor_version: str = __version__,
-) -> str | None:
+) -> CaptureResult:
     """Capture a raw Lingo glucose CSV (bytes) to the bronze layer.
 
     Returns the bronze payload path, or ``None`` only if the underlying capture

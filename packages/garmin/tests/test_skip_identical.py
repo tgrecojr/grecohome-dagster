@@ -2,7 +2,8 @@
 
 Garmin re-captures each trailing day on every daily tick. Single-request endpoints
 that always return a value skip a payload identical to the folder's newest capture;
-fan-out paths and skip-flagged endpoints keep every capture.
+fan-out paths skip a payload identical to the newest capture of the same request;
+skip-flagged endpoints keep every capture.
 """
 
 import itertools
@@ -155,39 +156,54 @@ class TestKeepEveryCapture:
             assert len(_payloads(tmp_path, name)) == 2, name
         assert len(_payloads(tmp_path, "activity_fit")) == 2
 
-    def test_per_activity_fan_out_keeps_identical_recaptures(self, tmp_path):
+    # @spec GARMIN-CAPTURE-006
+    def test_per_activity_identical_recapture_of_the_same_activity_is_skipped(self, tmp_path):
         p = _puller(tmp_path, _activity_client([111], {"ok": 1}))
         for _ in range(2):
             p.pull_activities(DAY, DAY, dt=DAY)
+        assert len(_payloads(tmp_path, "activity_summary")) == 1
+        assert len(_payloads(tmp_path, "activity_fit")) == 1
+
+    # @spec GARMIN-CAPTURE-006
+    def test_per_activity_changed_recapture_is_kept(self, tmp_path):
+        client = _activity_client([111], {"ok": 1})
+        p = _puller(tmp_path, client)
+        p.pull_activities(DAY, DAY, dt=DAY)
+        client.get_activity.return_value = {"ok": 2}
+        client.download_activity.return_value = b"FITDATA-v2"
+        p.pull_activities(DAY, DAY, dt=DAY)
         assert len(_payloads(tmp_path, "activity_summary")) == 2
         assert len(_payloads(tmp_path, "activity_fit")) == 2
 
     # @spec GARMIN-CAPTURE-007
-    def test_per_device_keeps_identical_across_devices_and_recaptures(self, tmp_path):
+    def test_per_device_keeps_identical_across_devices_skips_recaptures(self, tmp_path):
         client = MagicMock()
         client.get_devices.return_value = [{"deviceId": 42}, {"deviceId": 43}]
         client.get_device_settings.return_value = {"s": 1}
         p = _puller(tmp_path, client)
         for _ in range(2):
             p.pull_per_device(catalog.get("device_settings"))
-        assert len(_payloads(tmp_path, "device_settings")) == 4
+        assert len(_payloads(tmp_path, "device_settings")) == 2  # one per device
 
-    def test_per_device_range_keeps_identical(self, tmp_path):
+    # @spec GARMIN-CAPTURE-005, GARMIN-CAPTURE-007
+    def test_skip_flagged_per_device_range_keeps_every_capture(self, tmp_path):
+        # device_solar is flagged skip_if_empty: the flag rule wins over request scope.
         client = MagicMock()
         client.get_devices.return_value = [{"deviceId": 42}, {"deviceId": 43}]
         client.get_device_solar_data.return_value = [{"solar": 1}]
         p = _puller(tmp_path, client)
-        p.pull_per_device(catalog.get("device_solar"), start=DAY, end=DAY, dt=DAY)
-        assert len(_payloads(tmp_path, "device_solar")) == 2
+        for _ in range(2):
+            p.pull_per_device(catalog.get("device_solar"), start=DAY, end=DAY, dt=DAY)
+        assert len(_payloads(tmp_path, "device_solar")) == 4
 
     # @spec GARMIN-CAPTURE-008
-    def test_goals_keep_identical_answers_per_status(self, tmp_path):
+    def test_goals_keep_identical_answers_per_status_skip_recaptures(self, tmp_path):
         client = MagicMock()
         client.get_goals.return_value = []
         p = _puller(tmp_path, client)
         for _ in range(2):
             p.pull_endpoint(catalog.get("goals"))
-        assert len(_payloads(tmp_path, "goals")) == 2 * len(catalog.GOAL_STATUSES)
+        assert len(_payloads(tmp_path, "goals")) == len(catalog.GOAL_STATUSES)
 
 
 @pytest.mark.unit

@@ -11,7 +11,7 @@ may be skipped depends on the capture path (see ``pull.py`` and
 
 from typing import Any
 
-from grecohome_core.bronze import capture_bronze
+from grecohome_core.bronze import CaptureResult, capture_bronze
 from grecohome_garmin import __version__
 from grecohome_garmin.serialize import screen_for_secrets, to_bronze_json
 
@@ -42,10 +42,11 @@ def capture_json(
     dt: str | None = None,
     screen_secrets: bool = False,
     dedupe: bool,
-) -> str | None:
+    dedupe_scope: str = "folder",
+) -> CaptureResult:
     """Screen (if asked), reserialize, and capture a parsed JSON return.
 
-    Returns the payload path, or ``None`` if skipped as identical or on failure.
+    Returns the core writer's :class:`CaptureResult`.
     """
     redacted: list[str] = []
     payload = parsed
@@ -66,7 +67,7 @@ def capture_json(
     }
     return capture_bronze(
         SOURCE, collection, to_bronze_json(payload), meta,
-        bronze_root=bronze_root, dt=dt, dedupe=dedupe, ext="json",
+        bronze_root=bronze_root, dt=dt, dedupe=dedupe, dedupe_scope=dedupe_scope, ext="json",
     )
 
 
@@ -83,7 +84,8 @@ def capture_raw(
     processor_version: str = __version__,
     dt: str | None = None,
     dedupe: bool,
-) -> str | None:
+    dedupe_scope: str = "folder",
+) -> CaptureResult:
     """Capture binary download bytes at the ``raw`` grade (true bytes, no reserialize)."""
     meta = {
         "request_url": request_url,
@@ -100,5 +102,5 @@ def capture_raw(
     }
     return capture_bronze(
         SOURCE, collection, raw_bytes, meta,
-        bronze_root=bronze_root, dt=dt, dedupe=dedupe, ext=ext,
+        bronze_root=bronze_root, dt=dt, dedupe=dedupe, dedupe_scope=dedupe_scope, ext=ext,
     )

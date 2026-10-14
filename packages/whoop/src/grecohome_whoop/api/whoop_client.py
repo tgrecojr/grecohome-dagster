@@ -6,6 +6,7 @@ bytes are captured to the bronze layer (capture is always on).
 """
 
 import asyncio
+from collections import Counter
 from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Any
@@ -141,6 +142,8 @@ class WhoopClient:
         self.base_url = settings.whoop_api_base_url
         self.timeout = timeout
         self.bronze_dt = bronze_dt
+        # Per-client counts of bronze capture outcomes (written / skipped / failed).
+        self.capture_outcomes: Counter[str] = Counter()
         # Lazily-created, reused across requests for connection pooling/keep-alive.
         self._client: httpx.AsyncClient | None = None
 
@@ -213,7 +216,7 @@ class WhoopClient:
                 "processor": _BRONZE_PROCESSOR,
                 "processor_version": __version__,
             }
-            await asyncio.to_thread(
+            result = await asyncio.to_thread(
                 capture_bronze,
                 _BRONZE_SOURCE,
                 collection,
@@ -222,7 +225,9 @@ class WhoopClient:
                 bronze_root=settings.bronze_root,
                 dt=self.bronze_dt,
             )
+            self.capture_outcomes[str(result.outcome)] += 1
         except Exception as e:  # noqa: BLE001 - capture must never break processing
+            self.capture_outcomes["failed"] += 1
             logger.warning("bronze dispatch failed", collection=collection, error=str(e))
 
     # @spec WHOOP-CAPTURE-002, WHOOP-CAPTURE-003, WHOOP-CAPTURE-004, WHOOP-CAPTURE-005

@@ -9,6 +9,8 @@ import pytest
 from dagster import AssetCheckSeverity, DagsterInstance, materialize
 from grecohome_lingo.dagster.assets import lingo_bronze_glucose
 
+from grecohome_core.bronze.capture import CaptureOutcome, CaptureResult
+
 
 def _service() -> MagicMock:
     service = MagicMock()
@@ -24,13 +26,15 @@ def _service() -> MagicMock:
 @pytest.mark.integration
 class TestFailedWrite:
     # @spec LINGO-CAPTURE-004
-    def test_a_bronze_write_that_returns_no_path_fails_the_run(self):
+    @pytest.mark.parametrize("outcome", ["failed", "skipped_identical", "skipped_non_2xx"])
+    def test_a_bronze_write_not_reported_written_fails_the_run(self, outcome):
         inst = DagsterInstance.ephemeral()
         inst.add_dynamic_partitions("lingo_files", ["f1"])
+        result_obj = CaptureResult(CaptureOutcome(outcome), None)
         with (
             patch("grecohome_lingo.drive.get_drive_service", return_value=_service()),
             patch("grecohome_lingo.drive.download_file_bytes", return_value=b"x,1\n"),
-            patch("grecohome_lingo.dagster.assets.capture_glucose", return_value=None),
+            patch("grecohome_lingo.dagster.assets.capture_glucose", return_value=result_obj),
         ):
             result = materialize(
                 [lingo_bronze_glucose], partition_key="f1", instance=inst, raise_on_error=False

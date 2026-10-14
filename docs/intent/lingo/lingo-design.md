@@ -66,8 +66,8 @@ means uploading a new file.
 4. records `file_id`, `file_name`, `bytes` and `bronze_path` as materialization metadata.
 
 **A failed bronze write fails the run.** The core writer never raises: a failed write (a full
-disk, permissions) only logs a warning and returns no path. With skip-identical off, no path can
-only mean failure, so the asset raises. Otherwise the run would succeed, the partition would look
+disk, permissions) only logs a warning and reports a `failed` outcome. The asset raises on any
+outcome other than `written`. Otherwise the run would succeed, the partition would look
 captured, and the sensor would never request that file again: the export would be silently lost.
 
 The sidecar carries Drive provenance only:
@@ -158,7 +158,7 @@ Unlike the other bronze checks, it calls the Drive API, which is a cheap read-on
 | Auth | Service account with a folder share and the read-only scope | OAuth with a refresh token | No consent flow and no rotating token to lose. The share plus the scope keep the grant to "read one folder". |
 | Freshness | Off; completeness at 14 days | Freshness with a long tolerance | Sporadic uploads would make any freshness tolerance either useless or noisy. |
 | Folder health | `lingo_drive_folder_health`: ERROR when listing fails or finds no CSVs | Rely on sensor tick failures; an ERROR log line on an empty listing | A wrong or un-shared folder produces an empty listing, not an error, so the sensor skips silently and nothing alerts (freshness is off). The folder only accumulates exports, so empty is always a fault. |
-| Failed bronze write | The asset raises | Trust the writer's non-fatal `None` | A swallowed failure leaves the partition marked captured; the sensor never retries, so the export is lost for good. |
+| Failed bronze write | The asset raises | Trust the writer's non-fatal failure outcome | A swallowed failure leaves the partition marked captured; the sensor never retries, so the export is lost for good. |
 | Required settings | `GDRIVE_FOLDER_ID` and `GDRIVE_SERVICE_ACCOUNT_PATH` have no default | Empty-string defaults | An empty folder id runs silently misconfigured. Missing settings should stop the code location at startup with the standard configuration error. |
 
 ## Open Questions & Future Decisions

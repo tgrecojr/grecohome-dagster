@@ -69,7 +69,7 @@ def capture(bronze_root: str) -> CaptureFn:
                 dt=dt,
                 dedupe=dedupe,
                 ext=ext,
-            )
+            ).path
 
     return _capture
 

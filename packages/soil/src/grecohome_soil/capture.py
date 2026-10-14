@@ -67,4 +67,4 @@ def capture_hourly(
         dt=partition_date,
         dedupe=True,
         ext="txt",
-    )
+    ).path  # None when skipped as identical or failed

@@ -30,7 +30,7 @@ class TestCaptureGlucose:
         path = capture_glucose(
             SAMPLE, file_id="abc123", file_name="lingo.csv", folder_id="folder1",
             bronze_root=root, created_time="2026-06-06T00:00:00Z",
-        )
+        ).path
         assert path is not None and path.endswith(".csv")
         assert "/lingo/glucose/dt=" in path.replace(os.sep, "/")
         with open(path, "rb") as fh:
@@ -48,7 +48,7 @@ class TestCaptureGlucose:
         root = str(tmp_path / "bronze")
         path = capture_glucose(
             SAMPLE, file_id="x", file_name="g.csv", folder_id="f", bronze_root=root
-        )
+        ).path
         text = open(re.sub(r"\.csv$", ".meta.json", path)).read().lower()
         for needle in ("token", "authorization", "secret", "credential", "bearer"):
             assert needle not in text
@@ -73,6 +73,6 @@ class TestCaptureGlucose:
         bigger = SAMPLE + b"2026-06-06T15:30-04:00,71\n"
         path = capture_glucose(
             bigger, file_id="y", file_name="g2.csv", folder_id="f", bronze_root=root
-        )
+        ).path
         assert path is not None
         assert len(_payloads(root)) == 2

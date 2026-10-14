@@ -97,15 +97,24 @@ only where it is sound on both of these counts:
 | Single-call `daily` / `range` endpoints that always return a value, and the `activities` list | **On** |
 | `static` / `weekly` / `per_profile` reference endpoints that always return a value | **On** (only matters when a reference run repeats on the same UTC day, since each daily run writes a new fetch-date folder) |
 | Endpoints flagged `skip_if_empty` or `skip_if_none`, whatever their kind | Off: keep every capture |
-| Per-activity fan-out (`PER_ACTIVITY` endpoints and activity downloads) | Off: keep every capture |
-| `per_device` and `per_device_range` endpoints | Off: keep every capture |
-| `static_goals` (`goals`, one request per status) | Off: keep every capture |
+| Per-activity fan-out (`PER_ACTIVITY` endpoints and activity downloads) | **On, per request**: compared with the newest capture of the same `request_params` (`dedupe_scope="request"`) |
+| `per_device` and `per_device_range` endpoints not flagged `skip_if_empty` / `skip_if_none` | **On, per request** |
+| `static_goals` (`goals`, one request per status) | **On, per request** |
+
+Folder scope suits paths where one request writes a folder. The fan-out paths write several
+requests into one folder (one per activity, device or goal status), so they compare each request
+only with its own earlier captures: two different requests returning identical bytes are both
+kept, and an unchanged re-capture of the same request is skipped. The skip-flag rule (condition
+2) still wins: a flagged endpoint keeps every capture whatever its path.
 
 The flag is decided **at each capture call site** from the capture path and the endpoint's
 flags. It is never derived from `Endpoint.kind` alone: the per-activity fan-out builds its
 endpoints with kind `static`, which would wrongly turn the check on.
 
-A skipped capture never loses data, because the newest capture in the folder already holds
+**Each asset run records its capture outcomes** as materialization metadata: `written`,
+`skipped_identical` and `failed` (counts across every capture the run made, fan-out included).
+
+A skipped capture never loses data, because the matching earlier capture already holds
 exactly those bytes. If the newest sidecar is missing a `sha256`, unreadable or absent, the
 check gives way and the payload is written.
 
@@ -196,7 +205,8 @@ How skip-identical interacts with each family:
 | Window length (`LOOKBACK_DAYS` default) | 14 days | 7 days; 7 days daily plus a weekly deep re-capture of days 8–30 | With a 7-day window, late-sync batches repeatedly reached the window's edge, which means older days in the same batch were never re-fetched. 14 days covers a two-week sync gap at the cost of about 7 more partition runs per tick, with negligible storage under skip-identical. A weekly deep re-capture catches longer gaps but adds a second schedule; a manual backfill covers the rare longer gap. *Completeness over economy*. |
 | Storage control for re-captures | Core skip-identical (`dedupe=True`) | Keep every capture (`dedupe=False`); shrink the window | About 71% of re-captures are byte-identical to the previous capture. Skipping them never loses data and reuses the shared core mechanism Whoop and USCRN already use. |
 | Which captures may be skipped | Single-request-per-folder paths whose endpoint returns a value every run | Skip-identical everywhere | Two soundness conditions. Fan-out folders would drop identical answers to different requests. Endpoints that skip no-data days would starve freshness and page falsely. The excluded paths are cheap except per-activity (next row). |
-| Per-activity fan-out storage | Keep every capture | Teach the core writer to compare against the newest capture of the **same request** (matching `request_params`) | The per-activity collections are about 38% of Garmin bronze bytes (FIT downloads dominate), so they keep growing about 7× per activity. Per-request comparison is the right fix but changes the shared writer, which every source uses. Keeping every capture is complete and safe now. The core change is deferred. |
+| Fan-out storage | Per-request skip-identical (the core writer's `dedupe_scope="request"`) | Keep every capture; folder-scope skip-identical | The per-activity collections are about 38% of Garmin bronze bytes (FIT downloads dominate), each re-captured on every tick of the 14-day window. Comparing each request with its own earlier captures skips unchanged re-captures without ever confusing two requests. |
+| Run reporting | Per-run counts of written, skipped-identical and failed captures as materialization metadata | No metadata | A run that wrote nothing because nothing changed must look different from one whose writes failed. |
 | Schedule `run_key` | `<partition>-<YYYYMMDDTHH>` (tick-scoped) | `run_key = partition_key` | Matches Whoop and USCRN, and states in code that re-emitting a partition each tick is intended. A partition-only key reads as capture-once and becomes capture-once under a sensor. |
 | Asset granularity | One asset per catalog collection (about 60), built by a factory | One asset per endpoint kind; a single "garmin" asset | Per-collection failures are visible and retryable on their own, matching Whoop's per-collection observability. |
 | Duplicate captures already in bronze | Leave them | Delete identical older captures | Bronze is immutable and append-only. Silver already picks the latest capture, so the extra files are harmless. |
@@ -214,20 +224,6 @@ Items 2–4 belong to the shared core writer and are tracked in issue #176.
    devices interleave in one folder. If the remaining difference is a volatile field (a request
    timestamp, for example), these keep growing about 7× per day. A Garmin-side normalization
    would have to be weighed against bronze's byte-faithful rule.
-2. **Per-request skip-identical in core.** An opt-in match key on `capture_bronze` (compare
-   against the newest capture with the same `request_params`) would let the fan-out paths skip
-   identical re-captures too. This is a change to the shared writer, owned outside this
-   package.
-3. **Orphan payloads in core.** The writer saves the payload before its sidecar. If the sidecar
-   write fails, the payload is an orphan: silver reads it, but the skip-identical check
-   (sidecar-based) doesn't see it. A later capture identical to the older, sidecar-backed
-   capture would then be skipped while silver keeps the orphan. This needs a failed sidecar
-   write and is owned by the core writer.
-4. **Written / skipped / failed counts.** The core writer returns `None` both for a skipped and
-   for a failed capture, so a run that wrote nothing looks like a healthy run. Per-run counts in
-   materialization metadata would separate the two. This needs the writer to distinguish the
-   outcomes.
-
 
 ## References
 
