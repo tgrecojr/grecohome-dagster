@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import pytest
 from dagster import AssetCheckSeverity, AssetKey, asset
+
 from grecohome_core.checks.table_freshness import MAX_AGE_HOURS, table_freshness_check
 
 pytestmark = pytest.mark.unit
