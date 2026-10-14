@@ -12,6 +12,7 @@ import os
 from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 
 from grecohome_core.checks import alerting_check
+from grecohome_core.checks.table_freshness import table_freshness_check
 from grecohome_core.silver import connect
 from grecohome_gold.dagster.weather_assets import (
     WEATHER_PARQUET,
@@ -44,6 +45,7 @@ def _src() -> str:
     return f"read_parquet('{path.replace(chr(39), chr(39) * 2)}')"
 
 
+# @spec GOLD-WEATHER-CHECKS-001
 @asset_check(asset=gold_daily_weather, name="weather_day_unique_nonnull")
 @alerting_check
 def weather_day_unique_nonnull() -> AssetCheckResult:
@@ -61,6 +63,7 @@ def weather_day_unique_nonnull() -> AssetCheckResult:
     )
 
 
+# @spec GOLD-WEATHER-CHECKS-002
 @asset_check(asset=gold_daily_weather, name="weather_value_ranges")
 @alerting_check
 def weather_value_ranges() -> AssetCheckResult:
@@ -93,6 +96,7 @@ def weather_value_ranges() -> AssetCheckResult:
     )
 
 
+# @spec GOLD-WEATHER-CHECKS-003
 @asset_check(asset=gold_daily_weather, name="weather_coverage")
 @alerting_check
 def weather_coverage() -> AssetCheckResult:
@@ -113,4 +117,16 @@ def weather_coverage() -> AssetCheckResult:
     )
 
 
-WEATHER_CHECKS = [weather_day_unique_nonnull, weather_value_ranges, weather_coverage]
+# @spec GOLD-WEATHER-CHECKS-004
+gold_daily_weather_freshness = table_freshness_check(
+    gold_daily_weather, lambda: gold_weather_path(WEATHER_PARQUET)
+)
+
+
+# @spec GOLD-WEATHER-CHECKS-005, GOLD-WEATHER-CHECKS-006
+WEATHER_CHECKS = [
+    weather_day_unique_nonnull,
+    weather_value_ranges,
+    weather_coverage,
+    gold_daily_weather_freshness,
+]

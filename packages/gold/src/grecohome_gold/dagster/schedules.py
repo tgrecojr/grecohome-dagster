@@ -15,6 +15,7 @@ from grecohome_gold.dagster.checks import ALL_CHECKS
 from grecohome_gold.dagster.weather_assets import WEATHER_ASSETS
 from grecohome_gold.dagster.weather_checks import WEATHER_CHECKS
 
+# @spec GOLD-WELLNESS-SCHED-001
 gold_wellness_job = define_asset_job("gold_wellness_job", selection=ALL_ASSETS)
 
 gold_wellness_daily = ScheduleDefinition(
@@ -25,6 +26,7 @@ gold_wellness_daily = ScheduleDefinition(
 )
 
 # Daily rebuild of the weather mart (reads silver_weather, which lands ~06:55 + checks).
+# @spec GOLD-WEATHER-SCHED-001
 gold_weather_job = define_asset_job("gold_weather_job", selection=WEATHER_ASSETS)
 
 gold_weather_daily = ScheduleDefinition(
@@ -34,7 +36,9 @@ gold_weather_daily = ScheduleDefinition(
     execution_timezone="UTC",
 )
 
+# @spec GOLD-CHECKS-JOB-001
 gold_checks_job = build_bronze_checks_job(ALL_CHECKS + WEATHER_CHECKS, name="gold_checks_job")
+# @spec GOLD-CHECKS-JOB-002
 gold_checks_schedule = build_bronze_checks_schedule(
     gold_checks_job, name="gold_checks_daily", cron_schedule="0 8 * * *"
 )

@@ -21,7 +21,8 @@ packages/
 ```
 
 One root `pyproject.toml`, one `uv.lock`, one pinned Python (`.python-version`). Subjects
-depend on `grecohome-core` via the workspace. See [ADRs](adr/) for the load-bearing decisions.
+depend on `grecohome-core` via the workspace. The load-bearing decisions are in the
+[high-level design](high-level-design.md) and the design tree under [`intent/`](intent/).
 
 ## `grecohome-core` — the shared framework
 
@@ -174,10 +175,11 @@ grecohome_gold/
 ```
 
 Analysis marts derived from silver — joins and per-day rollups silver deliberately deferred.
-Reads `SILVER_ROOT`, writes `GOLD_ROOT` (never under silver). v1: **`gold_daily_wellness`** — one
-row per local day over a continuous spine, joining sleep + recovery + daily workout load + daily
-glucose summary (time-in-range 70–140), with `has_*` provenance (ADR 0011). Full guide:
-[GOLD](GOLD.md).
+Reads `SILVER_ROOT`, writes `GOLD_ROOT` (never under silver). **`gold_daily_wellness`** — one
+row per local day over a continuous spine, joining sleep, recovery, strain, daily activity,
+Garmin and Whoop workouts, glucose (time-in-range 70–140) and carried-forward weight, with `has_*`
+provenance; **`gold_daily_weather`** — the gardening rollup of `silver_weather`. The gold code
+location also hosts the instance-wide run monitors. Design: [docs/intent/gold/](intent/gold/gold-design.md).
 
 ## Orchestration model
 

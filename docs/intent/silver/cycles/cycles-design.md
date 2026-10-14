@@ -89,10 +89,13 @@ profiled, every recovery matched exactly one Whoop sleep),
 Each cycle record carries the cycle `id`, `start` and `end` (UTC), `timezone_offset`,
 `score_state`, `step_count` and a nested `score`.
 
-- **`strain_date`** is the **local date of `start`**: a cycle begins at wake, so its start day is
-  the day the strain accrued. `start` is shifted by the record's own `timezone_offset` (`±HH:MM`,
-  the minutes taking the hours' sign), falling back to the UTC date of `start` when the offset is
-  missing or unparseable. An offset without a colon (`+0530`) loses its minutes.
+- **`strain_date`** is **the day the strain accrued**: the local date 12 hours after the cycle's
+  `start`. A Whoop cycle starts at **sleep onset** (in the evening, or just after midnight) and
+  runs until the next sleep onset, so its strain accrues on the day after an evening start, or the
+  same day as an after-midnight one; 12 hours after `start` lands on that day for any night-time
+  sleep onset (it matched every cycle's wake day when profiled). `start` is shifted by the record's
+  own `timezone_offset` (`±HH:MM`, the minutes taking the hours' sign), falling back to UTC when the
+  offset is missing or unparseable. An offset without a colon (`+0530`) loses its minutes.
 - **The current cycle** has no `end` yet: it's kept, with `end_ts` null and its strain so far.
   Later captures restate it until it closes.
 - **Metrics are whatever `score` holds**, regardless of `score_state`. Whoop sends a `score` only
@@ -142,7 +145,7 @@ Each table has its own job, which also runs its checks, and a daily schedule tha
 | Tables | Two tables, one per Whoop score, sharing `cycle_id` | One combined cycle table | Each mirrors one bronze collection; a join in silver would couple their rebuilds and dedup. Gold joins them on `cycle_id`. |
 | Key | `cycle_id` | A date | A day can hold two cycles; the cycle is Whoop's unit. |
 | Recovery date | UTC date of `created_at` | A local date via a join to sleep | Recovery records have no offset; joining sleep inside silver couples tables. The approximation is labelled, and gold joins for precision. |
-| Strain date | Local date of `start` via the record's offset | Local date of `end`; UTC date | A cycle starts at wake, so its start day is the day the strain accrued; `end` is null for the open cycle. |
+| Strain date | Local date 12 hours after `start` | Local date of `start`; the wake date of the cycle's sleep (via `silver_sleep_whoop`); local date of `end` | A cycle starts at sleep onset, so its start date is usually the evening before the strain day; 12 hours later is the strain day for any night-time onset. Joining sleep inside silver would couple tables, and `end` is null for the open cycle. |
 | Open or unscored cycles | Kept, with null or partial metrics | Dropped until scored | A row's existence is data; later captures restate it. |
 | Non-array `records` | Fail the rebuild | Skip the payload | Skipping every payload after a format change rebuilds an empty table that passes uniqueness, coverage (0 ≥ 0) and freshness, so nothing pages. Failing keeps the last good table and freshness pages. |
 | `score_state` in both tables | Carried as reported | Only in strain; infer from null metrics | Without it an unscored recovery is indistinguishable from a scored day that isn't calibrating. |

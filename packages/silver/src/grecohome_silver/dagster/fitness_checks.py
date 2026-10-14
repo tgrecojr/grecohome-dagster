@@ -12,9 +12,9 @@ import os
 from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 
 from grecohome_core.checks import alerting_check
+from grecohome_core.checks.table_freshness import table_freshness_check
 from grecohome_core.silver import connect
 from grecohome_silver.dagster.fitness_assets import FITNESS_PARQUET, fitness_path, silver_fitness
-from grecohome_silver.dagster.freshness import table_freshness_check
 
 
 def _missing(path: str) -> AssetCheckResult:

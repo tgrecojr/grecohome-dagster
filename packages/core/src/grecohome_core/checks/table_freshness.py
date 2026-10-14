@@ -1,13 +1,14 @@
-"""Table freshness: a silver table whose Parquet wasn't rewritten recently fails at ERROR.
+"""Table freshness for the derived layers (silver, gold).
 
-A failed rebuild leaves the previous Parquet in place, where every structural check
-still passes, and a failed run pages no one. Freshness makes a failed or never-enabled
-rebuild loud. It measures the table's last write (file modification time), not the
-newest data in it: a day with nothing new still rewrites the table.
+A table whose Parquet wasn't rewritten recently fails at ERROR. A failed rebuild leaves
+the previous Parquet in place, where every structural check still passes, so freshness is
+what makes a failed or never-enabled rebuild loud. It measures the table's last write (file
+modification time), not the newest data in it: a day with nothing new still rewrites the
+table. Bronze freshness, by contrast, reads sidecar capture times (``freshness.py``).
 
-At the daily 07:00 UTC checks run a table is ~1 h old normally, ~25 h after one missed
-rebuild and ~49 h after two, so a 36 h limit pages on the second consecutive miss with
-wide margin either side. See docs/intent/silver/silver-design.md (Asset checks).
+At a daily checks run an hour or so after the rebuild, a table is about 1 h old normally,
+about 25 h after one missed rebuild and about 49 h after two, so a 36 h limit pages on the
+second consecutive miss. See docs/intent/core/checks/checks-design.md (Table freshness).
 """
 
 from __future__ import annotations
@@ -18,12 +19,12 @@ from collections.abc import Callable
 
 from dagster import AssetCheckResult, AssetCheckSeverity, AssetsDefinition, asset_check
 
-from grecohome_core.checks import alerting_check
+from grecohome_core.checks.alerting import alerting_check
 
 MAX_AGE_HOURS = 36.0
 
 
-# @spec SILVER-CHECKS-FRESH-001, SILVER-CHECKS-FRESH-002, SILVER-CHECKS-FRESH-003
+# @spec CORE-CHECKS-TABLE-001, CORE-CHECKS-TABLE-002, CORE-CHECKS-TABLE-003
 def table_freshness_check(asset: AssetsDefinition, path_fn: Callable[[], str]):
     """An ERROR check ``<asset>_freshness`` on ``path_fn()``'s Parquet modification time.
 

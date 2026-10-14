@@ -21,6 +21,7 @@ def materialized(silver_root, tmp_path, monkeypatch):
     return settings.gold_root
 
 
+# @spec GOLD-WELLNESS-MART-001
 def test_materializes_to_parquet(materialized) -> None:
     n = int(connect().execute(
         f"SELECT count(*) FROM read_parquet('{gold_path(WELLNESS_PARQUET)}')"
@@ -42,6 +43,7 @@ def test_rebuild_idempotent(silver_root, tmp_path, monkeypatch) -> None:
     assert one == two
 
 
+# @spec GOLD-WELLNESS-CHECKS-001, GOLD-WELLNESS-CHECKS-002, GOLD-WELLNESS-CHECKS-003
 def test_checks_pass(materialized) -> None:
     assert checks_mod.wellness_day_unique_nonnull().passed
     assert checks_mod.wellness_value_ranges().passed

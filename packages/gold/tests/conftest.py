@@ -87,10 +87,18 @@ def silver_root(tmp_path) -> str:
     # 2026-01-03 (81 kg -> carries to 01-03/04/05).
     _copy(con, """
         SELECT * FROM (VALUES
-            (DATE '2025-12-20', 80.0::DOUBLE, 26.0::DOUBLE, 22.0::DOUBLE),
-            (DATE '2026-01-03', 81.0::DOUBLE, 26.3::DOUBLE, 22.5::DOUBLE)
-        ) AS t(measured_date, weight_kg, bmi, body_fat_pct)
+            (DATE '2025-12-20', TIMESTAMP '2025-12-20 13:00:00', 80.0::DOUBLE, 26.0::DOUBLE, 22.0::DOUBLE),
+            (DATE '2026-01-03', TIMESTAMP '2026-01-03 13:00:00', 81.0::DOUBLE, 26.3::DOUBLE, 22.5::DOUBLE)
+        ) AS t(measured_date, measured_ts_utc, weight_kg, bmi, body_fat_pct)
     """, os.path.join(root, "body", "silver_body.parquet"))
+
+    # Whoop workouts on 2026-01-02: two sessions (30 + 45 min, strain 8 and 12).
+    _copy(con, """
+        SELECT * FROM (VALUES
+            (DATE '2026-01-02', TIMESTAMP '2026-01-02 14:00:00', TIMESTAMP '2026-01-02 14:30:00', 8.0),
+            (DATE '2026-01-02', TIMESTAMP '2026-01-02 18:00:00', TIMESTAMP '2026-01-02 18:45:00', 12.0)
+        ) AS t(workout_date, start_ts, end_ts, strain)
+    """, os.path.join(root, "whoop_workouts", "silver_whoop_workouts.parquet"))
 
     return root
 

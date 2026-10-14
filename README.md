@@ -30,7 +30,7 @@ packages/
   soil/    grecohome-soil   — NOAA USCRN soil/temp bronze subject (ported from soildata)
   silver/  grecohome-silver — silver layer (sleep, glucose, workouts, recovery, …)
   gold/    grecohome-gold   — gold layer (daily wellness mart)
-docs/      ARCHITECTURE, BRONZE, SILVER, GOLD, DEPLOYMENT, ENV_TEMPLATE, VALIDATION, adr/
+docs/      high-level-design, ARCHITECTURE, DEPLOYMENT, ENV_TEMPLATE, VALIDATION, intent/
 ```
 
 ## Docs
@@ -39,9 +39,8 @@ docs/      ARCHITECTURE, BRONZE, SILVER, GOLD, DEPLOYMENT, ENV_TEMPLATE, VALIDAT
 - [Bronze writer](docs/intent/core/bronze/bronze-design.md) — capture rules, layout, sidecar, skip-identical
 - [Bronze checks](docs/intent/core/checks/checks-design.md) — the four check families, alerting, checks-only jobs
 - [Silver layer](docs/intent/silver/silver-design.md) — derived/rebuildable Parquet: sleep, glucose, recovery + strain, workouts, weather, daily, body, fitness
-- [Gold layer](docs/GOLD.md) — analysis marts from silver; daily wellness mart (sleep + recovery + workouts + glucose)
+- [Gold layer](docs/intent/gold/gold-design.md) — analysis marts from silver (daily wellness, daily weather) and the run monitors
 - [Deployment](docs/DEPLOYMENT.md) — host `workspace.yaml`, concurrency pool, OAuth / service-account setup
-- [ADRs](docs/adr/) — bronze-only, Dagster pins, token file, Garmin/Lingo/Soil ports, silver sleep/glucose/workouts/recovery, gold wellness
 
 This is a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/): one
 root `pyproject.toml`, one `uv.lock`, one managed Python version.
@@ -53,7 +52,7 @@ root `pyproject.toml`, one `uv.lock`, one managed Python version.
   Garmin single-request endpoints, off for Garmin fan-out paths). **Silver** reads bronze and writes typed, deduplicated Parquet to
   `SILVER_ROOT`; **gold** reads silver and writes analysis marts to `GOLD_ROOT`. Silver/gold
   are DuckDB-over-Parquet, fully rebuildable, and never write under the layer below. See
-  [`docs/intent/silver/`](docs/intent/silver/silver-design.md) and [`docs/GOLD.md`](docs/GOLD.md).
+  [`docs/intent/silver/`](docs/intent/silver/silver-design.md) and [`docs/intent/gold/`](docs/intent/gold/gold-design.md).
 - **Self-hosted Dagster.** The daemon + webserver run on the host. Each layer (every bronze
   subject, silver, gold) ships a gRPC code-location image that registers with the host via
   `workspace.yaml`. Dagster libraries are pinned (`dagster==1.13.22`, `dagster-*==0.29.22`) to

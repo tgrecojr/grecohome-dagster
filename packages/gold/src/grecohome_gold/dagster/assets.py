@@ -26,6 +26,7 @@ _SILVER_DEPS = [
     AssetKey("silver_strain"),
     AssetKey("silver_daily"),
     AssetKey("silver_body"),
+    AssetKey("silver_whoop_workouts"),
 ]
 
 
@@ -34,6 +35,7 @@ def gold_path(filename: str) -> str:
     return os.path.join(settings.gold_root, WELLNESS_SUBDIR, filename)
 
 
+# @spec GOLD-WELLNESS-MART-010
 @asset(name="gold_daily_wellness", group_name=GROUP, deps=_SILVER_DEPS)
 def gold_daily_wellness(context: AssetExecutionContext) -> MaterializeResult:
     """One row/day: sleep + recovery + strain + daily activity + workouts + glucose + weight."""

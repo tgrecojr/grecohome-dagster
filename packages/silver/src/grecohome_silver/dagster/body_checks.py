@@ -11,11 +11,11 @@ import os
 from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 
 from grecohome_core.checks import alerting_check
+from grecohome_core.checks.table_freshness import table_freshness_check
 from grecohome_core.silver import connect, list_payload_files
 from grecohome_silver.body import bronze_weighin_count_sql
 from grecohome_silver.config import settings
 from grecohome_silver.dagster.body_assets import BODY_PARQUET, body_path, silver_body
-from grecohome_silver.dagster.freshness import table_freshness_check
 
 
 def _missing(path: str) -> AssetCheckResult:

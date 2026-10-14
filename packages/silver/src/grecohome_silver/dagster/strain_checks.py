@@ -11,9 +11,9 @@ import os
 from dagster import AssetCheckResult, AssetCheckSeverity, asset_check
 
 from grecohome_core.checks import alerting_check
+from grecohome_core.checks.table_freshness import table_freshness_check
 from grecohome_core.silver import connect, list_payload_files
 from grecohome_silver.config import settings
-from grecohome_silver.dagster.freshness import table_freshness_check
 from grecohome_silver.dagster.strain_assets import STRAIN_PARQUET, silver_strain, strain_path
 from grecohome_silver.strain import bronze_strain_count_sql
 

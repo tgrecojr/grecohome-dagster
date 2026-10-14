@@ -2,10 +2,9 @@
 
 LID runs in **Scoped** mode here. Under the arrow: all four bronze subjects (Garmin, Whoop,
 Soil/USCRN, Lingo: `packages/{garmin,whoop,soil,lingo}/**`), the silver layer (`packages/silver/**`),
-and the shared core's bronze writer, bronze checks and silver helpers (`grecohome_core.bronze`,
+the gold layer (`packages/gold/**`), and the shared core's bronze writer, bronze checks and silver helpers (`grecohome_core.bronze`,
 `grecohome_core.checks`, `grecohome_core.silver`). Sections that describe other parts of the system are short
-orientation summaries. The detailed design for those parts lives in `docs/ARCHITECTURE.md`,
-`docs/GOLD.md` and `docs/adr/`.
+orientation summaries. The detailed design for those parts lives in `docs/ARCHITECTURE.md`.
 
 ## Problem
 
@@ -79,6 +78,7 @@ are applied in silver at read time.
 |---|---|---|
 | Shared core (bronze writer, bronze checks, silver helpers) | `docs/intent/core/` | The capture and data-quality contracts every bronze subject relies on, and the read/dedup/write helpers silver is built from |
 | Silver | `docs/intent/silver/` | Typed, deduplicated Parquet projections of bronze, one table family per child doc |
+| Gold | `docs/intent/gold/` | Analysis marts built from silver, and the instance-wide run monitors that ship in the gold code location |
 | Garmin | `docs/intent/garmin/` | Garmin Connect bronze subject (capture, authentication) |
 | Whoop | `docs/intent/whoop/` | Whoop bronze subject (capture, token lifecycle) |
 | Soil/USCRN | `docs/intent/soil/` | NOAA USCRN station bronze subject (day-slice capture, late corrections) |
@@ -147,7 +147,10 @@ cross-segment change: it cascades to every subject spec that relies on it.
   and Grafana alert rules route them to a Slack contact point. The signals are:
   - `asset_check_failed`, from any failing ERROR asset check in any layer,
   - the Whoop token-refresh failure lines,
-  - `run_queue_backed_up`, from a scheduled queue-depth monitor in the gold code location.
+  - `dagster_run_failed`, from a run-failure sensor in the gold code location that watches every
+    code location, so a failed run pages when it fails rather than when a freshness check
+    notices,
+  - `run_queue_backed_up`, from a queue-depth monitor in the gold code location.
 
   WARN-level check failures stay in the Dagster UI and don't page. The Slack credential
   lives only in Grafana, never in this repo. A "Data Platform Health" Grafana dashboard
@@ -156,7 +159,8 @@ cross-segment change: it cascades to every subject spec that relies on it.
   - **Capture** (anything that calls a source or builds a layer) is switched on by hand once per
     code location after its first deploy. A new subject may need credentials set up first, and
     forgetting to enable capture is loud: no data arrives, and the freshness checks page.
-  - **Checks** schedules start running, because forgetting to enable a safety net is silent.
+  - **Checks** schedules and the **run monitors** start running, because forgetting to enable a
+    safety net is silent.
 
   Dagster keeps a schedule's on/off state from the UI over its code default, so either way the
   choice is made once per code location. `docs/DEPLOYMENT.md` lists exactly what to enable.
@@ -170,7 +174,7 @@ criteria.)*
 
 ## References
 
-- `docs/ARCHITECTURE.md`, `docs/GOLD.md`
+- `docs/ARCHITECTURE.md`
 - `docs/intent/core/`: the bronze writer, bronze checks and silver helpers
 - `docs/intent/silver/`: the silver layer and its table families
-- `docs/adr/`: per-source and per-table architecture decision records
+- `docs/intent/gold/`: the gold layer, its marts and the run monitors
