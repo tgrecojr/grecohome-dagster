@@ -8,7 +8,7 @@ dependencies = [
     "grecohome-core",
     "dagster==1.13.22",
     "duckdb==1.5.6",
-    "pydantic==2.14.0",
+    "pydantic==2.14.1",
     "pydantic-settings==2.15.0",
     "structlog==26.1.0",
     "python-json-logger==4.2.0",
