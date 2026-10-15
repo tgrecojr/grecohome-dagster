@@ -12,7 +12,7 @@ dependencies = [
     # like tzdata), not ==.
     "garminconnect>=0.3.5",
     "tenacity==9.2.1",
-    "pydantic==2.14.0",
+    "pydantic==2.14.1",
     "pydantic-settings==2.15.0",
     "structlog==26.1.0",
     "python-json-logger==4.2.0",
