@@ -76,15 +76,15 @@ wheels = [
 
 [[package]]
 name = "authlib"
-version = "1.9.0"
+version = "1.9.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cryptography" },
     { name = "joserfc" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ea/4a/853a86cffe8ad8409dc0b9d27a1277122a3d9995417d96f18e3339b3b56f/authlib-1.9.0.tar.gz", hash = "sha256:9d17f1702131683a9af223e48c275b13d1520510582371f327a0ef05a370568e", size = 182330, upload-time = "2026-10-14T07:55:11.422Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c9/dc/087c08741a98d234c9b98beef8a28d3c309f814d14b6156422c5815bf6d6/authlib-1.9.1.tar.gz", hash = "sha256:5c7d9848f47cac340f060f76ae0bc09b59f5c8e89cc1bb032d4370a0c55b5974", size = 182700, upload-time = "2026-10-14T14:17:52.307Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b9/21/f40745a0ae9d70d3a3be30da10a81a0fb42a14660632f764f563ab1f2d82/authlib-1.9.0-py2.py3-none-any.whl", hash = "sha256:c54c963ede35c428d126f5bb5d6f84617e91ace74d6ea9acad659c30f5ff1819", size = 265779, upload-time = "2026-10-14T07:55:09.983Z" },
+    { url = "https://files.pythonhosted.org/packages/39/44/a46089266de32a0d809023b6bf31b80a1f26a46954446a7ce695a565cbea/authlib-1.9.1-py2.py3-none-any.whl", hash = "sha256:8b9be8b1e5174dcbf5520e984f1a22dc2edae5b6e40a61d4cedbf86b97e9e69b", size = 266042, upload-time = "2026-10-14T14:17:50.695Z" },
 ]
 
 [[package]]
@@ -680,7 +680,7 @@ requires-dist = [
     { name = "dagster", specifier = "==1.13.22" },
     { name = "dagster-postgres", specifier = "==0.29.22" },
     { name = "pydantic", specifier = "==2.14.1" },
-    { name = "pydantic-settings", specifier = "==2.15.0" },
+    { name = "pydantic-settings", specifier = "==2.16.0" },
     { name = "python-dotenv", specifier = "==1.2.4" },
     { name = "python-json-logger", specifier = "==4.2.0" },
     { name = "structlog", specifier = "==26.1.0" },
@@ -710,7 +710,7 @@ requires-dist = [
     { name = "garminconnect", specifier = ">=0.3.5" },
     { name = "grecohome-core", editable = "packages/core" },
     { name = "pydantic", specifier = "==2.14.1" },
-    { name = "pydantic-settings", specifier = "==2.15.0" },
+    { name = "pydantic-settings", specifier = "==2.16.0" },
     { name = "python-dotenv", specifier = "==1.2.4" },
     { name = "python-json-logger", specifier = "==4.2.0" },
     { name = "structlog", specifier = "==26.1.0" },
@@ -740,7 +740,7 @@ requires-dist = [
     { name = "duckdb", specifier = "==1.5.6" },
     { name = "grecohome-core", editable = "packages/core" },
     { name = "pydantic", specifier = "==2.14.1" },
-    { name = "pydantic-settings", specifier = "==2.15.0" },
+    { name = "pydantic-settings", specifier = "==2.16.0" },
     { name = "python-dotenv", specifier = "==1.2.4" },
     { name = "python-json-logger", specifier = "==4.2.0" },
     { name = "structlog", specifier = "==26.1.0" },
@@ -773,7 +773,7 @@ requires-dist = [
     { name = "google-auth-httplib2", specifier = ">=0.2.0" },
     { name = "grecohome-core", editable = "packages/core" },
     { name = "pydantic", specifier = "==2.14.1" },
-    { name = "pydantic-settings", specifier = "==2.15.0" },
+    { name = "pydantic-settings", specifier = "==2.16.0" },
     { name = "python-dotenv", specifier = "==1.2.4" },
     { name = "python-json-logger", specifier = "==4.2.0" },
     { name = "structlog", specifier = "==26.1.0" },
@@ -802,7 +802,7 @@ requires-dist = [
     { name = "duckdb", specifier = "==1.5.6" },
     { name = "grecohome-core", editable = "packages/core" },
     { name = "pydantic", specifier = "==2.14.1" },
-    { name = "pydantic-settings", specifier = "==2.15.0" },
+    { name = "pydantic-settings", specifier = "==2.16.0" },
     { name = "python-dotenv", specifier = "==1.2.4" },
     { name = "python-json-logger", specifier = "==4.2.0" },
     { name = "structlog", specifier = "==26.1.0" },
@@ -831,7 +831,7 @@ requires-dist = [
     { name = "grecohome-core", editable = "packages/core" },
     { name = "httpx", specifier = "==0.28.1" },
     { name = "pydantic", specifier = "==2.14.1" },
-    { name = "pydantic-settings", specifier = "==2.15.0" },
+    { name = "pydantic-settings", specifier = "==2.16.0" },
     { name = "python-dotenv", specifier = "==1.2.4" },
     { name = "python-json-logger", specifier = "==4.2.0" },
     { name = "structlog", specifier = "==26.1.0" },
@@ -858,12 +858,12 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "authlib", specifier = "==1.9.0" },
+    { name = "authlib", specifier = "==1.9.1" },
     { name = "dagster", specifier = "==1.13.22" },
     { name = "grecohome-core", editable = "packages/core" },
     { name = "httpx", specifier = "==0.28.1" },
     { name = "pydantic", specifier = "==2.14.1" },
-    { name = "pydantic-settings", specifier = "==2.15.0" },
+    { name = "pydantic-settings", specifier = "==2.16.0" },
     { name = "python-dotenv", specifier = "==1.2.4" },
     { name = "python-json-logger", specifier = "==4.2.0" },
     { name = "structlog", specifier = "==26.1.0" },
@@ -1355,16 +1355,17 @@ wheels = [
 
 [[package]]
 name = "pydantic-settings"
-version = "2.15.0"
+version = "2.16.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
     { name = "python-dotenv" },
+    { name = "typing-extensions" },
     { name = "typing-inspection" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/68/ca/31c57507b13119d7d3cfa1576dad2911a4861e3be07b579395f4e9d393f9/pydantic_settings-2.15.0.tar.gz", hash = "sha256:694b793e84f766ba76a90ebdefc01d0a9a045dab0382bee70393da93712ad117", size = 261253, upload-time = "2026-08-07T09:24:57.419Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/2e/3b/a5d2294799b53b448319978cfb5bd139d5a9d45e862af91661614f14c922/pydantic_settings-2.16.0.tar.gz", hash = "sha256:5b6c578049ede4db0e2ef3b4eaa4ad4069cfa9211f83fb38df899dfade50a614", size = 301031, upload-time = "2026-10-14T12:44:09.998Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/30/a4/2bffa9f8e804325a09867f0e9d30795c80ea9f8d62560bd1b6ad6220eb2f/pydantic_settings-2.15.0-py3-none-any.whl", hash = "sha256:0ba092c291c94baceb5eff768aa0d56400a457585bc0175925a5a5510303da42", size = 69413, upload-time = "2026-08-07T09:24:55.839Z" },
+    { url = "https://files.pythonhosted.org/packages/53/f4/b987bf8c51e5b19a95fa66d1ee596074141e085d9c2ddf97920803c7029b/pydantic_settings-2.16.0-py3-none-any.whl", hash = "sha256:7e73acf7f61936a15e5a3b6eedaea29f133357faf7272f2607ba479b049dd7f2", size = 80364, upload-time = "2026-10-14T12:44:08.233Z" },
 ]
 
 [[package]]
