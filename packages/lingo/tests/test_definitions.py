@@ -51,3 +51,10 @@ class TestAssetChecks:
 
     def test_validation_job_registered(self):
         assert defs.resolve_job_def("lingo_bronze_checks_job") is not None
+
+    # @spec LINGO-CHECKS-001
+    def test_checks_schedule_hourly_at_minute_23(self):
+        s = defs.get_schedule_def("lingo_bronze_checks_hourly")
+        assert s.job_name == "lingo_bronze_checks_job"
+        assert s.cron_schedule == "23 * * * *"
+        assert str(s.execution_timezone) == "UTC"

@@ -105,7 +105,7 @@ and overwrite the fresh token.
 |---|---|
 | `whoop_token_invalid_grant` (ERROR, `status_code` 400/401) | The refresh token is dead. Re-auth is needed now. |
 | `Token refresh failed` (ERROR, other status) | Whoop returned an error. Not retried; the next tick tries again. |
-| `whoop_token_health` asset check (ERROR), logging `whoop_token_unhealthy` (WARNING) and the shared `asset_check_failed` (ERROR) | `expires_at` is more than 90 minutes in the past, or the token file is missing or unreadable: refreshes have stopped succeeding, or stopped happening. The check reads only the token file (no Whoop API call) and runs hourly at `:00` in `whoop_bronze_checks_job`. |
+| `whoop_token_health` asset check (ERROR), logging `whoop_token_unhealthy` (WARNING) and the shared `asset_check_failed` (ERROR) | `expires_at` is more than 90 minutes in the past, or the token file is missing or unreadable: refreshes have stopped succeeding, or stopped happening. The check reads only the token file (no Whoop API call) and runs hourly at `:37` in `whoop_bronze_checks_job`. |
 
 The only recovery from a revoked grant is a re-auth: `scripts/whoop-reauth.sh` on the host
 runs `grecohome_whoop.oauth_setup --headless` inside a throwaway container built from the

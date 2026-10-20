@@ -179,5 +179,5 @@ silver_whoop_workouts_daily = ScheduleDefinition(
 silver_checks_job = build_bronze_checks_job(ALL_CHECKS, name="silver_checks_job")
 # @spec SILVER-CHECKS-JOB-002
 silver_checks_schedule = build_bronze_checks_schedule(
-    silver_checks_job, name="silver_checks_daily", cron_schedule="0 7 * * *"
+    silver_checks_job, name="silver_checks_daily", cron_schedule="5 7 * * *"  # 07:05 UTC
 )

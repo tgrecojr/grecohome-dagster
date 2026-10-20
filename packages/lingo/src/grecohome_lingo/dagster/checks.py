@@ -92,8 +92,10 @@ lingo_checks = [
     lingo_drive_folder_health,
 ]
 
-# Checks-only job + hourly schedule (off the lingo_api pool).
+# Checks-only job + hourly schedule (off the lingo_api pool). Minute 23 is this code
+# location's own off-minute (see docs/DEPLOYMENT.md for the others).
+# @spec LINGO-CHECKS-001
 lingo_checks_job = build_bronze_checks_job(lingo_checks, name="lingo_bronze_checks_job")
 lingo_checks_schedule = build_bronze_checks_schedule(
-    lingo_checks_job, name="lingo_bronze_checks_hourly"
+    lingo_checks_job, name="lingo_bronze_checks_hourly", cron_schedule="23 * * * *"
 )

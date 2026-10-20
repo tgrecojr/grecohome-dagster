@@ -62,6 +62,7 @@ class TestCheckConfig:
         assert cfg.event_date_source == "partition"
         assert (cfg.cadence_hours, cfg.grace_hours, cfg.cadence_days) == (30.0, 12.0, 2)
         assert cfg.enabled_checks == {"freshness", "completeness", "schema", "content"}
-        assert defs.get_schedule_def("uscrn_bronze_checks_hourly").job_name == (
-            "uscrn_bronze_checks_job"
-        )
+        s = defs.get_schedule_def("uscrn_bronze_checks_hourly")
+        assert s.job_name == "uscrn_bronze_checks_job"
+        assert s.cron_schedule == "43 * * * *"
+        assert str(s.execution_timezone) == "UTC"

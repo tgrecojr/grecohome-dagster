@@ -49,7 +49,10 @@ building, general behavior), `FRESH`, `COMPLETE`, `SCHEMA`, `CONTENT`, `ALERT`, 
 ## Checks-only job and schedule
 
 - [x] **CORE-CHECKS-JOB-001**: When `build_bronze_checks_job` builds a job from asset checks, the job shall run those checks without materializing their assets, and use no concurrency pool.
-- [x] **CORE-CHECKS-JOB-002**: When `build_bronze_checks_schedule` builds a schedule for a checks-only job, the schedule shall run hourly at minute 0 UTC unless another cron is given, be named `<job>_schedule` unless named explicitly, and start running.
+- [x] **CORE-CHECKS-JOB-002**: When `build_bronze_checks_schedule` builds a schedule for a checks-only job from the cron it is given, the schedule shall run on that cron in UTC, be named `<job>_schedule` unless named explicitly, and start running.
+- [x] **CORE-CHECKS-JOB-003**: When `build_bronze_checks_job` builds a job from asset checks, the job shall use Dagster's in-process executor, so that its check steps run one after another in the run's own process.
+- [x] **CORE-CHECKS-JOB-004**: The `cron_schedule` argument of `build_bronze_checks_schedule` shall be a required keyword argument with no default value.
+- [x] **CORE-CHECKS-JOB-005**: If the first whitespace-separated field of the cron given to `build_bronze_checks_schedule` is not a decimal integer from 1 to 59, then `build_bronze_checks_schedule` shall raise `ValueError` when it is called, before any schedule is built.
 
 ## Table freshness (derived layers)
 

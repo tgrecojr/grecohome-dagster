@@ -174,17 +174,58 @@ aren't emitted; they stay in the UI and don't page.
 
 ## Checks-only job and schedule
 
-A per-run check can't notice an asset that stopped running. So each subject also wires a
-**checks-only job** (`build_bronze_checks_job`: `AssetSelection.checks(...)`, which runs the
-checks without materializing their assets) and an **hourly UTC schedule**
-(`build_bronze_checks_schedule`, `0 * * * *` UTC by default, adjustable per subject; named
-`<job>_schedule` unless named explicitly). The schedule **starts running** (`default_status`
-RUNNING), so deploying a code location turns its checks on with no manual step. A schedule
-someone deliberately stopped in the UI stays stopped: Dagster keeps a schedule's state from the
-UI over its code default. A check that fails on its very first run (before an asset's first
-capture, for example) is accepted, because it clears itself on a later run. The job has **no concurrency
-pool**: checks make no source calls, so they must never compete with, or be stuck behind, the
-`*_api` ingestion pools. A job can't span code locations, so there's one per code location.
+A per-run check can't notice an asset that stopped running. So each code location also wires
+a **checks-only job** (`build_bronze_checks_job`: `AssetSelection.checks(...)`, which runs the
+checks without materializing their assets) and a **UTC schedule** for it
+(`build_bronze_checks_schedule`; named `<job>_schedule` unless named explicitly). A job can't
+span code locations, so there's one per code location.
+
+**The job runs in-process** (`in_process_executor`): its check steps run one after another in
+the run's own process. Under Dagster's default multiprocess executor each check step spawns a
+fresh Python subprocess that imports Dagster and the code location before running a check that
+is itself a sub-second local file read. With a hundred-plus checks in one job, that spawn-and-
+import cost is nearly all of the job's CPU time, and it lands on every core the host has, at
+once. In-process does the same work on one core, and because each check is a fraction of a
+second the job's wall time stays in the same range. There is nothing to parallelize: checks
+share no client or resource, and the collection checks are bounded local file reads. The cost
+is that one hung check holds up the checks queued behind it in that run, and those never
+report. The backstop is the host's run monitoring (see `docs/DEPLOYMENT.md`), which ends a run
+that exceeds its limit; the ended run fails, and a failed run pages through the run-failure
+monitor (HLD: *Failures page through Loki and Grafana to Slack*), so a hang is not silent. That
+limit is far shorter than any checks cadence, so consecutive checks runs never overlap. A check
+that raises fails only its own step; the other steps still run (the in-process executor
+continues past a failed step with the steps that don't depend on it). A bespoke check that
+calls out over the network (a folder listing, for example) is where a hang can come from, so
+such a check bounds its own call or accepts that a hang holds its code location's checks until
+run monitoring ends the run; the subject's design doc says which.
+
+**The schedule's cron is chosen per code location.** `build_bronze_checks_schedule` has no
+default cron: the caller names the minute and the cadence. The builder accepts only a cron
+whose minute field is one literal minute from 1 to 59 and rejects any other (minute `0`, `*`,
+a step or a list) when the schedule is built, so the first rule below holds by construction.
+Two rules guide the choice.
+
+- **Never minute 0, and no two checks schedules at the same time.** The host runs its own
+  cron jobs at the top of the hour, and every code location's checks job landing there as well
+  is a CPU stampede on a shared host. Each hourly checks schedule owns a minute of the hour that
+  no other schedule uses; a less frequent one takes a minute no hourly schedule uses, at hours
+  no other schedule ticks. The minutes in use are listed in `docs/DEPLOYMENT.md` (*Schedules and
+  sensors*).
+- **Cadence matches what the checks can detect.** Freshness fails only once a collection's
+  newest capture is older than `cadence_hours + grace_hours`. A check can't report that before
+  it happens, and reports it at most one check interval after. So checking far more often than
+  the subject captures shortens that interval and nothing else, at the cost of CPU. A subject
+  that captures hourly checks hourly; a subject that captures daily with a day-plus tolerance
+  checks a few times a day. The cadence also sets how often a persisting ERROR repeats its
+  `asset_check_failed` line (once per checks run); Grafana folds the repeats into one alert.
+
+The schedule **starts running** (`default_status` RUNNING), so deploying a code location turns
+its checks on with no manual step. A schedule someone deliberately stopped in the UI stays
+stopped: Dagster keeps a schedule's state from the UI over its code default. A check that fails
+on its very first run (before an asset's first capture, for example) fails and pages like any
+other; that is accepted, because it clears itself once capture starts. The job has **no
+concurrency pool**: checks make no source calls, so they must never compete with, or be stuck
+behind, the `*_api` ingestion pools.
 
 ## Table freshness (derived layers)
 
@@ -225,7 +266,10 @@ python3 scripts/sweep_streams.py  "$BRONZE_ROOT"
 | Baseline location | `BRONZE_MONITOR_DIR`, refusing paths inside bronze; disabled if unset | Under `BRONZE_ROOT` | Bronze stays immutable raw capture only. |
 | Paging path | ERROR failures log `asset_check_failed` → Grafana Loki rule → Slack | Dagster+ alerting; email | Dagster OSS has no push alerts; logs already ship to Loki and Grafana already alerts from it. |
 | A check that raises | Logs `asset_check_failed`, then re-raises | Pass the exception through unlogged; have each check catch its own errors | A raised check is only a failed step in the UI, which pages no one. Catching per check is easy to forget; one place in the decorator covers every check. |
-| Stopped-asset detection | A checks-only job on an hourly schedule, unpooled | Rely on per-materialization checks | Per-run checks never run for an asset that stopped. Pool-free so ingestion wedges can't hide it. |
+| Stopped-asset detection | A checks-only job on its own schedule, unpooled | Rely on per-materialization checks | Per-run checks never run for an asset that stopped. Pool-free so ingestion wedges can't hide it. |
+| Checks job executor | In-process | Dagster's default multiprocess executor; multiprocess with a low `max_concurrent` | A check is a sub-second local read; a per-step subprocess spends far more CPU importing the code location than checking, across every core at once. Capping `max_concurrent` serializes the spawns but keeps every one of them. In-process does the work on one core in about the same wall time; checks share nothing, so parallelism bought nothing. |
+| Checks schedule cron | A required argument: a distinct off-minute per code location, at a cadence matched to the subject's capture | A shared hourly-at-`:00` default; a minute derived from the job name | A shared default would put every code location on one minute, and a new code location would inherit it by omission. A derived minute is invisible to a reader and can still collide. Naming the cron at each call site keeps the choice visible and makes each new subject decide. |
+| Minute-0 guard | The builder rejects a cron whose minute field isn't one literal minute 1–59 | Guidance only; a lint | A rule that only lives in prose is the kind a new subject copies past. The guard costs a few lines and turns the stampede into a load-time error. Distinctness across code locations can't be checked in one builder, so that half stays guidance plus the deployment table. |
 | Checks schedule default | Starts running | Starts stopped (Dagster's default), enabled by hand | A safety net that depends on someone remembering to switch it on can silently never run. A first-run failure that clears itself is an acceptable cost. |
 
 ## Open Questions & Future Decisions
@@ -237,6 +281,9 @@ python3 scripts/sweep_streams.py  "$BRONZE_ROOT"
    would surface it.
 2. **Schema sample fallback.** If a folder's newest payload is empty or unreadable, an older,
    non-empty payload in the same folder isn't considered.
+3. **The instance run queue.** The checks job is pool-free, but it still shares the instance's
+   run queue. Whether a host-level run limit could hold a checks run behind wedged ingestion
+   runs is not settled here; the gold run-queue monitor pages when the queue backs up.
 
 ## References
 

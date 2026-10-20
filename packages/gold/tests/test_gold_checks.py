@@ -142,8 +142,8 @@ def test_checks_job_runs_every_marts_checks_and_no_assets() -> None:
 
 
 # @spec GOLD-CHECKS-JOB-002
-def test_checks_schedule_daily_0800_and_starts_running() -> None:
+def test_checks_schedule_daily_0805_and_starts_running() -> None:
     s = defs.get_schedule_def("gold_checks_daily")
     assert s.job_name == "gold_checks_job"
-    assert s.cron_schedule == "0 8 * * *" and str(s.execution_timezone) == "UTC"
+    assert s.cron_schedule == "5 8 * * *" and str(s.execution_timezone) == "UTC"
     assert s.default_status == DefaultScheduleStatus.RUNNING

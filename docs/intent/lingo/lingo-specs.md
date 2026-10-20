@@ -24,6 +24,6 @@ sensor), `CAPTURE` (download and capture), `AUTH` (service account, settings), `
 
 ## Bronze checks
 
-- [x] **LINGO-CHECKS-001**: The system shall configure the `lingo/glucose` bronze checks with the CSV reader, event dates from the `Time of Glucose Reading [T=(local time) +/- (time zone offset)]` column, a completeness gap tolerance of 14 days, and only the completeness, schema-drift and content-health families (no freshness), run hourly by `lingo_bronze_checks_job`.
+- [x] **LINGO-CHECKS-001**: The system shall configure the `lingo/glucose` bronze checks with the CSV reader, event dates from the `Time of Glucose Reading [T=(local time) +/- (time zone offset)]` column, a completeness gap tolerance of 14 days, and only the completeness, schema-drift and content-health families (no freshness), run hourly at minute 23 UTC by `lingo_bronze_checks_job`.
 - [x] **LINGO-CHECKS-002**: When the `lingo_drive_folder_health` check runs, it shall fail at ERROR severity, and alert through `alerting_check`, if listing the watched folder raises or returns no CSV files, and pass otherwise.
 - [x] **LINGO-CHECKS-003**: The `lingo_drive_folder_health` check shall report only the folder id, the number of files found, or the error's type name, never credentials or file contents.

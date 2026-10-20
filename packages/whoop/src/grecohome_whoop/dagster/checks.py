@@ -205,8 +205,9 @@ whoop_checks = [
 
 # A checks-only job + hourly schedule, so freshness/staleness is caught even if an
 # asset stops materializing. Runs off the whoop_api pool (checks make no API calls).
+# Minute 37: off the host's cron minute, and 20 minutes after the :17 capture tick.
 # @spec WHOOP-CAPTURE-CHECKS-004
 whoop_checks_job = build_bronze_checks_job(whoop_checks, name="whoop_bronze_checks_job")
 whoop_checks_schedule = build_bronze_checks_schedule(
-    whoop_checks_job, name="whoop_bronze_checks_hourly"
+    whoop_checks_job, name="whoop_bronze_checks_hourly", cron_schedule="37 * * * *"
 )

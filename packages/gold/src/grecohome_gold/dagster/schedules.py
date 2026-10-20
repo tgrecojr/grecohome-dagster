@@ -40,5 +40,5 @@ gold_weather_daily = ScheduleDefinition(
 gold_checks_job = build_bronze_checks_job(ALL_CHECKS + WEATHER_CHECKS, name="gold_checks_job")
 # @spec GOLD-CHECKS-JOB-002
 gold_checks_schedule = build_bronze_checks_schedule(
-    gold_checks_job, name="gold_checks_daily", cron_schedule="0 8 * * *"
+    gold_checks_job, name="gold_checks_daily", cron_schedule="5 8 * * *"  # 08:05 UTC
 )

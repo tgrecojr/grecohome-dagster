@@ -42,8 +42,9 @@ soil_checks = build_collection_checks(
     monitor_dir=settings.bronze_monitor_dir,
 )
 
-# Checks-only job + hourly schedule (off the uscrn_api pool).
+# Checks-only job + hourly schedule (off the uscrn_api pool). Minute 43 is this code
+# location's own off-minute, clear of the 6-hourly :00 capture ticks.
 soil_checks_job = build_bronze_checks_job(soil_checks, name="uscrn_bronze_checks_job")
 soil_checks_schedule = build_bronze_checks_schedule(
-    soil_checks_job, name="uscrn_bronze_checks_hourly"
+    soil_checks_job, name="uscrn_bronze_checks_hourly", cron_schedule="43 * * * *"
 )

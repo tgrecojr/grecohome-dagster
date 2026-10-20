@@ -29,8 +29,8 @@ def test_checks_job_runs_every_silver_tables_checks_and_no_assets() -> None:
 
 
 # @spec SILVER-CHECKS-JOB-002
-def test_checks_schedule_daily_0700_and_starts_running() -> None:
+def test_checks_schedule_daily_0705_and_starts_running() -> None:
     s = defs.get_schedule_def("silver_checks_daily")
     assert s.job_name == "silver_checks_job"
-    assert s.cron_schedule == "0 7 * * *" and str(s.execution_timezone) == "UTC"
+    assert s.cron_schedule == "5 7 * * *" and str(s.execution_timezone) == "UTC"
     assert s.default_status == DefaultScheduleStatus.RUNNING
