@@ -24,4 +24,4 @@ capture), `SCHED` (schedules), `CHECKS` (the `uscrn/hourly` check config).
 
 ## Bronze checks
 
-- [x] **SOIL-CHECKS-001**: The system shall configure the `uscrn/hourly` bronze checks with the text reader, the partition as the event date, a freshness tolerance of 30 h cadence plus 12 h grace, a completeness gap tolerance of 2 days, and all four check families, run hourly by `uscrn_bronze_checks_job`.
+- [x] **SOIL-CHECKS-001**: The system shall configure the `uscrn/hourly` bronze checks with the text reader, the partition as the event date, a freshness tolerance of 30 h cadence plus 12 h grace, a completeness gap tolerance of 2 days, and all four check families, run hourly at minute 43 UTC by `uscrn_bronze_checks_job`.

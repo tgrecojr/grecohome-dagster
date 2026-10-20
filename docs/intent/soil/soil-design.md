@@ -119,8 +119,9 @@ manual backfill. Re-slicing a range costs two downloads and writes only the days
 
 ## Bronze checks
 
-One `CollectionCheckConfig` for `uscrn/hourly`, run by `uscrn_bronze_checks_job` hourly (a
-checks-only schedule, `uscrn_bronze_checks_hourly`, which starts running):
+One `CollectionCheckConfig` for `uscrn/hourly`, run by `uscrn_bronze_checks_job` hourly at
+`:43` (a checks-only schedule, `uscrn_bronze_checks_hourly`, which starts running; the minute
+is this code location's own, per the core checks design, *Checks-only job and schedule*):
 
 | Setting | Value | Why |
 |---|---|---|
@@ -172,6 +173,7 @@ not ingest problems: the source itself carries sentinels for those hours.
 | Missing year file | 404 is a WARNING and "no rows" | Fail the run | Early-year and pre-station dates legitimately have no file. Failing would break wide backfills. |
 | Gap filling from other USCRN products | Not done | `updates/`, `snapshots/`, `subhourly01`, `daily01` | None of them holds data the year file lacks (see *What the other USCRN products can't do*). |
 | Station | One, configurable, recorded in the sidecar | Multiple stations; station in the path | Single-user system. Keeping it out of the path leaves the layout stable if the station ever changes. |
+| Checks schedule minute | `:43` hourly | `:00` | Minute 0 is the host's cron minute and where the capture ticks land; a checks schedule takes its own off-minute. |
 
 ## Open Questions & Future Decisions
 

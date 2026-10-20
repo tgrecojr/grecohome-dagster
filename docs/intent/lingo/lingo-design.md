@@ -116,8 +116,10 @@ setup*).
 
 ## Bronze checks
 
-One `CollectionCheckConfig` for `lingo/glucose`, run hourly by `lingo_bronze_checks_job`
-(`lingo_bronze_checks_hourly`, which starts running; checks use no pool):
+One `CollectionCheckConfig` for `lingo/glucose`, run hourly at `:23` by
+`lingo_bronze_checks_job` (`lingo_bronze_checks_hourly`, which starts running; checks use no
+pool, and the minute is this code location's own, per the core checks design, *Checks-only job
+and schedule*):
 
 | Setting | Value | Why |
 |---|---|---|
@@ -133,6 +135,10 @@ One `CollectionCheckConfig` for `lingo/glucose`, run hourly by `lingo_bronze_che
 - It **fails** when listing raises (bad key, API disabled, network), or when it returns **zero
   CSV files**. The folder only accumulates exports, so an empty listing means a wrong folder id,
   a missing share or revoked access, never a quiet week.
+- It is the one Lingo check that calls out over the network, and the checks job runs in-process
+  (core checks design, *Checks-only job and schedule*). The listing carries no explicit timeout,
+  so a hung Drive call holds the job's remaining checks until the host's run monitoring ends the
+  run; with four checks in the job and the next tick an hour away, that is accepted.
 - It reports only the folder id, the number of files found, or the error's type name. It never
   reports credentials or file contents.
 
@@ -160,6 +166,7 @@ Unlike the other bronze checks, it calls the Drive API, which is a cheap read-on
 | Folder health | `lingo_drive_folder_health`: ERROR when listing fails or finds no CSVs | Rely on sensor tick failures; an ERROR log line on an empty listing | A wrong or un-shared folder produces an empty listing, not an error, so the sensor skips silently and nothing alerts (freshness is off). The folder only accumulates exports, so empty is always a fault. |
 | Failed bronze write | The asset raises | Trust the writer's non-fatal failure outcome | A swallowed failure leaves the partition marked captured; the sensor never retries, so the export is lost for good. |
 | Required settings | `GDRIVE_FOLDER_ID` and `GDRIVE_SERVICE_ACCOUNT_PATH` have no default | Empty-string defaults | An empty folder id runs silently misconfigured. Missing settings should stop the code location at startup with the standard configuration error. |
+| Checks schedule minute | `:23` hourly | `:00` | Minute 0 is the host's cron minute; a checks schedule takes its own off-minute. |
 
 ## Open Questions & Future Decisions
 

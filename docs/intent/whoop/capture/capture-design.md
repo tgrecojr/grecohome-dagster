@@ -149,7 +149,8 @@ and the run fails.
 
 The collection checks are built by the shared core builders from one `CollectionCheckConfig`
 per collection. They read bronze only (no Whoop API call, no `whoop_api` pool) and run hourly
-at `:00` in `whoop_bronze_checks_job`, alongside `whoop_token_health`. Each looks at the 14
+at `:37` in `whoop_bronze_checks_job` (schedule `whoop_bronze_checks_hourly`, which starts
+running), alongside `whoop_token_health`. Each looks at the 14
 most recent **existing** `dt=` folders of its collection. For a sparse collection like
 `workout`, that window spans weeks, not 14 days.
 
@@ -180,6 +181,7 @@ most recent **existing** `dt=` folders of its collection. For a sparse collectio
 |---|---|---|---|
 | Schedule minute | `:17` for both Whoop schedules | `:00`; staggering the two schedules apart | Grant losses clustered at `HH:00`; none in about 80 days since the move. Staggering the schedules apart doesn't reduce token-endpoint load, because the lock and re-read already collapse them into one refresh per hour. |
 | Poll cadence | Hourly | Every 2–3 h | Hourly keeps intraday freshness. A slower cadence halves refresh exposure, but it is only worth taking if grant losses come back at `:17`. |
+| Checks schedule | Hourly at `:37` | `:00`; `:17` beside the capture schedules | Whoop captures hourly, so hourly checks are the right cadence, and a checks schedule takes its own off-minute (core checks design, *Checks-only job and schedule*). `:17` would put the checks job beside the captures and the token refresh they trigger. |
 | Range request window | The partition's UTC day | Local days; a rolling window | Bronze partitions are UTC fetch-slices (HLD). Local-day semantics belong in silver. |
 | Empty pages | Not captured | Capture every response | An empty page is the end-of-results marker or an empty window. Capturing it would add a file per day per collection with no information. |
 | Runaway cursor | Stop with a WARNING and keep the partial results | Fail the run | Failing gains nothing: the next tick re-captures the window. Stopping releases the `whoop_api` pool, so later ticks aren't stuck behind the run. |

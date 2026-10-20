@@ -1,6 +1,7 @@
 """Tests that the Garmin code location's Definitions resolve cleanly."""
 
 import pytest
+from dagster import DefaultScheduleStatus
 from grecohome_garmin import catalog
 from grecohome_garmin.dagster.assets import DAILY_ASSETS, REFERENCE_ASSETS
 from grecohome_garmin.dagster.checks import EMPIRICALLY_EMPTY, GARMIN_CHECK_CONFIGS
@@ -75,10 +76,24 @@ class TestAssetChecks:
         # hrv is skip_if_none in the catalog -> expected_empty regardless.
         assert self._cfg("hrv").expected_empty
 
-    def test_validation_job_and_schedule_registered(self):
-        assert defs.resolve_job_def("garmin_bronze_checks_job") is not None
-        s = defs.get_schedule_def("garmin_bronze_checks_hourly")
-        assert s.cron_schedule == "0 * * * *"
+    # @spec GARMIN-CAPTURE-CHECKS-003
+    def test_checks_job_runs_every_defined_check_and_no_asset(self):
+        ops = {n.name for n in defs.resolve_job_def("garmin_bronze_checks_job").graph.nodes}
+        graph = defs.resolve_asset_graph()
+        every_check = {f"{k.asset_key.to_user_string()}_{k.name}" for k in graph.asset_check_keys}
+        assert every_check, "expected Garmin asset checks"
+        assert ops == every_check
+        assets = {k.to_user_string() for k in graph.get_all_asset_keys()}
+        assert not (assets & ops), "the checks job must not materialize assets"
+        assert "garmin_bronze_sleep_garmin_tokenstore_health" in ops
+
+    # @spec GARMIN-CAPTURE-CHECKS-004
+    def test_checks_schedule_four_times_a_day_off_minute_and_starts_running(self):
+        s = defs.get_schedule_def("garmin_bronze_checks_schedule")
+        assert s.job_name == "garmin_bronze_checks_job"
+        assert s.cron_schedule == "7 3-21/6 * * *"
+        assert str(s.execution_timezone) == "UTC"
+        assert s.default_status == DefaultScheduleStatus.RUNNING
 
     def test_excluded_endpoints_get_no_checks(self, monkeypatch):
         # A collection turned off via FETCH_EXCLUDE never writes again, so it must

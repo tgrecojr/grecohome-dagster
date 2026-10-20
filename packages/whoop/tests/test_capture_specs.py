@@ -208,9 +208,10 @@ class TestCheckWiring:
         assert (cfg.cadence_hours, cfg.grace_hours) == (26.0, 6.0)
 
     # @spec WHOOP-CAPTURE-CHECKS-004
-    def test_checks_run_hourly_at_minute_0_outside_the_api_pool(self):
+    def test_checks_run_hourly_at_minute_37_outside_the_api_pool(self):
         schedule = defs.get_schedule_def("whoop_bronze_checks_hourly")
-        assert schedule.cron_schedule == "0 * * * *"
+        assert schedule.cron_schedule == "37 * * * *"
+        assert str(schedule.execution_timezone) == "UTC"
         assert schedule.job_name == "whoop_bronze_checks_job"
         assert whoop_token_health in whoop_checks
         job = defs.resolve_job_def("whoop_bronze_checks_job")

@@ -168,8 +168,14 @@ garmin_checks = [
     garmin_tokenstore_health,
 ]
 
-# Checks-only job + hourly schedule (off the garmin_api pool).
+# Checks-only job (in-process, off the garmin_api pool) and its schedule. Garmin
+# captures once a day at 05:30 UTC with a 32 h freshness tolerance, so four ticks a
+# day detect a stopped capture within about an hour of an hourly check, at a sixth
+# of the runs. The 3-hour offset keeps the ticks clear of the host's midnight cron
+# jobs and silver's 06:00-06:55 rebuilds. See docs/intent/garmin/capture/.
+# @spec GARMIN-CAPTURE-CHECKS-003
 garmin_checks_job = build_bronze_checks_job(garmin_checks, name="garmin_bronze_checks_job")
+# @spec GARMIN-CAPTURE-CHECKS-004
 garmin_checks_schedule = build_bronze_checks_schedule(
-    garmin_checks_job, name="garmin_bronze_checks_hourly"
+    garmin_checks_job, name="garmin_bronze_checks_schedule", cron_schedule="7 3-21/6 * * *"
 )

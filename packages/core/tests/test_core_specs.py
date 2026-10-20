@@ -248,5 +248,5 @@ class TestChecksSchedule:
         job = build_bronze_checks_job(
             [build_fetch_freshness_check(_cfg(), str(tmp_path))], name="src_bronze_checks_job"
         )
-        schedule = build_bronze_checks_schedule(job)
+        schedule = build_bronze_checks_schedule(job, cron_schedule="37 * * * *")
         assert schedule.default_status == DefaultScheduleStatus.RUNNING

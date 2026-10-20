@@ -58,7 +58,7 @@ runs to backfill.
 
 - `whoop_token_invalid_grant` (ERROR) fires on the **first** failed refresh — page on it
   for immediate re-auth.
-- `whoop_token_health` asset check (in `whoop_bronze_checks_job`, hourly at `:00`) is the
+- `whoop_token_health` asset check (in `whoop_bronze_checks_job`, hourly at `:37`) is the
   backstop: it ERRORs once `expires_at` is more than the grace window
   (`_TOKEN_GRACE_SECONDS`, ~90 min) in the past, or when the token file is missing or
   unreadable. It logs `whoop_token_unhealthy` (and `whoop_token_file_unreadable` for a

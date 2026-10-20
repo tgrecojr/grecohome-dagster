@@ -469,11 +469,30 @@ state across redeploys. Checks schedules start **running** and need nothing.
 | Code location | Enable (capture: starts stopped) | Already running (checks) |
 |---|---|---|
 | `whoop_ingest` | `whoop_hourly`, `whoop_snapshots_hourly` (after the OAuth setup) | `whoop_bronze_checks_hourly` |
-| `garmin_ingest` | `garmin_daily`, `garmin_reference` (after the MFA bootstrap) | `garmin_bronze_checks_hourly` |
+| `garmin_ingest` | `garmin_daily`, `garmin_reference` (after the MFA bootstrap) | `garmin_bronze_checks_schedule` |
 | `lingo_ingest` | sensor `lingo_drive_sensor` (after the service-account setup) | `lingo_bronze_checks_hourly` |
 | `soil_ingest` | `uscrn_schedule`, `uscrn_correction_schedule` | `uscrn_bronze_checks_hourly` |
 | silver | `silver_sleep_daily`, `silver_glucose_daily`, `silver_workouts_daily`, `silver_recovery_daily`, `silver_weather_daily`, `silver_daily_daily`, `silver_strain_daily`, `silver_body_daily`, `silver_fitness_daily`, `silver_workout_splits_daily`, `silver_whoop_workouts_daily` | `silver_checks_daily` |
 | gold | `gold_wellness_daily`, `gold_weather_daily` | `gold_checks_daily`; sensors `run_failure_monitor` and `run_queue_monitor` |
+
+### Checks schedule minutes
+
+The host is shared, and its own cron jobs run at the top of the hour, so every checks schedule
+takes its own off-minute and no two tick at the same time (`docs/intent/core/checks/checks-design.md`,
+*Checks-only job and schedule*). The core builder refuses a cron whose minute field is `0`, `*`,
+a step or a list. When adding a code location, pick a minute not in this table.
+
+| Schedule | Cron (UTC) | Ticks |
+|---|---|---|
+| `garmin_bronze_checks_schedule` | `7 3-21/6 * * *` | 03:07, 09:07, 15:07, 21:07 |
+| `lingo_bronze_checks_hourly` | `23 * * * *` | hourly at :23 |
+| `whoop_bronze_checks_hourly` | `37 * * * *` | hourly at :37 |
+| `uscrn_bronze_checks_hourly` | `43 * * * *` | hourly at :43 |
+| `silver_checks_daily` | `5 7 * * *` | 07:05 |
+| `gold_checks_daily` | `5 8 * * *` | 08:05 |
+
+For reference, the capture schedules: Whoop at :17 hourly, Soil at :00 every 6 h (plus Sunday
+03:30), Garmin at 05:30, silver rebuilds 06:00–06:55, gold rebuilds 07:30 and 07:40.
 
 ## Observability and alerting
 
@@ -494,8 +513,10 @@ Design: `docs/high-level-design.md` (*Failures page through Loki and Grafana to 
 - **Dashboard:** "Data Platform Health" (check failures, token failures, queue backups,
   per-code-location log volume).
 - **Checks-only schedules start running** on deploy: `whoop_bronze_checks_hourly`,
-  `garmin_bronze_checks_hourly`, `lingo_bronze_checks_hourly`, `uscrn_bronze_checks_hourly` (plus
-  the silver and gold checks schedules). One stopped deliberately in the UI stays stopped.
+  `garmin_bronze_checks_schedule`, `lingo_bronze_checks_hourly`, `uscrn_bronze_checks_hourly` (plus
+  the silver and gold checks schedules). One stopped deliberately in the UI stays stopped. Garmin's
+  schedule was renamed from `garmin_bronze_checks_hourly`; the old name may linger in the UI's
+  unloadable schedules until its state is deleted, which is harmless.
 - **Run monitoring (host `dagster.yaml`):** `run_monitoring` is enabled with
   `max_runtime_seconds: 1800`, so a run executing for more than 30 minutes is terminated as
   wedged. `start_timeout_seconds` and `cancel_timeout_seconds` are 300, and runs aren't

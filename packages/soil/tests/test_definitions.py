@@ -43,4 +43,4 @@ class TestAssetChecks:
     def test_validation_job_and_schedule_registered(self):
         assert defs.resolve_job_def("uscrn_bronze_checks_job") is not None
         s = defs.get_schedule_def("uscrn_bronze_checks_hourly")
-        assert s.cron_schedule == "0 * * * *"
+        assert s.cron_schedule == "43 * * * *"

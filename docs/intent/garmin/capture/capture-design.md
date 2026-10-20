@@ -169,6 +169,29 @@ How skip-identical interacts with each family:
 - **Content health** samples payloads across folders. Fewer identical copies only make the
   sample more varied.
 
+### Checks-only job and schedule
+
+`garmin_bronze_checks_job` runs every Garmin check (the collection checks above and
+`garmin_tokenstore_health`, which reads only the token store and makes no Garmin call; see
+[authentication](../auth/auth-design.md)) without materializing anything. It is built with the
+core checks-only builders, so it runs in-process and uses no pool (core checks design,
+*Checks-only job and schedule*). Its schedule, `garmin_bronze_checks_schedule`, runs it four
+times a day at **03:07, 09:07, 15:07 and 21:07 UTC** (`7 3-21/6 * * *`) and starts running.
+
+Four times a day is enough because of what freshness can detect. Garmin captures once a day at
+05:30 UTC with a tolerance of 26 h + 6 h, so a stopped capture becomes detectable at about
+13:30 UTC on the day after the last tick that captured. An hourly check would report it within
+the hour; this schedule reports it at 15:07. That extra hour or so of latency buys a sixth of
+the check runs, each of which is well over a hundred checks. The ticks avoid minute 0 (the
+host's own cron minute), sit three hours clear of the host's midnight cron jobs, and miss the
+05:30 capture tick and silver's 06:00–06:55 rebuilds.
+
+The sizing couples three numbers: the capture tick time, the freshness tolerance, and the
+tick offset. It holds because 05:30 plus 32 h falls shortly before the 15:07 tick. Moving any
+one of them (a later capture tick, a longer grace, a different cron offset) can push the first
+tick after the tolerance expires hours later, so a change to any of the three re-checks the
+other two.
+
 ## Failure and recovery
 
 - **Missed ticks.** A tick-scoped `run_key` launches a fresh run on every tick. Any partition
@@ -212,6 +235,8 @@ How skip-identical interacts with each family:
 | Duplicate captures already in bronze | Leave them | Delete identical older captures | Bronze is immutable and append-only. Silver already picks the latest capture, so the extra files are harmless. |
 | Partition range | Completed days only (`end_offset=0`), captured at 05:30 UTC | Include the in-progress day | A partial "today" would be captured repeatedly while still incomplete. The trailing window picks the day up once it has closed, and 05:30 UTC is after the user's local day ends. |
 | Tick time | 05:30 UTC | 07:00 UTC (after silver's 06:00–06:55 rebuilds) | Silver reads bronze once a day; a capture landing after silver's rebuilds reaches silver, gold and the dashboards a day late. 05:30 is still after local midnight in both EDT and EST, and the trailing window absorbs anything synced later. |
+| Checks cadence | Four times a day, `7 3-21/6 * * *` | Hourly at `:00`; once a day after the 05:30 tick; `7 */6 * * *` | Hourly checks detect a stopped daily capture no sooner than about an hour before a 6-hourly check does, at six times the runs, and each run is over a hundred checks. Once a day could add nearly a day of latency. `7 */6` puts a tick at 00:07, inside the host's midnight backups, and one at 06:07, inside silver's rebuilds; the 3-hour offset clears both. |
+| Checks schedule name | `garmin_bronze_checks_schedule`, cadence-neutral | Keep `garmin_bronze_checks_hourly`; `garmin_bronze_checks_6hourly` | A cadence in the name must change whenever the cadence does, and the cron is visible beside the schedule in the UI, so the name carries only what the schedule is for. Dagster treats a renamed schedule as new: it starts running on deploy even if the old name had been stopped in the UI, and the old name's state record lingers in the instance as an unloadable schedule until deleted. Both are accepted: checks are meant to run, and the record is inert. |
 
 ## Open Questions & Future Decisions
 

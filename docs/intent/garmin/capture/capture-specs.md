@@ -1,7 +1,8 @@
 # Garmin capture — EARS specs
 
 Design: [capture-design.md](capture-design.md). Prefix `GARMIN-CAPTURE`. Facets: `SCHED`
-(capture cadence), none (bronze writes and skip-identical), `CHECKS` (bronze-check guarantees).
+(capture cadence), none (bronze writes and skip-identical), `CHECKS` (bronze-check guarantees
+and the checks-only job and schedule).
 
 ## Capture cadence
 
@@ -31,3 +32,5 @@ Design: [capture-design.md](capture-design.md). Prefix `GARMIN-CAPTURE`. Facets:
 
 - [x] **GARMIN-CAPTURE-CHECKS-001**: The system shall configure a fetch-freshness check for every selected Garmin collection, with a tolerance of 26 h cadence plus 6 h grace.
 - [x] **GARMIN-CAPTURE-CHECKS-002**: When a Garmin single-request endpoint under the skip-identical rule (GARMIN-CAPTURE-004) is captured into a `(collection, dt)` bronze folder that holds no prior capture, the system shall write the capture, so that each newly completed partition and each new reference fetch-date gives the freshness check a new sidecar.
+- [x] **GARMIN-CAPTURE-CHECKS-003**: The system shall define `garmin_bronze_checks_job` to run every asset check the Garmin code location defines (the collection checks and `garmin_tokenstore_health`, with none left out) without materializing any asset.
+- [x] **GARMIN-CAPTURE-CHECKS-004**: The system shall define a `garmin_bronze_checks_schedule` schedule that runs `garmin_bronze_checks_job` at 03:07, 09:07, 15:07 and 21:07 UTC (cron `7 3-21/6 * * *`) with a default status of running.
