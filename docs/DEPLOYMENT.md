@@ -17,7 +17,7 @@ ghcr.io/tgrecojr/grecohome-dagster-whoop:whoop-<sha>
 ```
 
 Each image runs `dagster code-server start` serving its subject's `Definitions` on port
-4000. Images are multi-arch (amd64/arm64), cosign-signed, and ship an SBOM + SLSA
+4000. Images are linux/amd64 only, cosign-signed, and ship an SBOM + SLSA
 provenance attestation.
 
 ## Pins (hard requirement)
