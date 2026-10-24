@@ -13,7 +13,7 @@ dependencies = [
     # See tests/test_instance_storage.py.
     "dagster-postgres==0.29.22",
     "pydantic==2.14.1",
-    "pydantic-settings==2.16.0",
+    "pydantic-settings==2.16.1",
     "structlog==26.1.0",
     "python-json-logger==4.2.0",
     "python-dotenv==1.2.4",
