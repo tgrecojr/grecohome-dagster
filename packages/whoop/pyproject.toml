@@ -8,7 +8,7 @@ dependencies = [
     "grecohome-core",
     "dagster==1.13.22",
     "httpx==0.28.1",
-    "authlib==1.9.1",
+    "authlib==1.9.2",
     "tenacity==9.2.1",
     "pydantic==2.14.2",
     "pydantic-settings==2.16.2",
