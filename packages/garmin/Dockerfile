@@ -6,7 +6,7 @@
 # =============================================================================
 # Stage 1: Builder
 # =============================================================================
-FROM cgr.dev/chainguard/python:latest-dev@sha256:eb0d45dfc69fecb471d2eaee7a8eea281bf860578ef44cb85db1bfa8165c47fe AS builder
+FROM cgr.dev/chainguard/python:latest-dev@sha256:898360ca56a2a65c3facdd36a4e6151133a580aa367195261554e82948921ff1 AS builder
 
 USER root
 WORKDIR /app
@@ -34,7 +34,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # =============================================================================
 # Stage 2: Runtime (distroless)
 # =============================================================================
-FROM cgr.dev/chainguard/python:latest@sha256:565af762d7f3efedc4e60d7ac7815e41588211d3f5757be33d8303e915ee6c72
+FROM cgr.dev/chainguard/python:latest@sha256:1a00964779bf570a8cb2ea4fa086614af19c35069029785c08fcec0c50b66ac0
 
 LABEL org.opencontainers.image.title="grecohome-dagster-garmin"
 LABEL org.opencontainers.image.description="Garmin data subject: bronze-only Dagster code location"
