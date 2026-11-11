@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "grecohome-core",
-    "dagster==1.13.22",
+    "dagster==1.13.29",
     "httpx==0.28.1",
     "authlib==1.9.5",
     "tenacity==9.2.1",
