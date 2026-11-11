@@ -5,13 +5,13 @@ description = "Shared framework for grecohome data-subject pipelines (bronze cap
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "dagster==1.13.22",
+    "dagster==1.13.29",
     # Lets a run worker (DefaultRunLauncher runs execute inside the code-location
     # container) write to the host instance's Postgres event/run/schedule storage.
     # It ships psycopg2 only, so the host dagster.yaml must pin
     # `scheme: postgresql+psycopg2`. SQLAlchemy 2.1's default is psycopg v3.
     # See tests/test_instance_storage.py.
-    "dagster-postgres==0.29.22",
+    "dagster-postgres==0.29.29",
     "pydantic==2.14.3",
     "pydantic-settings==2.16.2",
     "structlog==26.1.0",

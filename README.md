@@ -55,7 +55,7 @@ root `pyproject.toml`, one `uv.lock`, one managed Python version.
   [`docs/intent/silver/`](docs/intent/silver/silver-design.md) and [`docs/intent/gold/`](docs/intent/gold/gold-design.md).
 - **Self-hosted Dagster.** The daemon + webserver run on the host. Each layer (every bronze
   subject, silver, gold) ships a gRPC code-location image that registers with the host via
-  `workspace.yaml`. Dagster libraries are pinned (`dagster==1.13.22`, `dagster-*==0.29.22`) to
+  `workspace.yaml`. Dagster libraries are pinned (`dagster==1.13.29`, `dagster-*==0.29.29`) to
   match the host so the daemon ↔ code-location gRPC contract stays in sync.
 - **Cross-layer lineage by `AssetKey`.** silver→bronze and gold→silver deps render in the UI;
   the reads themselves are filesystem reads of the upstream root, not gRPC calls.
