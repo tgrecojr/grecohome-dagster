@@ -172,14 +172,7 @@ Unlike the other bronze checks, it calls the Drive API, which is a cheap read-on
 
 ### Deferred
 
-1. **The `grpcio` floor.** Google's client libraries (`google-api-core`, used only here) are
-   raising their minimum to `grpcio>=1.83`. The workspace pins `grpcio==1.81.1` until Dagster
-   moves to protobuf 7. When the upgrade can't resolve, the options in order are:
-   1. adopt a Dagster release on protobuf 7 and move grpc in lockstep with the host;
-   2. pin the Google client libraries below the new floor, for this package only;
-   3. let `grpcio` (never `grpcio-health-checking`) float to ≥1.83 if it resolves against the host
-      contract.
-2. **Files updated in place.** Comparing Drive's `modifiedTime` against the captured partition
+1. **Files updated in place.** Comparing Drive's `modifiedTime` against the captured partition
    would catch a replaced file. It isn't needed while every export is a new file.
 
 ## References
