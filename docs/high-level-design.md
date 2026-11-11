@@ -108,6 +108,14 @@ cross-segment change: it cascades to every subject spec that relies on it.
     protocol. A patch mismatch fails code-location loading with opaque gRPC errors. So these
     pins change deliberately, in lockstep with the host, and Renovate doesn't bump them. Other
     libraries are pinned `==`; pure-data packages (`tzdata`) use `>=`.
+  - **The gRPC stack floats.** `grpcio`, `grpcio-health-checking` and `protobuf` arrive
+    through Dagster and are resolved by the lock, not pinned: gRPC is wire-compatible across
+    library versions, so only the Dagster version couples an image to the host. What must
+    agree is the pairing *inside* one image, because generated protobuf code refuses to load
+    under an older protobuf runtime and that stops the code server at startup. Package
+    metadata normally enforces the pairing; a CI smoke test imports the modules the code
+    server loads at startup, so a release that mis-declares it fails the build instead of
+    the deployment.
   - **Code locations:** each subject and layer is its own gRPC code-location image
     (`ghcr.io/tgrecojr/grecohome-dagster-<subject>`), registered in the host's
     `workspace.yaml`. This repo ships code locations only, never a Dagster instance, webserver
