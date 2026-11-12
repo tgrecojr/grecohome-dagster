@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "NOAA USCRN soil/temperature data subject: bronze-only Dagster code location"
 readme = "README.md"
 requires-python = ">=3.14"
+license = "MIT"
 dependencies = [
     "grecohome-core",
     "dagster==1.13.29",
