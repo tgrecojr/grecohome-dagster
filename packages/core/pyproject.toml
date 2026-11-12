@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Shared framework for grecohome data-subject pipelines (bronze capture, rate limiting, token file store, Dagster helpers)"
 readme = "README.md"
 requires-python = ">=3.14"
+license = "MIT"
 dependencies = [
     "dagster==1.13.29",
     # Lets a run worker (DefaultRunLauncher runs execute inside the code-location

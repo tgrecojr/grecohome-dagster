@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Silver layer: cross-subject derived/rebuildable Dagster code location (Parquet over bronze)"
 readme = "README.md"
 requires-python = ">=3.14"
+license = "MIT"
 dependencies = [
     "grecohome-core",
     "dagster==1.13.29",

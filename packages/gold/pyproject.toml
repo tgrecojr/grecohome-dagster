@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Gold layer: analysis marts (Dagster code location) derived from silver Parquet"
 readme = "README.md"
 requires-python = ">=3.14"
+license = "MIT"
 dependencies = [
     "grecohome-core",
     "dagster==1.13.29",

@@ -91,3 +91,11 @@ One code-location image per layer published to GHCR
 `whoop`/`garmin`/`lingo`/`soil`/`silver`/`gold`).
 See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for the host `workspace.yaml`, mounts (silver reads
 bronze read-only; gold reads silver read-only), and concurrency-pool wiring.
+
+## Contributing
+
+Issues and pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) first.
+
+## License
+
+Released under the [MIT License](LICENSE).
