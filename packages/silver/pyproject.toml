@@ -12,7 +12,7 @@ dependencies = [
     # never in the bronze capture images (which need no query engine).
     "duckdb==2.0.0",
     "pydantic==2.14.3",
-    "pydantic-settings==2.16.2",
+    "pydantic-settings==2.16.3",
     "structlog==26.1.0",
     "python-json-logger==4.2.0",
     "python-dotenv==1.2.4",
