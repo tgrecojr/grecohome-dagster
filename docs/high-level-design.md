@@ -106,7 +106,7 @@ cross-segment change: it cascades to every subject spec that relies on it.
   - **Pins:** `dagster` and every `dagster-*` package are pinned `==` to the host's versions,
     because the daemon and webserver talk to code locations over a version-coupled gRPC
     protocol. A patch mismatch fails code-location loading with opaque gRPC errors. So these
-    pins change deliberately, in lockstep with the host, and Renovate doesn't bump them. Other
+    pins change deliberately, in lockstep with the host: Renovate proposes them as one grouped PR and never merges it. Other
     libraries are pinned `==`; pure-data packages (`tzdata`) use `>=`.
   - **The gRPC stack floats.** `grpcio`, `grpcio-health-checking` and `protobuf` arrive
     through Dagster and are resolved by the lock, not pinned: gRPC is wire-compatible across
