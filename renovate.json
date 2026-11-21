@@ -3,12 +3,15 @@
   "extends": ["github>tgrecojr/renovate-config"],
   "packageRules": [
     {
-      "description": "Pin the Dagster libraries to match the host gRPC contract; never auto-bump.",
+      "description": "The Dagster libraries must match the host webserver and daemon (greco-home-builder, dagster/dagster-k8s). One grouped PR, never automerged: merge it by hand together with the host image PR.",
       "matchPackageNames": [
         "dagster",
         "/^dagster-/"
       ],
-      "enabled": false
+      "matchUpdateTypes": ["major", "minor", "patch"],
+      "groupName": "dagster",
+      "groupSlug": "dagster",
+      "automerge": false
     },
     {
       "description": "Keep the Chainguard builder (python:latest-dev) and runtime (python:latest) in lockstep across all package Dockerfiles — one PR, never desynced, so the venv copied from the builder always matches the runtime Python.",

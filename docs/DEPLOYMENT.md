@@ -24,8 +24,8 @@ provenance attestation.
 
 `dagster==1.13.30` and all `dagster-*==0.29.30` must match the host daemon/webserver so the
 daemon ↔ code-location gRPC protocol stays in sync. A mismatch fails code-location loading
-with opaque gRPC errors. Renovate is configured **not** to bump these; update them
-deliberately, in lockstep with the host.
+with opaque gRPC errors. Renovate opens one grouped `dagster` PR for these and never
+automerges it; merge it by hand, in lockstep with the host image PR in `greco-home-builder`.
 
 ## Host wiring
 
