@@ -7,7 +7,7 @@ requires-python = ">=3.14"
 license = "MIT"
 dependencies = [
     "grecohome-core",
-    "dagster==1.13.29",
+    "dagster==1.13.30",
     "duckdb==2.0.0",
     "pydantic==2.14.3",
     "pydantic-settings==2.16.3",
