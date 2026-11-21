@@ -7,7 +7,7 @@ requires-python = ">=3.14"
 license = "MIT"
 dependencies = [
     "grecohome-core",
-    "dagster==1.13.29",
+    "dagster==1.13.30",
     # Google Drive access (service account). Integration deps that track upstream
     # API/client drift, so pinned >= (like tzdata), not ==.
     "google-api-python-client>=2.0.0",
