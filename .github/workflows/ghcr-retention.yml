@@ -21,7 +21,7 @@ jobs:
       group: ghcr-cleanup-${{ github.repository }}-${{ matrix.subject }}
     steps:
       - name: Prune GHCR (keep latest + 5 most recent tagged)
-        uses: dataaxiom/ghcr-cleanup-action@v1.2.2
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
         with:
           packages: grecohome-dagster-${{ matrix.subject }}
           keep-n-tagged: 5
