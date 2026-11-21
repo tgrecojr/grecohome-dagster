@@ -22,7 +22,7 @@ provenance attestation.
 
 ## Pins (hard requirement)
 
-`dagster==1.13.29` and all `dagster-*==0.29.29` must match the host daemon/webserver so the
+`dagster==1.13.30` and all `dagster-*==0.29.30` must match the host daemon/webserver so the
 daemon ↔ code-location gRPC protocol stays in sync. A mismatch fails code-location loading
 with opaque gRPC errors. Renovate is configured **not** to bump these; update them
 deliberately, in lockstep with the host.
