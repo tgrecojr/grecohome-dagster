@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>tgrecojr/renovate-config"],
+  "extends": ["github>chainringlabs/renovate-config"],
   "packageRules": [
     {
       "description": "The Dagster libraries must match the host webserver and daemon (greco-home-builder, dagster/dagster-k8s). One grouped PR, never automerged: merge it by hand together with the host image PR.",
