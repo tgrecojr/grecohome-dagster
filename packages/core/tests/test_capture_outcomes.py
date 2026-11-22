@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import glob
+import itertools
 import os
 
 import pytest
@@ -81,7 +82,13 @@ def test_request_scope_writes_a_changed_payload_and_ignores_key_order(tmp_path) 
 
 
 # @spec CORE-BRONZE-013
-def test_request_scope_compares_with_the_newest_capture_of_that_request(tmp_path) -> None:
+def test_request_scope_compares_with_the_newest_capture_of_that_request(
+    tmp_path, monkeypatch
+) -> None:
+    # A distinct fetch time per capture: "newest" is ordered by the millisecond in the
+    # filename, and two captures in the same millisecond tie on directory-listing order.
+    clock = itertools.count(1_790_000_000_000)
+    monkeypatch.setattr(capture_mod, "_utc_now_ms", lambda: next(clock))
     _cap(tmp_path, b'{"v":1}', {"activity_id": 1}, dedupe_scope="request")
     _cap(tmp_path, b'{"v":2}', {"activity_id": 1}, dedupe_scope="request")
     back = _cap(tmp_path, b'{"v":1}', {"activity_id": 1}, dedupe_scope="request")
