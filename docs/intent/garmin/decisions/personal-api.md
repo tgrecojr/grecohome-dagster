@@ -16,9 +16,14 @@ The Garmin bronze subject captures about 60 catalog collections plus ten per-act
 endpoints through `garminconnect`, and silver reads eight of those collections. The question
 is whether to move capture onto the Personal API, in whole or in part, and when.
 
-This doc records the evaluation made on 2026-11-02, the decision to defer, and the facts a
-re-evaluation needs. The *Reference* section at the end is the snapshot of the Personal API
-at evaluation time; refresh it before deciding again.
+This doc records the evaluation (made on 2026-11-02, re-checked against the live spec on
+2026-11-23), the decision to defer, and the facts a re-evaluation needs. The *Reference*
+section at the end describes the Personal API as of the last check, and
+[personal-api-openapi.json](personal-api-openapi.json) is the full OpenAPI document from that
+check. Before deciding again, run `python3 scripts/garmin_personal_api_spec.py`: it fetches the
+live spec and lists every operation and schema added, removed or changed since the snapshot.
+Compare operations, not the spec's `info.version`, which Garmin does not bump when it adds
+endpoints.
 
 ## Decision Elements
 
@@ -62,7 +67,7 @@ token store and endpoint wrappers.
 - *Operational simplicity (moderate):* **strong**. One mechanism, already built and guarded
   (token-store checks, health check, bootstrap).
 - *Implementation cost (moderate):* **strong**. Zero.
-- *Timing (moderate):* **strong**. Nothing is bet on an API two weeks old.
+- *Timing (moderate):* **strong**. Nothing is bet on a young API whose allowlist is still growing.
 
 ### Option B — Switch everything to the Personal API
 
@@ -70,13 +75,13 @@ token store and endpoint wrappers.
 collection the Personal API doesn't serve.
 
 **Analysis.**
-- *Gate:* **fails**. The Personal API has no training status, VO2max (`max_metrics`), race
+- *Gate:* **fails**. The Personal API serves VO2max but has no training status, race
   predictions, training readiness, or per-activity splits, details, zones, weather, gear or
-  exercise sets. `silver_fitness` and `silver_workout_splits` lose their sources, and
-  `gold_daily_wellness` loses VO2max and training status.
+  exercise sets. `silver_workout_splits` loses its source, `silver_fitness` loses its
+  training-status and race-prediction columns, and `gold_daily_wellness` loses training status.
 - *Sanctioned access (major):* **strong**.
 - *Fragility (major):* **strong**. Key plus 24-hour token, no SSO, no MFA, no Cloudflare.
-- *Data coverage (major):* **weak**. Roughly 26 endpoints against the library's 300-plus; about
+- *Data coverage (major):* **weak**. 28 endpoints against the library's 300-plus; about
   35 bronze collections disappear and intraday stress, steps and respiration series become
   daily aggregates.
 - *Operational simplicity (moderate):* **strong**. One static secret, one disposable token.
@@ -88,17 +93,18 @@ collection the Personal API doesn't serve.
 
 **Description.** Add a Personal API client beside the library. Move the collections the
 Personal API covers and silver consumes (`user_summary`, `activities`, `activity_summary`,
-`activity_fit`, `sleep`, `hrv`, `heart_rates`, `body_battery`, weight) onto it. Keep the
-library only for fitness metrics, splits and the long tail. The catalog gains a field naming
-which client serves each endpoint.
+`activity_fit`, `sleep`, `hrv`, `heart_rates`, `body_battery`, weight, `max_metrics`) onto it.
+Keep the library only for training status, race predictions, splits and the long tail. The
+catalog gains a field naming which client serves each endpoint.
 
 **Analysis.**
 - *Gate:* **passes**. Every silver source keeps a path.
-- *Sanctioned access (major):* **partial**. The bulk of analytically important data moves to
-  the sanctioned path; fitness and splits stay on the SSO path.
-- *Fragility (major):* **partial**. An SSO break stalls `silver_fitness` and
-  `silver_workout_splits` only; sleep, daily, workouts and body keep flowing. The dependency
-  itself is not removed.
+- *Sanctioned access (major):* **partial**. The bulk of analytically important data, VO2max
+  included, moves to the sanctioned path; training status, race predictions and splits stay on
+  the SSO path.
+- *Fragility (major):* **partial**. An SSO break stalls `silver_workout_splits` and
+  `silver_fitness`'s training-status and race-prediction columns only; sleep, daily, workouts,
+  body and VO2max keep flowing. The dependency itself is not removed.
 - *Data coverage (major):* **strong**. Nothing lost. Where the Personal API serves aggregates
   only (stress, steps, respiration), the library keeps the intraday collections.
 - *Operational simplicity (moderate):* **weak**. Two auth mechanisms, two secrets, two health
@@ -115,33 +121,36 @@ which client serves each endpoint.
 **Chosen: Option A for now, with Option C as the expected destination.**
 
 B fails the gate outright. C is the right shape if a move is made, because it puts the data
-gold depends on behind a supported API while keeping the fitness and splits tables alive.
-But the API was two weeks old at evaluation, has undocumented rate limits, no refresh tokens
-and a 26-endpoint allowlist, and the library maintainer declined to adopt it. Garmin may
-extend the allowlist (the obvious additions are the metrics service and activity sub-resources),
-in which case C's split line moves or disappears and work done now is redone. The current path
-works and is guarded. Waiting costs nothing but exposure to an SSO change, and that exposure
-already exists today.
+gold depends on behind a supported API while keeping the training-status and splits sources
+alive. But the API is young, has undocumented rate limits, no refresh tokens and a 28-endpoint
+allowlist, and the library maintainer declined to adopt it. Garmin is extending the allowlist
+(it added daily VO2max and activity types three weeks after launch), so C's split line is
+still moving: work done now would be redone as more of the metrics service and the activity
+sub-resources arrive. The current path works and is guarded. Waiting costs nothing but
+exposure to an SSO change, and that exposure already exists today.
 
 **Re-evaluate when any of these happens:**
 
-1. The Swagger allowlist or Garmin's Python client gains any of: `metrics-service`
-   (training status, max metrics, race predictions, endurance or hill score, training
-   readiness), `activity-service` sub-resources (splits, details, zones, weather, gear,
-   exercise sets), or `device-service`. That removes most of the gap and pushes toward B.
+1. The Swagger allowlist or Garmin's Python client gains any of: the rest of
+   `metrics-service` (training status, race predictions, endurance or hill score, training
+   readiness; daily VO2max is already served), `activity-service` sub-resources (splits,
+   details, zones, weather, gear, exercise sets), or `device-service`. That removes most of the
+   gap and pushes toward B.
 2. The `garminconnect` SSO path breaks or Garmin starts blocking it. That forces C or B on
    whatever coverage exists at the time.
 3. Garmin documents rate limits that our daily volume (about 14 partitions times roughly 50
    endpoints, plus fan-out) would exceed. That constrains C's design.
-4. Six months pass without any of the above (about 2027-05). Re-read the *Reference* section
-   against the live Swagger page and decide on the facts then.
+4. Six months pass without any of the above (about 2027-05). Run the spec diff, re-read the
+   *Reference* section against it, and decide on the facts then.
 
-## Reference: the Personal API as evaluated on 2026-11-02
+## Reference: the Personal API as of 2026-11-23
 
-Sources: the Personal API page, FAQ and Swagger page under
-`developer.garmin.com/gc-developer-program/personal/`, the OpenAPI document embedded in the
-Swagger page (version 1.0.0), Garmin's reference client `garmin/connect-personal-api-python`
-(Apache-2.0), and the `cyberjunky/python-garminconnect` issue tracker.
+Sources: the Personal API page (`personal-api/`), FAQ (`personal-faq/`) and Swagger page
+(`swagger-docs/`) under `developer.garmin.com/gc-developer-program/personal/`, the OpenAPI
+document embedded in the Swagger page's JavaScript bundle (saved as
+[personal-api-openapi.json](personal-api-openapi.json); `info.version` 1.0.0), Garmin's
+reference client `garmin/connect-personal-api-python` (Apache-2.0), and the
+`cyberjunky/python-garminconnect` issue tracker.
 
 ### Program and terms
 
@@ -183,6 +192,7 @@ Swagger page (version 1.0.0), Garmin's reference client `garmin/connect-personal
 
 | Tag | Path | Parameters | Notes |
 |---|---|---|---|
+| Activity | `/activity-service/activity/activityTypes/simple` | | Activity-type table (`key`, `parent`), sorted by parent then key. Same data as the library's `activity_types`. |
 | Activity | `/activity-service/activity/{activityId}` | `activityId` | Summary, metadata, measurements, split summaries. Same path the library uses for `activity_summary`. |
 | Activity | `/activity-service/activity/{activityId}/workouts` | `activityId` | Workouts performed during the activity. |
 | Activity | `/activitylist-service/activities/search/activities` | `start`, `limit`, `startDate`, `endDate`, `activityType`, many filters | Paginated list. Same path the library uses for `activities`. About 45 per page. |
@@ -193,6 +203,7 @@ Swagger page (version 1.0.0), Garmin's reference client `garmin/connect-personal
 | Health | `/goal-service/goal/user/effective/weightgoal/{startDate}/{endDate}` | dates | Weight goals. |
 | Health | `/hrv-service/hrv/{calendarDate}` | `calendarDate` | HRV summary and readings. Same path as the library's `hrv`. |
 | Health | `/hrv-service/hrv/daily/{fromDate}/{toDate}` | dates | HRV daily summaries. |
+| Health | `/metrics-service/metrics/maxmet/daily/{startDate}/{endDate}` | dates, `sport` (optional list, FIT sport names) | Daily VO2max as an array of `MaxMetDTO`: `generic`, `cycling` and `rowing`, each with `calendarDate`, `vo2MaxValue`, `vo2MaxPreciseValue`. Same path and shape as the library's `max_metrics`; adds `rowing`. |
 | Health | `/nutrition-service/food/logs/{date}` | `date`, `includeGoals`, `includeNutrition`, `includeMedia`, `mealId` | Daily nutrition. |
 | Health | `/sleep-service/sleep/dailySleep` | `date` | One night. Returns a flat `DailySleepDTO`. The library's `sleep` collection comes from `wellness-service/.../dailySleepData/{displayName}`, which wraps the same object as `dailySleepDTO` and adds sleep levels, movement and other series. |
 | Health | `/sleep-service/sleep/dailySleepSummariesByDate` | `startDate`, `endDate` | Up to 31 days. |
@@ -201,7 +212,7 @@ Swagger page (version 1.0.0), Garmin's reference client `garmin/connect-personal
 | Health | `/usersummary-service/stats/stress/daily/{startDate}/{endDate}` | dates | Daily aggregates, up to 28 days. Not the intraday series the library's `stress` captures. |
 | Health | `/usersummary-service/usersummary/daily` | `calendarDate` | Daily user summary. Same path and shape as the library's `user_summary`. |
 | Health | `/usersummary-service/v2/dailysummaries` | `startDate`, `endDate` | Up to one year. Compact per-day summary with stress, respiration, pulse-ox, HR, body battery, intensity minutes, movement, hydration sub-objects. |
-| Health | `/weight-service/weight/all/{startDate}/{endDate}` | dates | All weight entries. |
+| Health | `/weight-service/weight/all/{startDate}/{endDate}` | dates | All weight entries, up to 364 days. |
 | Health | `/weight-service/weight/range/{startDate}/{endDate}` | dates, `includeAll` | Daily latest weights plus averages (`dailyWeightSummaries`). Not the `dateWeightList` shape the library's `daily_weigh_ins` returns. |
 | Health | `/wellness-service/wellness/bodyBattery/reports/daily` | `startDate`, `endDate`, `chunks` | Up to 31 days. Same path as the library's `body_battery`. |
 | Health | `/wellness-service/wellness/daily/spo2acclimation/{calendarDate}` | `calendarDate` | Daily SpO2. The library's `spo2` uses `wellness/daily/spo2`. |
@@ -222,24 +233,29 @@ Swagger page (version 1.0.0), Garmin's reference client `garmin/connect-personal
 | `daily_weigh_ins`, `weigh_ins`, `body_composition` | `silver_body` | Partial; different shape |
 | `spo2`, `fitness_age`, `hydration`, `nutrition_*`, `menstrual_*` | bronze only | Yes, some with different paths |
 | `stress`, `steps_intraday`, `respiration`, `intensity_minutes`, `floors`, `daily_events`, `body_battery_events` | bronze only, several in `IMPORTANT` checks | Daily aggregates only, via stats or summary endpoints; intraday series not available |
-| `max_metrics`, `training_status`, `race_predictions` | `silver_fitness`, then `gold_daily_wellness` | **No** |
+| `max_metrics` | `silver_fitness`, then `gold_daily_wellness` | Yes, same path and shape (plus a `rowing` entry) |
+| `training_status`, `race_predictions` | `silver_fitness`, then `gold_daily_wellness` | **No** |
 | `training_readiness`, `morning_training_readiness`, `endurance_score`, `hill_score`, `running_tolerance`, `lactate_threshold`, `cycling_ftp` | bronze only | **No** |
 | `activity_splits` | `silver_workout_splits` | **No** (`lapDTOs` not served; the activity summary's `splitSummaries` is a different, coarser object) |
 | `activity_details`, `activity_typed_splits`, `activity_split_summaries`, `activity_weather`, `activity_hr_zones`, `activity_power_zones`, `activity_exercise_sets`, `activity_gear` | bronze only | **No** |
 | `devices`, `device_last_used`, `primary_device`, `device_settings`, `device_solar`, `device_alarms` | bronze only | **No** |
-| `gear`, `gear_defaults`, `goals`, `personal_records`, `training_plans`, `workouts`, `*_badges`, `weekly_*`, `activity_types`, `user_settings`, `pregnancy_summary`, `lifestyle_logging`, `blood_pressure` | bronze only | **No** |
+| `activity_types` | bronze only | Yes, simplified form (`key`, `parent`) |
+| `gear`, `gear_defaults`, `goals`, `personal_records`, `training_plans`, `workouts`, `*_badges`, `weekly_*`, `user_settings`, `pregnancy_summary`, `lifestyle_logging`, `blood_pressure` | bronze only | **No** |
 
 ### Ecosystem signals
 
-- Garmin's reference client (`garmin-connect-personal-api-python` on PyPI) is Python 3.12+,
-  `requests`-based, Apache-2.0: token mint with on-disk cache, GET wrappers for the endpoints
-  above, a generic `get()` for the rest, no retries, whole FIT ZIP held in memory.
+- Garmin's reference client (`garmin-connect-personal-api-python` on PyPI, 1.1.0 released
+  2026-11-20) is Python 3.12+, `requests`-based, Apache-2.0: token mint with on-disk cache, GET
+  wrappers for the endpoints above, a generic `get()` for the rest, an on-disk cache of the
+  activity-type table, no retries, whole FIT ZIP held in memory. New endpoints have appeared in
+  this client within a day of reaching the Swagger page, so its commit log is a cheap
+  change signal.
 - `cyberjunky/python-garminconnect` issue #476 ("Garmin Personal API Available",
   2026-10-21) was closed by the maintainer on 2026-10-23 as unusable for that library ("only
   35 datapoints compared with 300+") with a pointer to Garmin's client. No upstream migration
   is planned.
-- Independent probes (for example `tamcore/garmin-mcp` issue #42, 2026-10-22) confirm: 26
-  endpoints, unlisted paths 404, token rejected on the regular host, HRV shape identical to
+- Independent probes at launch (for example `tamcore/garmin-mcp` issue #42, 2026-10-22)
+  confirm: 26 endpoints at that time, unlisted paths 404, token rejected on the regular host, HRV shape identical to
   the unofficial API, sleep and stress shapes different.
 
 ### Design notes for Option C, if taken

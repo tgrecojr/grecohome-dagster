@@ -42,4 +42,4 @@ every capture op in the run uses that client.
 ## References
 
 - `docs/high-level-design.md`: tenets and the bronze re-capture decision
-- [decisions/personal-api.md](decisions/personal-api.md): Garmin's official Personal API (2026-10) versus the `garminconnect` library; deferred, with re-evaluation triggers and an endpoint-coverage snapshot
+- [decisions/personal-api.md](decisions/personal-api.md): Garmin's official Personal API (2026-10) versus the `garminconnect` library; deferred, with re-evaluation triggers, an endpoint-coverage table and the OpenAPI snapshot that `scripts/garmin_personal_api_spec.py` diffs against
