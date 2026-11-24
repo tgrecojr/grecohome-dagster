@@ -6,7 +6,6 @@ import pytest
 
 from grecohome_core.dagster.helpers import (
     daily_utc_partitions,
-    run_async,
     trailing_partition_keys,
 )
 
@@ -49,11 +48,3 @@ class TestTrailingPartitionKeys:
         # Only Jan 1-2 exist yet (plus the in-progress 2nd); clamped by availability.
         assert keys == ["2024-01-01", "2024-01-02"]
 
-
-@pytest.mark.unit
-class TestRunAsync:
-    def test_runs_coroutine_to_completion(self):
-        async def coro():
-            return 42
-
-        assert run_async(coro()) == 42

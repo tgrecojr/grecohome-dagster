@@ -36,7 +36,7 @@ rebuild per run, so there's no persistent database and no state shared between r
 | Reader | Yields | For |
 |---|---|---|
 | `payloads_relation_sql(files)` | `filename`, `j` (the whole file parsed as one `JSON` value, via `read_text` → `json(content)`) | JSON payloads |
-| `csv_relation_sql(files, columns)` | `filename` plus the named columns (an alias → exact header map, since headers can hold spaces and brackets), read all-VARCHAR with a header row (`header=true`) and `union_by_name` to tolerate column drift | CSV payloads (Lingo) |
+| `csv_relation_sql(files, columns)` | `filename` plus the named columns (an alias → exact header map, since headers can hold spaces and brackets), read all-VARCHAR with a header row (`header=true`) and `union_by_name` to tolerate column drift | CSV payloads |
 | `text_lines_relation_sql(files)` | `filename`, `line` (one row per non-blank physical line, read with a delimiter, ASCII Unit Separator, that never occurs in the data; DuckDB's default `"` quoting still applies, which is harmless for quote-free data) | Headerless, whitespace- or fixed-width text (USCRN) |
 
 JSON payloads are read as raw text rather than struct-typed (`read_json_auto`): heterogeneous,

@@ -1,22 +1,28 @@
 # Deployment
 
-Each data subject ships as its own **gRPC code-location image** that registers with
-the **existing host Dagster daemon + webserver**. We don't *own* the Dagster instance,
-webserver, or `dagster.yaml` (the host does) — but because the host uses the
-`DefaultRunLauncher`, each run executes **inside the code-location container**, so that
-container does need the host's instance config + Postgres at run time (see
-[Dagster instance wiring](#dagster-instance-wiring)).
+Each code location — the Soil/USCRN bronze subject, silver and gold — ships as its own **gRPC
+code-location image** that registers with the **existing host Dagster daemon + webserver**. We
+don't *own* the Dagster instance, webserver, or `dagster.yaml` (the host does) — but because the
+host uses the `DefaultRunLauncher`, each run executes **inside the code-location container**, so
+that container does need the host's instance config + Postgres at run time (see
+[Dagster instance wiring](#3-dagster-instance-wiring)).
+
+Whoop and Garmin bronze is written by [WearStream](https://github.com/chainringlabs/wearstream),
+a separate container deployed alongside these code locations — see
+[Whoop and Garmin bronze (WearStream)](#whoop-and-garmin-bronze-wearstream).
 
 ## Images
 
-Per-subject images are published to GHCR on every push to `main`:
+Per-code-location images are published to GHCR on every push to `main`:
 
 ```
-ghcr.io/tgrecojr/grecohome-dagster-whoop:latest
-ghcr.io/tgrecojr/grecohome-dagster-whoop:whoop-<sha>
+ghcr.io/tgrecojr/grecohome-dagster-soil:latest
+ghcr.io/tgrecojr/grecohome-dagster-soil:soil-<sha>
+ghcr.io/tgrecojr/grecohome-dagster-silver:latest     (silver-<sha>)
+ghcr.io/tgrecojr/grecohome-dagster-gold:latest       (gold-<sha>)
 ```
 
-Each image runs `dagster code-server start` serving its subject's `Definitions` on port
+Each image runs `dagster code-server start` serving its code location's `Definitions` on port
 4000. Images are linux/amd64 only, cosign-signed, and ship an SBOM + SLSA
 provenance attestation.
 
@@ -29,54 +35,52 @@ automerges it; merge it by hand, in lockstep with the host image PR in `greco-ho
 
 ## Host wiring
 
-### 1. Register the code location (`workspace.yaml`)
+### 1. Register the code locations (`workspace.yaml`)
 
-On the host, point Dagster at each subject's gRPC server (Ansible-managed):
+On the host, point Dagster at each code location's gRPC server (Ansible-managed):
 
 ```yaml
 load_from:
-  - grpc_server:
-      host: whoop-code-location   # docker network service / hostname
-      port: 4000
-      location_name: whoop
-  # Future subjects:
-  # - grpc_server: { host: garmin-code-location, port: 4000, location_name: garmin }
-  # - grpc_server: { host: lingo-code-location,  port: 4000, location_name: lingo }
+  - grpc_server: { host: dagster_soil,   port: 4000, location_name: soil_ingest }
+  - grpc_server: { host: dagster_silver, port: 4000, location_name: silver }
+  - grpc_server: { host: dagster_gold,   port: 4000, location_name: gold }
 ```
 
-### 2. Shared Whoop-API concurrency pool
+`host` is the container name on the shared docker network (`monitoring`).
 
-The Whoop assets tag their ops with the `whoop_api` concurrency pool. **The limit is
-enforced by the host instance (stored in its Postgres), not the image.** Set it to 1 so the
-hourly tick and any backfill cannot collectively exceed the API budget (and only one run
-holds the OAuth token at a time, avoiding the refresh-token rotation race).
+### 2. Concurrency pool (`uscrn_api`)
+
+The soil asset tags its op with the `uscrn_api` concurrency pool. **The limit is enforced by
+the host instance (stored in its Postgres), not the image.** USCRN is low volume, so the limit
+is optional; set it to 1 so the 6-hourly tick, the weekly correction run and any backfill fetch
+NOAA's files one at a time. Silver and gold carry no pool.
 
 In Dagster 1.13 a **per-pool limit is set in the instance DB via the CLI**, not in
 `dagster.yaml`. (The `concurrency.pools` block in `dagster.yaml` only accepts
 `default_limit` / `granularity` / `op_granularity_run_buffer` — naming a pool there, e.g.
-`pools: { whoop_api: { max_concurrent: 1 } }`, is invalid and crashes the daemon at instance
+`pools: { uscrn_api: { max_concurrent: 1 } }`, is invalid and crashes the daemon at instance
 load.) Set it once, against the running instance (any container with `DAGSTER_HOME` + the
 `DAGSTER_POSTGRES_*` env — the daemon works):
 
 ```bash
-dagster instance concurrency set whoop_api 1
-dagster instance concurrency get whoop_api   # verify
+dagster instance concurrency set uscrn_api 1
+dagster instance concurrency get uscrn_api   # verify
 ```
 
-This is an **op**-granularity limit, so at most one `whoop_api` op runs across all runs. It
+This is an **op**-granularity limit, so at most one `uscrn_api` op runs across all runs. It
 persists in the instance DB (re-run it if you ever reset that DB). To keep it Ansible-managed,
 run it as a post-deploy `docker_container_exec` against the daemon container:
 
 ```yaml
-- name: Set whoop_api pool concurrency limit
+- name: Set uscrn_api pool concurrency limit
   community.docker.docker_container_exec:
     container: dagster_daemon
-    command: dagster instance concurrency set whoop_api 1
+    command: dagster instance concurrency set uscrn_api 1
   changed_when: false
 ```
 
 > A blanket `concurrency: { pools: { default_limit: 1 } }` in `dagster.yaml` is valid and
-> would also cap `whoop_api` while it's the only pool — but it limits *every* pool, so prefer
+> would also cap `uscrn_api` while it's the only pool — but it limits *every* pool, so prefer
 > the per-pool CLI for precision.
 
 ### 3. Dagster instance wiring
@@ -103,18 +107,21 @@ instance config:
   host's storage config and checks in CI that its driver is importable, so keep the two in
   sync.
 
-The host `dagster.yaml` also carries the `whoop_api` pool from step 2; mounting the same file
-into the container is harmless (the limit is enforced by the daemon's run coordinator).
+The pool limit from step 2 lives in the instance DB and is enforced by the daemon's run
+coordinator, so the code-location containers need nothing extra for it.
 
 ### 4. Required environment / mounts
 
-Inject per-subject env at deploy (Ansible + secrets manager). See `docs/ENV_TEMPLATE.md`.
+Inject per-code-location env at deploy (Ansible + secrets manager). See
+`docs/ENV_TEMPLATE.md`. This section covers the bronze subject; silver and gold have their own
+[host container](#host-container-dagster_silver) sections below.
 
 App env (read by the app's settings):
-- required: `BRONZE_ROOT`, `WHOOP_CLIENT_ID`, `WHOOP_CLIENT_SECRET`, `WHOOP_TOKEN_PATH`.
-- optional: `BRONZE_MONITOR_DIR` — enables the bronze schema-drift check by giving it a
-  writable place for baselines, **outside** `BRONZE_ROOT` (bronze stays immutable raw
-  capture). Unset → schema-drift no-ops. See `docs/intent/core/checks/checks-design.md`.
+- required: `BRONZE_ROOT`.
+- optional: the `USCRN_*` tuning knobs (see [Soil](#soil--noaa-uscrn-bronze-subject)), and
+  `BRONZE_MONITOR_DIR` — enables the bronze schema-drift check by giving it a writable place for
+  baselines, **outside** `BRONZE_ROOT` (bronze stays immutable raw capture). Unset →
+  schema-drift no-ops. See `docs/intent/core/checks/checks-design.md`.
 
 Dagster instance env (read by Dagster, per step 3):
 - required: `DAGSTER_HOME`, `DAGSTER_POSTGRES_USER`, `DAGSTER_POSTGRES_PASSWORD`,
@@ -123,208 +130,49 @@ Dagster instance env (read by Dagster, per step 3):
 Mount these into the container:
 
 - `BRONZE_ROOT` — writable; where raw captures are written.
-- the directory of `WHOOP_TOKEN_PATH` — writable; the OAuth token file is rewritten atomically
-  on every refresh (Whoop rotates the refresh token).
 - `DAGSTER_HOME` — the directory containing the shared `dagster.yaml`.
 - `BRONZE_MONITOR_DIR` (optional) — writable; holds schema-drift baselines. Mount it as a
   **separate** volume from `BRONZE_ROOT` so checks never write under the immutable bronze tree
   (the check refuses to write a baseline that would land inside `BRONZE_ROOT`).
 
-## One-time OAuth setup
-
-The token file at `WHOOP_TOKEN_PATH` is created by the interactive OAuth flow:
-
-```bash
-# Headless (server): prints an auth URL, you paste back the callback URL.
-python -m grecohome_whoop.oauth_setup --headless
-
-# Local with a browser + callback server:
-python -m grecohome_whoop.oauth_setup
-```
-
-Run it with the same `WHOOP_*` env and a writable `WHOOP_TOKEN_PATH` so the resulting token
-lands where the code location will read it.
-
 ## Backfill
 
-Backfill older partitions through the same assets (no separate script):
+Backfill older bronze partitions through the same assets (no separate script):
 
 ```bash
-dagster backfill --partition-range 2024-01-01...2024-03-31 \
-  --job whoop_bronze_job
+dagster backfill --partition-range 2010-01-01...2010-12-31 --job uscrn_capture_job
 ```
 
-The `whoop_api` pool keeps backfill within the API budget alongside the hourly schedule.
+The soil asset's backfill policy splits a range into runs of up to 366 partitions, so each run
+fetches about one year file; the `uscrn_api` pool keeps a backfill from fetching alongside the
+scheduled captures. Silver and gold have no partitions to backfill: after a bronze backfill, run
+the affected silver job (then gold) on demand.
 
-## Garmin (second subject)
+## Whoop and Garmin bronze (WearStream)
 
-Garmin deploys the same way as Whoop (per-subject gRPC code-location image registered with the
-host daemon over `workspace.yaml`, runs executing in the container via `DefaultRunLauncher`), with
-a few subject-specific differences:
+Whoop and Garmin capture lives in [WearStream](https://github.com/chainringlabs/wearstream), a
+standalone, self-scheduling container — not a Dagster code location, so it has no
+`workspace.yaml` entry, no Dagster schedules and no concurrency pool. It owns Whoop OAuth and
+the Garmin session, the trailing-window re-capture, skip-identical, backfill, its own bronze
+checks and its own alerts; re-authentication and Whoop/Garmin backfills are done through it.
 
-- **Image:** `ghcr.io/tgrecojr/grecohome-dagster-garmin`, serving
-  `grecohome_garmin.dagster.definitions`.
-- **Auth is delegated to `garminconnect`**, which keeps its session in a token *store*
-  directory at **`GARMINTOKENS`** (the file `garmin_tokens.json`; mounted, writable, **separate
-  from bronze**). The library refreshes it. **`GARMINTOKENS` must be the mounted token
-  directory** — `/secrets/garmin` (the code default), mounted from
-  `/opt/docker/dagster/garmin/secrets`, writable by the container user, no symlink in the path,
-  never under `BRONZE_ROOT`. A path that doesn't exist in the container makes every run do a full
-  password login, which Garmin rate-limits; `garmin_tokenstore_unusable` /
-  `garmin_tokenstore_not_saved` (ERROR) and the `garmin_tokenstore_health` check flag it. Design:
-  `docs/intent/garmin/auth/auth-design.md`. Required env: `GARMINCONNECT_EMAIL`, `GARMINCONNECT_BASE64_PASSWORD`
-  (+ optional `GARMINCONNECT_IS_CN`); tuning: `LOOKBACK_DAYS`, `FETCH_SELECTION`/`FETCH_EXCLUDE`
-  (default empty = capture all), `RATE_LIMIT_SECONDS`, `WEEKLY_WEEKS`, `CAPTURE_ALT_FORMATS`.
-- **Daily re-capture** — the daily schedule re-captures every one of the trailing `LOOKBACK_DAYS`
-  completed partitions on every tick (Garmin syncs late and restates days); identical
-  re-captures are skipped on single-request endpoints. Days that fall out of the window during
-  an outage need a manual partition backfill of `garmin_daily_job`. A second daily schedule
-  refreshes the unpartitioned reference/snapshot collections. Design:
-  `docs/intent/garmin/capture/capture-design.md`.
+- **Deployment** is in the host repo `greco-home-builder` (Ansible `tasks/wearstream.yml`). It
+  writes `whoop/` and `garmin/` into the same host bronze tree that soil writes `uscrn/` into
+  and silver reads.
+- **Shared bronze contract.** Its files are byte-compatible with core's bronze writer (same
+  layout, same `.meta.json` sidecar, `schema_version` `v1`). A layout change in
+  `grecohome_core.bronze` needs a matching WearStream release before silver can rely on it.
+- **Lineage stubs.** Silver declares `whoop_bronze_*` / `garmin_bronze_*` upstreams by
+  `AssetKey`; no code location defines them, so Dagster shows them as external stubs. Silver
+  runs on its own schedules regardless.
+- **Alerts** are provisioned with WearStream's deployment in
+  `files/grafana/provisioning/alerting/wearstream.yml` (greco-home-builder), not by this repo —
+  see [Observability and alerting](#observability-and-alerting).
 
-### Host container (`dagster_garmin`)
+## Soil / NOAA USCRN (bronze subject)
 
-Mirror the `dagster_whoop` task: on the `monitoring` network, `DAGSTER_HOME` + the four
-`DAGSTER_POSTGRES_*` (run worker → instance Postgres), the `GARMINCONNECT_*` env, and **three
-mounts** — the shared `dagster.yaml` (`DAGSTER_HOME`), the bronze root
-(`/opt/datalake/bronze` → `/data/bronze`; the app writes the `garmin/` source segment itself), and
-the writable **`GARMINTOKENS`** dir (`/opt/docker/dagster/garmin/secrets` → `/secrets/garmin`,
-matching Whoop's `/secrets/<subject>` convention; set `GARMINTOKENS=/secrets/garmin` or leave it
-unset).
-
-```yaml
-# workspace.yaml
-  - grpc_server: { host: dagster_garmin, port: 4000, location_name: garmin_ingest }
-```
-
-```bash
-# concurrency pool (instance DB), same as whoop
-dagster instance concurrency set garmin_api 1
-```
-
-### One-time MFA bootstrap
-
-Garmin's first login needs an interactive MFA code; run it once to write the token store. It
-must mount the **same** host directory as the running container. It exits non-zero if the
-session wasn't saved:
-
-```bash
-docker run --rm -it \
-  -e GARMINCONNECT_EMAIL=... -e GARMINCONNECT_BASE64_PASSWORD=... \
-  -e GARMINTOKENS=/secrets/garmin -e BRONZE_ROOT=/data/bronze \
-  -v /opt/docker/dagster/garmin/secrets:/secrets/garmin \
-  --entrypoint python ghcr.io/tgrecojr/grecohome-dagster-garmin:latest \
-  -m grecohome_garmin.bootstrap
-```
-
-### Backfill
-
-```bash
-dagster backfill --partition-range 2024-01-01...2024-03-31 --job garmin_daily_job
-```
-
-Because Garmin has no dedup, backfilling an already-captured day **appends** a second copy
-(intended for explicit re-pulls; clean for never-captured history). The `garmin_api` pool keeps a
-large backfill gentle.
-
-## Lingo (third subject)
-
-Lingo is **file-arrival-driven**, not schedule-driven: the user exports CGM data from the Lingo
-iOS app and uploads a cumulative CSV to a Google Drive folder; a **sensor** captures each new file.
-
-- **Image:** `ghcr.io/tgrecojr/grecohome-dagster-lingo`, serving `grecohome_lingo.dagster.definitions`.
-- **Auth = Google service account** (no interactive OAuth). In GCP, create a service account, enable
-  the Drive API, download its key JSON; in Drive, **share the watched folder (read-only) with the
-  SA's email**. Mount the key JSON (e.g. `/secrets/lingo/sa.json`) and set
-  `GDRIVE_SERVICE_ACCOUNT_PATH` to it. Full walkthrough: [GCP service-account setup](#gcp-service-account-setup).
-- **Sensor + dynamic partitions:** `lingo_drive_sensor` lists the folder and adds a partition +
-  run per new Drive `file_id` (one collection: `lingo/glucose`, captured once each). **Enable the
-  sensor** in the UI/daemon — sensors are off by default. No schedule, no backfill grid; the
-  sensor's first tick captures the existing folder backlog. Design:
-  `docs/intent/lingo/lingo-design.md`.
-
-### Host container (`dagster_lingo`)
-
-Mirror the others: on `monitoring`, `DAGSTER_HOME` + `DAGSTER_POSTGRES_*` (run worker), the
-`GDRIVE_*` env (`GDRIVE_FOLDER_ID`, `GDRIVE_SERVICE_ACCOUNT_PATH`, optional
-`GDRIVE_POLL_INTERVAL_MINUTES`), and **three mounts** — the shared `dagster.yaml`, the SA key
-(read-only, e.g. `/secrets/lingo`), and the bronze root (`/opt/datalake/bronze` → `/data/bronze`;
-the app writes the `lingo/` source segment itself).
-
-```yaml
-# workspace.yaml
-  - grpc_server: { host: dagster_lingo, port: 4000, location_name: lingo_ingest }
-```
-
-The sensor runs in this container (where the SA key lives); the host daemon triggers its
-evaluation over gRPC. Optional `dagster instance concurrency set lingo_api 1` (low volume; not
-critical).
-
-### GCP service-account setup
-
-A **service account** (SA) is a non-human Google identity with its own key — no OAuth consent
-screen, no token refresh, no user in the loop. We give it read-only access to *only* the one Drive
-folder by sharing that folder with the SA's email, exactly as you would share with a person. The SA
-can see nothing else in Drive.
-
-**1. Create / pick a GCP project.** [console.cloud.google.com](https://console.cloud.google.com) →
-project picker → *New Project* (e.g. `grecohome-data`). An existing project is fine.
-
-**2. Enable the Drive API.** APIs & Services → *Library* → search "Google Drive API" → **Enable**
-(in the target project). This is the only API the SA needs.
-
-**3. Create the service account.** IAM & Admin → *Service Accounts* → **Create service account**.
-- Name: `lingo-drive-reader` (id becomes `lingo-drive-reader@<project>.iam.gserviceaccount.com`).
-- **Skip** the "Grant this service account access to the project" step — **do not** give it any
-  project IAM role. Drive access comes from folder *sharing* (step 6), not project IAM; a project
-  role would over-grant. Click **Done**.
-
-**4. Create a key.** Open the SA → *Keys* tab → **Add key → Create new key → JSON** → Create. A
-JSON file downloads **once** (Google keeps no copy). This is the secret you'll mount — treat it like
-a password.
-
-**5. Store the key as a secret (no commit).** Put the JSON into your secrets manager and have
-Ansible drop it at the mounted path (e.g. `/secrets/lingo/sa.json`), `0400`, owned by the container
-user. Never commit it; `GDRIVE_SERVICE_ACCOUNT_PATH` points at this mount.
-
-**6. Share the glucose folder with the SA — read-only (the scoping step).** This is what restricts
-the SA to just the one folder:
-- In Google Drive, open the folder you upload Lingo exports to.
-- **Share** → paste the SA email (`lingo-drive-reader@<project>.iam.gserviceaccount.com`) →
-  role **Viewer** → **uncheck "Notify people"** → Share.
-- That single share is the *entire* grant. The SA can list/read this folder and its files and
-  nothing else in your Drive. The code requests only the read-only scope
-  (`https://www.googleapis.com/auth/drive.readonly`), so even a Viewer share can't be used to write.
-
-**7. Get the folder id for `GDRIVE_FOLDER_ID`.** Open the folder; the id is the last path segment of
-the URL: `https://drive.google.com/drive/folders/`**`<THIS_IS_THE_ID>`**.
-
-**8. Verify before deploy.** With the key path and folder id set, list the folder once:
-
-```bash
-docker run --rm \
-  -e GDRIVE_SERVICE_ACCOUNT_PATH=/secrets/lingo/sa.json \
-  -e GDRIVE_FOLDER_ID=<folder-id> -e BRONZE_ROOT=/data/bronze \
-  -v /opt/docker/dagster/lingo/secrets:/secrets/lingo:ro \
-  --entrypoint python ghcr.io/tgrecojr/grecohome-dagster-lingo:latest \
-  -c "from grecohome_lingo import drive; s=drive.get_drive_service(); \
-print([f['name'] for f in drive.list_csv_files(s)])"
-```
-
-It should print your uploaded CSV names. An empty list with no error means the SA authenticated but
-the folder isn't shared with it (or wrong id) — re-check step 6/7. A `403`/`PERMISSION_DENIED` means
-the Drive API isn't enabled on the SA's project (step 2).
-
-> **Scope hygiene.** Two independent limits keep this tight: the *share* bounds the SA to one folder
-> (data scoping), and the *OAuth scope* in code is `drive.readonly` (capability scoping). Rotate the
-> key by creating a new one (step 4), swapping the secret, then deleting the old key from the *Keys*
-> tab. Revoke all access instantly by un-sharing the folder.
-
-## Soil / NOAA USCRN (fourth subject)
-
-Soil is **schedule-driven** like Whoop/Garmin, but the source is a **public NOAA file** (the
-`hourly02` USCRN product) — **no auth, no secrets, no token/key mount**. It's the simplest subject
-to deploy.
+Soil is **schedule-driven**, and the source is a **public NOAA file** (the `hourly02` USCRN
+product) — **no auth, no secrets, no token/key mount**.
 
 - **Image:** `ghcr.io/tgrecojr/grecohome-dagster-soil`, serving `grecohome_soil.dagster.definitions`.
 - **Daily UTC partitions + row-slice + dedup.** The source is one ever-growing year file per station
@@ -340,11 +188,12 @@ to deploy.
 
 ### Host container (`dagster_soil`)
 
-Mirror the others, but **only two mounts** (no credential mount): on `monitoring`, `DAGSTER_HOME` +
-`DAGSTER_POSTGRES_*` (run worker → instance Postgres), the `USCRN_*` env (`USCRN_STATION`, optional
-`USCRN_BASE_URL` / `USCRN_LOOKBACK_DAYS` / `USCRN_CORRECTION_LOOKBACK_DAYS` / `USCRN_START_DATE`), and the two mounts — the shared
-`dagster.yaml` (`DAGSTER_HOME`) and the bronze root (`/opt/datalake/bronze` → `/data/bronze`; the app
-writes the `uscrn/` source segment itself).
+On `monitoring`: `DAGSTER_HOME` + `DAGSTER_POSTGRES_*` (run worker → instance Postgres), the
+`USCRN_*` env (`USCRN_STATION`, optional `USCRN_BASE_URL` / `USCRN_LOOKBACK_DAYS` /
+`USCRN_CORRECTION_LOOKBACK_DAYS` / `USCRN_START_DATE`), and **two mounts** (no credential mount)
+— the shared `dagster.yaml` (`DAGSTER_HOME`) and the bronze root (`/opt/datalake/bronze` →
+`/data/bronze`; the app writes the `uscrn/` source segment itself) — plus the optional
+`BRONZE_MONITOR_DIR` volume ([step 4](#4-required-environment--mounts)).
 
 ```yaml
 # workspace.yaml
@@ -352,12 +201,12 @@ writes the `uscrn/` source segment itself).
 ```
 
 ```bash
-# optional concurrency pool (instance DB); low volume, not critical
+# optional concurrency pool (instance DB); low volume, not critical — see Host wiring step 2
 dagster instance concurrency set uscrn_api 1
 ```
 
-Enable `uscrn_schedule` and `uscrn_correction_schedule` in the UI (capture schedules, like sensors,
-are off by default; the checks schedule starts running). Its first ticks
+Enable `uscrn_schedule` and `uscrn_correction_schedule` in the UI (capture schedules start
+stopped; the checks schedule `uscrn_bronze_checks_hourly` starts running). Their first ticks
 capture the recent partitions; backfill the station's history with
 `dagster backfill --partition-range 2010-01-01...<today> --job uscrn_capture_job`.
 
@@ -365,38 +214,40 @@ capture the recent partitions; backfill the station's history with
 
 Silver is **not** a data subject — it captures nothing. It's a derived, rebuildable layer
 that reads immutable bronze and writes typed, deduplicated **Parquet** for analysis. It
-makes **no source-API calls** (no auth, no secrets, no token/key mount) and stays **off**
-the `*_api` concurrency pools. Its tables (sleep, glucose, recovery, strain, workouts, weather,
-daily, body, fitness) are designed in [docs/intent/silver/](intent/silver/silver-design.md).
+makes **no source-API calls** (no auth, no secrets, no token/key mount) and carries **no**
+concurrency pool. Its tables (sleep, recovery, strain, workouts, weather, daily, body, fitness)
+are designed in [docs/intent/silver/](intent/silver/silver-design.md).
 
 - **Image:** `ghcr.io/tgrecojr/grecohome-dagster-silver`, serving
-  `grecohome_silver.dagster.definitions`. Depends only on `grecohome-core` + DuckDB — the
-  bronze API clients are deliberately absent.
+  `grecohome_silver.dagster.definitions`. Depends only on `grecohome-core` + DuckDB — no
+  bronze source client is in the image.
 - **Cross-code-location lineage:** each silver asset declares its bronze upstreams (for example
-  `garmin_bronze_sleep`, `whoop_bronze_sleep`) by `AssetKey`, so lineage renders across code
-  locations. The reads themselves are **filesystem reads of `BRONZE_ROOT`**, not gRPC
-  calls into the subject locations.
+  `garmin_bronze_sleep`, `whoop_bronze_sleep`, `uscrn_bronze_hourly`) by `AssetKey`, so lineage
+  renders across code locations. `uscrn_bronze_hourly` resolves to the soil location; the Whoop
+  and Garmin keys are external stubs (WearStream writes those files). The reads themselves are
+  **filesystem reads of `BRONZE_ROOT`**, not gRPC calls.
 - **Whole-table rebuild.** Assets are unpartitioned; each run overwrites its Parquet from
   current bronze (idempotent — last run wins). Each family's daily rebuild runs between 06:00 and
-  06:55 UTC, after Garmin's 05:30 daily capture and Whoop's hourly capture;
-  `silver_checks_daily` (07:00 UTC) runs every silver asset check independently. The rebuild
-  schedules default to stopped and are enabled in the UI; the checks schedule starts running.
+  06:55 UTC over whatever bronze holds then; `silver_checks_daily` (07:05 UTC) runs every silver
+  asset check independently. The rebuild schedules default to stopped and are enabled in the UI;
+  the checks schedule starts running.
 
 ### Host container (`dagster_silver`)
 
-Mirror the others — on `monitoring`, `DAGSTER_HOME` + `DAGSTER_POSTGRES_*` (run worker →
-instance Postgres) — but the data mounts differ from a subject's: silver **reads** bronze
-and **writes** a separate silver root.
+Like soil — on `monitoring`, `DAGSTER_HOME` + `DAGSTER_POSTGRES_*` (run worker → instance
+Postgres) — but the data mounts differ from a subject's: silver **reads** bronze and **writes** a
+separate silver root.
 
 - required app env: `BRONZE_ROOT`, `SILVER_ROOT`.
-- optional app env: `SILVER_MONITOR_DIR` — reserved for the forthcoming silver
+- optional app env: `USCRN_TIMEZONE` (the station's IANA tz for `silver_weather`'s local day;
+  defaults to `America/New_York`), and `SILVER_MONITOR_DIR` — reserved for the forthcoming silver
   monitor/validation (mirrors `BRONZE_MONITOR_DIR`); unused today, declared + mounted now so
   turning it on needs no deploy change. Unset → future silver checks no-op.
 
 Mounts (note bronze is **read-only** here — silver never writes under it):
 
 - **`BRONZE_ROOT` — read-only** (`/opt/datalake/bronze` → `/data/bronze:ro`). Silver reads the
-  source segments it projects (`garmin/`, `whoop/`, `lingo/`, `uscrn/`).
+  source segments it projects (`garmin/`, `whoop/`, `uscrn/`).
 - **`SILVER_ROOT` — writable**, a **separate** volume outside bronze (e.g.
   `/opt/datalake/silver` → `/data/silver`). The atomic Parquet writer refuses any path under
   `BRONZE_ROOT`.
@@ -421,20 +272,20 @@ dagster job execute --job silver_sleep_job   # whole-table rebuild from current 
 
 Gold is the analysis layer — derived, rebuildable marts built **from silver** (not bronze).
 It reads `SILVER_ROOT` and writes marts under a new `GOLD_ROOT`; like silver it makes **no
-source-API calls** (no auth/secrets) and stays **off** the `*_api` pools. Its marts
+source-API calls** (no auth/secrets) and carries **no** concurrency pool. Its marts
 (`gold_daily_wellness`, `gold_daily_weather`) and the run monitors it hosts are designed in
 [docs/intent/gold/](intent/gold/gold-design.md).
 
 - **Image:** `ghcr.io/tgrecojr/grecohome-dagster-gold`, serving `grecohome_gold.dagster.definitions`.
   Depends only on `grecohome-core` + DuckDB.
 - **Cross-code-location lineage:** the wellness mart declares its silver upstreams (`silver_sleep`,
-  `silver_recovery`, `silver_workouts`, `silver_glucose`, `silver_strain`, `silver_daily`,
-  `silver_body`, `silver_whoop_workouts`) by `AssetKey`; the reads are
-  **filesystem reads of `SILVER_ROOT`**, not gRPC calls.
-- **Runs after silver.** `gold_wellness_daily` (07:30 UTC) rebuilds the mart once silver's daily
-  rebuilds (≤ 06:55) and silver checks (07:00) have run; `gold_checks_daily` (08:00 UTC) runs the
-  gold checks (it starts running). Enable the rebuild schedules in the UI. On-demand:
-  `dagster job execute --job gold_wellness_job`.
+  `silver_recovery`, `silver_workouts`, `silver_strain`, `silver_daily`, `silver_body`,
+  `silver_whoop_workouts`) by `AssetKey`, and the weather mart declares `silver_weather`; the
+  reads are **filesystem reads of `SILVER_ROOT`**, not gRPC calls.
+- **Runs after silver.** `gold_wellness_daily` (07:30 UTC) and `gold_weather_daily` (07:40 UTC)
+  rebuild the marts once silver's daily rebuilds (≤ 06:55) and silver checks (07:05) have run;
+  `gold_checks_daily` (08:05 UTC) runs the gold checks (it starts running). Enable the rebuild
+  schedules in the UI. On-demand: `dagster job execute --job gold_wellness_job`.
 
 ### Host container (`dagster_gold`)
 
@@ -442,7 +293,8 @@ Mirror silver — on `monitoring`, `DAGSTER_HOME` + `DAGSTER_POSTGRES_*` (run wo
 mounts are silver→gold:
 
 - required app env: `SILVER_ROOT`, `GOLD_ROOT`.
-- optional app env: `GOLD_MONITOR_DIR` — reserved for a future gold monitor (mirrors
+- optional app env: `GOLD_WEATHER_MIN_VALID_HOURS` (the `gold_daily_weather` completeness gate,
+  default 22), and `GOLD_MONITOR_DIR` — reserved for a future gold monitor (mirrors
   `*_MONITOR_DIR`); unused today, declared + mounted now so turning it on needs no deploy change.
 
 Mounts (silver is **read-only** here — gold never writes under it):
@@ -462,17 +314,14 @@ No concurrency pool is needed — gold makes no source calls.
 
 ## Schedules and sensors to enable after a first deploy
 
-Capture schedules and sensors start **stopped**; switch these on in the Dagster UI once per code
-location after its first deploy (and after its credentials are set up). Dagster remembers the
-state across redeploys. Checks schedules start **running** and need nothing.
+Capture and rebuild schedules start **stopped**; switch these on in the Dagster UI once per code
+location after its first deploy. Dagster remembers the state across redeploys. Checks schedules
+and the run-monitor sensors start **running** and need nothing.
 
-| Code location | Enable (capture: starts stopped) | Already running (checks) |
+| Code location | Enable (capture/rebuild: starts stopped) | Already running (checks, monitors) |
 |---|---|---|
-| `whoop_ingest` | `whoop_hourly`, `whoop_snapshots_hourly` (after the OAuth setup) | `whoop_bronze_checks_hourly` |
-| `garmin_ingest` | `garmin_daily`, `garmin_reference` (after the MFA bootstrap) | `garmin_bronze_checks_schedule` |
-| `lingo_ingest` | sensor `lingo_drive_sensor` (after the service-account setup) | `lingo_bronze_checks_hourly` |
 | `soil_ingest` | `uscrn_schedule`, `uscrn_correction_schedule` | `uscrn_bronze_checks_hourly` |
-| silver | `silver_sleep_daily`, `silver_glucose_daily`, `silver_workouts_daily`, `silver_recovery_daily`, `silver_weather_daily`, `silver_daily_daily`, `silver_strain_daily`, `silver_body_daily`, `silver_fitness_daily`, `silver_workout_splits_daily`, `silver_whoop_workouts_daily` | `silver_checks_daily` |
+| silver | `silver_sleep_daily`, `silver_workouts_daily`, `silver_recovery_daily`, `silver_weather_daily`, `silver_daily_daily`, `silver_strain_daily`, `silver_body_daily`, `silver_fitness_daily`, `silver_workout_splits_daily`, `silver_whoop_workouts_daily` | `silver_checks_daily` |
 | gold | `gold_wellness_daily`, `gold_weather_daily` | `gold_checks_daily`; sensors `run_failure_monitor` and `run_queue_monitor` |
 
 ### Checks schedule minutes
@@ -484,15 +333,12 @@ a step or a list. When adding a code location, pick a minute not in this table.
 
 | Schedule | Cron (UTC) | Ticks |
 |---|---|---|
-| `garmin_bronze_checks_schedule` | `7 3-21/6 * * *` | 03:07, 09:07, 15:07, 21:07 |
-| `lingo_bronze_checks_hourly` | `23 * * * *` | hourly at :23 |
-| `whoop_bronze_checks_hourly` | `37 * * * *` | hourly at :37 |
 | `uscrn_bronze_checks_hourly` | `43 * * * *` | hourly at :43 |
 | `silver_checks_daily` | `5 7 * * *` | 07:05 |
 | `gold_checks_daily` | `5 8 * * *` | 08:05 |
 
-For reference, the capture schedules: Whoop at :17 hourly, Soil at :00 every 6 h (plus Sunday
-03:30), Garmin at 05:30, silver rebuilds 06:00–06:55, gold rebuilds 07:30 and 07:40.
+For reference, the capture and rebuild schedules: Soil at :00 every 6 h (plus Sunday 03:30),
+silver rebuilds 06:00–06:55, gold rebuilds 07:30 and 07:40.
 
 ## Observability and alerting
 
@@ -500,27 +346,27 @@ Design: `docs/high-level-design.md` (*Failures page through Loki and Grafana to 
 `docs/intent/core/checks/checks-design.md` (*Alerting*).
 
 - **Logs:** every code location's structlog output ships to Loki, labelled
-  `service_name="dagster_<subject>"` (for example `dagster_whoop`, `dagster_garmin`).
+  `service_name="dagster_<location>"` (for example `dagster_soil`, `dagster_silver`).
 - **Grafana alert rules → Slack contact point.** The Slack credential lives only in Grafana.
 
   | Rule | Fires on | For |
   |---|---|---|
-  | Dagster asset check failing | any `asset_check_failed` line (a failing ERROR check, any layer; includes `whoop_token_health`, `garmin_tokenstore_health` and `lingo_drive_folder_health`) | 10 m |
-  | Whoop token refresh failing | more than 3 `token refresh failed` / `invalid_grant` lines in 1 h | 15 m |
+  | Dagster asset check failing | any `asset_check_failed` line (a failing ERROR check, any layer) | 10 m |
   | Dagster run failing | any `dagster_run_failed` line (gold's `run_failure_monitor`, any code location), grouped by job | immediately |
   | Dagster run queue backed up | `run_queue_backed_up` (gold's queue-depth monitor) | 30 m |
 
-- **Dashboard:** "Data Platform Health" (check failures, token failures, queue backups,
-  per-code-location log volume).
-- **Checks-only schedules start running** on deploy: `whoop_bronze_checks_hourly`,
-  `garmin_bronze_checks_schedule`, `lingo_bronze_checks_hourly`, `uscrn_bronze_checks_hourly` (plus
-  the silver and gold checks schedules). One stopped deliberately in the UI stays stopped. Garmin's
-  schedule was renamed from `garmin_bronze_checks_hourly`; the old name may linger in the UI's
-  unloadable schedules until its state is deleted, which is harmless.
+  WearStream pages through the same Loki → Grafana → Slack path with its own rules ("WearStream
+  needs attention" on any `ERROR` line, "WearStream silent" after 2 h with no log lines), which
+  are provisioned with its deployment in greco-home-builder rather than by this repo.
+- **Dashboard:** "Data Platform Health" (check failures, queue backups, per-code-location log
+  volume).
+- **Checks-only schedules start running** on deploy: `uscrn_bronze_checks_hourly`,
+  `silver_checks_daily` and `gold_checks_daily`. One stopped deliberately in the UI stays
+  stopped.
 - **Run monitoring (host `dagster.yaml`):** `run_monitoring` is enabled with
   `max_runtime_seconds: 1800`, so a run executing for more than 30 minutes is terminated as
   wedged. `start_timeout_seconds` and `cancel_timeout_seconds` are 300, and runs aren't
-  auto-resumed. This is the platform backstop for a stuck run holding an `*_api` pool.
+  auto-resumed. This is the platform backstop for a stuck run holding a concurrency pool.
 
 ## Grafana (data-lake dashboards)
 
@@ -546,11 +392,13 @@ query, so the daily silver/gold rebuilds show up with no restart.
 ## Building locally
 
 ```bash
-docker build -f packages/whoop/Dockerfile -t grecohome-dagster-whoop:dev .
+docker build -f packages/soil/Dockerfile -t grecohome-dagster-soil:dev .
 docker run --rm \
-  -e WHOOP_CLIENT_ID=... -e WHOOP_CLIENT_SECRET=... \
-  -e BRONZE_ROOT=/data/bronze -e WHOOP_TOKEN_PATH=/secrets/whoop/token.json \
-  -v /local/bronze:/data/bronze -v /local/secrets:/secrets/whoop \
-  -p 4000:4000 grecohome-dagster-whoop:dev
+  -e BRONZE_ROOT=/data/bronze \
+  -v /local/bronze:/data/bronze \
+  -p 4000:4000 grecohome-dagster-soil:dev
 # health: docker exec <id> dagster api grpc-health-check -p 4000
 ```
+
+Swap `soil` for `silver` or `gold` (and their roots: `BRONZE_ROOT` + `SILVER_ROOT`, or
+`SILVER_ROOT` + `GOLD_ROOT`) to build the other layers.

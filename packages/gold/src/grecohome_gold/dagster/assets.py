@@ -12,7 +12,7 @@ from dagster import AssetExecutionContext, AssetKey, MaterializeResult, asset
 
 from grecohome_core.silver import connect, write_parquet_atomic
 from grecohome_gold.config import settings
-from grecohome_gold.daily_wellness import TIR_HIGH, TIR_LOW, daily_wellness_sql
+from grecohome_gold.daily_wellness import daily_wellness_sql
 
 GROUP = "gold_wellness"
 WELLNESS_SUBDIR = "wellness"
@@ -22,7 +22,6 @@ _SILVER_DEPS = [
     AssetKey("silver_sleep"),
     AssetKey("silver_recovery"),
     AssetKey("silver_workouts"),
-    AssetKey("silver_glucose"),
     AssetKey("silver_strain"),
     AssetKey("silver_daily"),
     AssetKey("silver_body"),
@@ -38,14 +37,14 @@ def gold_path(filename: str) -> str:
 # @spec GOLD-WELLNESS-MART-010
 @asset(name="gold_daily_wellness", group_name=GROUP, deps=_SILVER_DEPS)
 def gold_daily_wellness(context: AssetExecutionContext) -> MaterializeResult:
-    """One row/day: sleep + recovery + strain + daily activity + workouts + glucose + weight."""
+    """One row/day: sleep + recovery + strain + daily activity + workouts + weight."""
     con = connect()
     sql = daily_wellness_sql(settings.silver_root)
     dest = gold_path(WELLNESS_PARQUET)
     rows = write_parquet_atomic(con, sql, dest, protected_root=settings.silver_root)
-    context.log.info(f"gold_daily_wellness: {rows} days -> {dest} (TIR {TIR_LOW}-{TIR_HIGH})")
+    context.log.info(f"gold_daily_wellness: {rows} days -> {dest}")
     return MaterializeResult(
-        metadata={"rows": rows, "tir_range": f"{TIR_LOW}-{TIR_HIGH}", "path": dest}
+        metadata={"rows": rows, "path": dest}
     )
 
 

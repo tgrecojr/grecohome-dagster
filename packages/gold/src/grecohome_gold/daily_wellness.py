@@ -12,8 +12,6 @@ A continuous daily spine (so gaps are explicit for rolling/streak analysis) left
 * **workouts** — ``silver_workouts`` (Garmin) aggregated by ``activity_date`` (count +
   totals), and ``silver_whoop_workouts`` aggregated by ``workout_date`` in separate
   ``whoop_*`` columns (the devices log independently and can both record one ride);
-* **glucose** — ``silver_glucose`` aggregated by ``reading_date`` (mean / min / max /
-  variability and **time-in-range**);
 * **weight** — ``silver_body`` as-of-joined (latest weigh-in **carried forward**, since
   weigh-ins are sparse; the later ``measured_ts_utc`` wins on a day with two), presented in
   **lb** alongside BMI / body-fat.
@@ -25,10 +23,6 @@ asset overwrites the mart from current silver each run.
 from __future__ import annotations
 
 import os
-
-# Time-in-range thresholds (mg/dL): non-diabetic / metabolic-health band.
-TIR_LOW = 70
-TIR_HIGH = 140
 
 # Presentation conversions (silver is canonical SI; gold adds the everyday units).
 LB_PER_KG = 2.20462  # weight kg → lb
@@ -54,7 +48,6 @@ _RECOVERY_COLS = {
 _WORKOUTS_COLS = {
     "activity_date": "DATE", "duration_sec": "DOUBLE", "distance_m": "DOUBLE", "calories": "DOUBLE",
 }
-_GLUCOSE_COLS = {"reading_date": "DATE", "mgdl": "INTEGER"}
 _STRAIN_COLS = {
     "strain_date": "DATE", "cycle_id": "BIGINT", "day_strain": "DOUBLE", "kilojoules": "DOUBLE",
     "avg_heart_rate": "INTEGER", "max_heart_rate": "INTEGER",
@@ -89,15 +82,12 @@ def _src(silver_root: str, parts: tuple[str, ...], cols: dict[str, str]) -> str:
 
 # @spec GOLD-WELLNESS-MART-001, GOLD-WELLNESS-MART-002, GOLD-WELLNESS-MART-003
 # @spec GOLD-WELLNESS-MART-004, GOLD-WELLNESS-MART-005, GOLD-WELLNESS-MART-006
-# @spec GOLD-WELLNESS-MART-007, GOLD-WELLNESS-MART-008, GOLD-WELLNESS-MART-009
-def daily_wellness_sql(
-    silver_root: str, *, tir_low: int = TIR_LOW, tir_high: int = TIR_HIGH
-) -> str:
+# @spec GOLD-WELLNESS-MART-008, GOLD-WELLNESS-MART-009
+def daily_wellness_sql(silver_root: str) -> str:
     """SQL for the daily wellness mart over the silver Parquet under ``silver_root``."""
     sleep = _src(silver_root, ("sleep", "silver_sleep.parquet"), _SLEEP_COLS)
     recovery = _src(silver_root, ("recovery", "silver_recovery.parquet"), _RECOVERY_COLS)
     workouts = _src(silver_root, ("workouts", "silver_workouts.parquet"), _WORKOUTS_COLS)
-    glucose = _src(silver_root, ("glucose", "silver_glucose.parquet"), _GLUCOSE_COLS)
     strain = _src(silver_root, ("strain", "silver_strain.parquet"), _STRAIN_COLS)
     daily = _src(silver_root, ("daily", "silver_daily.parquet"), _DAILY_COLS)
     body = _src(silver_root, ("body", "silver_body.parquet"), _BODY_COLS)
@@ -110,7 +100,6 @@ def daily_wellness_sql(
                 (SELECT min(night_date) FROM {sleep}),
                 (SELECT min(recovery_date) FROM {recovery}),
                 (SELECT min(activity_date) FROM {workouts}),
-                (SELECT min(reading_date) FROM {glucose}),
                 (SELECT min(activity_date) FROM {daily}),
                 (SELECT min(strain_date) FROM {strain}),
                 (SELECT min(workout_date) FROM {whoop_wo})
@@ -119,7 +108,6 @@ def daily_wellness_sql(
                 (SELECT max(night_date) FROM {sleep}),
                 (SELECT max(recovery_date) FROM {recovery}),
                 (SELECT max(activity_date) FROM {workouts}),
-                (SELECT max(reading_date) FROM {glucose}),
                 (SELECT max(activity_date) FROM {daily}),
                 (SELECT max(strain_date) FROM {strain}),
                 (SELECT max(workout_date) FROM {whoop_wo})
@@ -144,19 +132,6 @@ def daily_wellness_sql(
                 sum(distance_m) / 1000.0       AS workout_distance_km,
                 sum(calories)                  AS workout_calories
             FROM {workouts} GROUP BY activity_date
-        ),
-        glu AS (
-            SELECT reading_date AS day,
-                count(*) AS glucose_readings,
-                avg(mgdl) AS glucose_mean,
-                min(mgdl) AS glucose_min,
-                max(mgdl) AS glucose_max,
-                stddev_samp(mgdl) AS glucose_std,
-                100.0 * count(*) FILTER (WHERE mgdl BETWEEN {tir_low} AND {tir_high})
-                    / count(*) AS glucose_tir_pct,
-                100.0 * count(*) FILTER (WHERE mgdl < {tir_low}) / count(*) AS glucose_pct_below,
-                100.0 * count(*) FILTER (WHERE mgdl > {tir_high}) / count(*) AS glucose_pct_above
-            FROM {glucose} WHERE mgdl IS NOT NULL GROUP BY reading_date
         ),
         wwo AS (
             SELECT workout_date AS day,
@@ -200,9 +175,6 @@ def daily_wellness_sql(
             -- Whoop workouts (daily aggregate, kept apart from Garmin's)
             COALESCE(wwo.whoop_workout_count, 0)               AS whoop_workout_count,
             wwo.whoop_workout_min, wwo.whoop_workout_strain,
-            -- glucose (daily aggregate)
-            glu.glucose_readings, glu.glucose_mean, glu.glucose_min, glu.glucose_max,
-            glu.glucose_std, glu.glucose_tir_pct, glu.glucose_pct_below, glu.glucose_pct_above,
             -- body (latest weigh-in carried forward; presented in lb)
             bod.weight_kg, bod.weight_kg * {LB_PER_KG} AS weight_lb,
             bod.bmi AS body_bmi, bod.body_fat_pct,
@@ -213,7 +185,6 @@ def daily_wellness_sql(
             (da.activity_date IS NOT NULL) AS has_daily,
             (wo.day IS NOT NULL)           AS has_workout,
             (wwo.day IS NOT NULL)          AS has_whoop_workout,
-            (glu.day IS NOT NULL)          AS has_glucose,
             (bod.measured_date IS NOT NULL) AS has_weight
         FROM spine
         LEFT JOIN {sleep} AS s ON s.night_date = spine.day
@@ -222,6 +193,5 @@ def daily_wellness_sql(
         LEFT JOIN {daily} AS da     ON da.activity_date = spine.day
         LEFT JOIN wo                ON wo.day = spine.day
         LEFT JOIN wwo               ON wwo.day = spine.day
-        LEFT JOIN glu               ON glu.day = spine.day
         ASOF LEFT JOIN bod          ON spine.day >= bod.measured_date
     """

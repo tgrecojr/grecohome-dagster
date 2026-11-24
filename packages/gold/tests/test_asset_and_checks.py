@@ -49,7 +49,7 @@ def test_checks_pass(materialized) -> None:
     assert checks_mod.wellness_value_ranges().passed
     cov = checks_mod.wellness_coverage()
     assert cov.passed and cov.severity == AssetCheckSeverity.WARN
-    assert cov.metadata["days_with_glucose"].value == 2  # 2026-01-03 and -05
+    assert not {k for k in cov.metadata if "glucose" in k}
 
 
 def test_refuses_write_under_silver_root(silver_root, monkeypatch) -> None:

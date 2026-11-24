@@ -288,4 +288,4 @@ python3 scripts/sweep_streams.py  "$BRONZE_ROOT"
 ## References
 
 - `packages/core/src/grecohome_core/checks/`
-- `docs/intent/garmin/capture/capture-design.md`, `docs/intent/whoop/capture/capture-design.md`: each subject's check configuration
+- `docs/intent/soil/soil-design.md`: the USCRN subject's check configuration

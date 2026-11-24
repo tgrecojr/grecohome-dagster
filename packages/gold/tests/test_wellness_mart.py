@@ -75,5 +75,5 @@ def test_two_weigh_ins_on_one_day_take_the_later(silver_root: str) -> None:
 def test_provenance_flags_mark_source_rows(silver_root: str) -> None:
     r = _rows(silver_root)["2026-01-03"]
     assert r["has_sleep"] is True and r["garmin_sleep_score"] is None  # row exists, value null
-    assert r["has_glucose"] is True and r["has_daily"] is True
+    assert r["has_daily"] is True and r["has_workout"] is False
     assert r["has_recovery"] is False and r["has_strain"] is False

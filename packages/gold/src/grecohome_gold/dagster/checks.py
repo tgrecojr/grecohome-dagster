@@ -60,12 +60,9 @@ def wellness_value_ranges() -> AssetCheckResult:
     if not os.path.exists(path):
         return _missing(path)
     clauses = [
-        "(glucose_tir_pct IS NOT NULL AND (glucose_tir_pct < 0 OR glucose_tir_pct > 100))",
-        "(glucose_mean IS NOT NULL AND (glucose_mean < 10 OR glucose_mean > 600))",
         "(recovery_score IS NOT NULL AND (recovery_score < 0 OR recovery_score > 100))",
         "(workout_count < 0)",
         "(workout_total_min IS NOT NULL AND workout_total_min < 0)",
-        "(glucose_readings IS NOT NULL AND glucose_readings <= 0)",
         "(day_strain IS NOT NULL AND (day_strain < 0 OR day_strain > 21))",
         "(strain_kilocalories IS NOT NULL AND strain_kilocalories < 0)",
         "(steps IS NOT NULL AND (steps < 0 OR steps > 200000))",
@@ -94,7 +91,7 @@ def wellness_coverage() -> AssetCheckResult:
     any_src = _scalar(
         f"SELECT count(*) FROM {_src()} "
         "WHERE has_sleep OR has_recovery OR has_strain OR has_daily "
-        "OR has_workout OR has_glucose OR has_weight"
+        "OR has_workout OR has_weight"
     )
     return AssetCheckResult(
         passed=(any_src > 0),
@@ -107,7 +104,6 @@ def wellness_coverage() -> AssetCheckResult:
             "days_with_strain": _scalar(f"SELECT count(*) FROM {_src()} WHERE has_strain"),
             "days_with_daily": _scalar(f"SELECT count(*) FROM {_src()} WHERE has_daily"),
             "days_with_workout": _scalar(f"SELECT count(*) FROM {_src()} WHERE has_workout"),
-            "days_with_glucose": _scalar(f"SELECT count(*) FROM {_src()} WHERE has_glucose"),
             "days_with_weight": _scalar(f"SELECT count(*) FROM {_src()} WHERE has_weight"),
         },
     )

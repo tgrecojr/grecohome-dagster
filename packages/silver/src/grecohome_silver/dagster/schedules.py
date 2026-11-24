@@ -24,8 +24,6 @@ from grecohome_silver.dagster.daily_assets import DAILY_ASSETS
 from grecohome_silver.dagster.daily_checks import DAILY_CHECKS
 from grecohome_silver.dagster.fitness_assets import FITNESS_ASSETS
 from grecohome_silver.dagster.fitness_checks import FITNESS_CHECKS
-from grecohome_silver.dagster.glucose_assets import GLUCOSE_ASSETS
-from grecohome_silver.dagster.glucose_checks import GLUCOSE_CHECKS
 from grecohome_silver.dagster.recovery_assets import RECOVERY_ASSETS
 from grecohome_silver.dagster.recovery_checks import RECOVERY_CHECKS
 from grecohome_silver.dagster.strain_assets import STRAIN_ASSETS
@@ -40,7 +38,7 @@ from grecohome_silver.dagster.workout_splits_assets import WORKOUT_SPLITS_ASSETS
 from grecohome_silver.dagster.workout_splits_checks import WORKOUT_SPLITS_CHECKS
 
 ALL_CHECKS = (
-    SLEEP_CHECKS + GLUCOSE_CHECKS + WORKOUT_CHECKS + RECOVERY_CHECKS
+    SLEEP_CHECKS + WORKOUT_CHECKS + RECOVERY_CHECKS
     + WEATHER_CHECKS + DAILY_CHECKS + STRAIN_CHECKS + BODY_CHECKS + FITNESS_CHECKS
     + WORKOUT_SPLITS_CHECKS + WHOOP_WORKOUTS_CHECKS
 )
@@ -53,18 +51,6 @@ silver_sleep_daily = ScheduleDefinition(
     name="silver_sleep_daily",
     job=silver_sleep_job,
     cron_schedule="0 6 * * *",  # 06:00 UTC — after Garmin's 05:30 tick and Whoop's hourly
-    execution_timezone="UTC",
-)
-
-# Daily rebuild of the glucose table (Lingo arrives via sensor; a daily rebuild keeps
-# silver a current projection without chasing each upload).
-# @spec SILVER-GLUCOSE-SCHED-001
-silver_glucose_job = define_asset_job("silver_glucose_job", selection=GLUCOSE_ASSETS)
-
-silver_glucose_daily = ScheduleDefinition(
-    name="silver_glucose_daily",
-    job=silver_glucose_job,
-    cron_schedule="30 6 * * *",  # 06:30 UTC
     execution_timezone="UTC",
 )
 

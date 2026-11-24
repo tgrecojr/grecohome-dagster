@@ -20,7 +20,7 @@ runs and rides, and they share no key. So there's no merged workout table and no
 matching in silver; gold compares or picks a device per question.
 
 Per-activity and per-lap facts only. Weekly or monthly training load is analysis, which belongs
-in gold, joining these tables to sleep and glucose by local date (`activity_date`,
+in gold, joining these tables to sleep and recovery by local date (`activity_date`,
 `workout_date`); a day can hold several workouts, so neither date is unique. Activities are
 intermittent, with no daily cadence, so gaps between days are normal and coverage is a WARN.
 
