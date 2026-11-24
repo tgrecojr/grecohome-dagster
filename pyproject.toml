@@ -3,7 +3,7 @@
 # coordinator, not a package. Each data subject lives under packages/ as its
 # own member package, and they all share this single uv.lock.
 [tool.uv.workspace]
-members = ["packages/core", "packages/whoop", "packages/garmin", "packages/lingo", "packages/soil", "packages/silver", "packages/gold"]
+members = ["packages/core", "packages/soil", "packages/silver", "packages/gold"]
 
 [tool.uv.sources]
 grecohome-core = { workspace = true }
@@ -11,9 +11,7 @@ grecohome-core = { workspace = true }
 [dependency-groups]
 dev = [
     "pytest==9.2.0",
-    "pytest-asyncio==1.5.0",
     "pytest-cov==7.1.0",
-    "pytest-mock==3.17.0",
     "pytest-env==1.8.5",
     "freezegun==1.5.5",
     "respx==0.23.1",
@@ -29,16 +27,14 @@ markers = [
     "unit: Unit tests",
     "integration: Integration tests",
     "slow: Slow running tests",
-    "asyncio: Tests that use asyncio",
 ]
-asyncio_mode = "auto"
 addopts = [
     "--verbose",
     "--strict-markers",
     "--tb=short",
     "--import-mode=importlib",
     "--cov=grecohome_core",
-    "--cov=grecohome_whoop",
+    "--cov=grecohome_soil",
     "--cov=grecohome_silver",
     "--cov=grecohome_gold",
     "--cov-report=term-missing",
@@ -51,12 +47,6 @@ env = [
     "BRONZE_ROOT=/tmp/grecohome-test-bronze",
     "SILVER_ROOT=/tmp/grecohome-test-silver",
     "GOLD_ROOT=/tmp/grecohome-test-gold",
-    "WHOOP_CLIENT_ID=test_client_id",
-    "WHOOP_CLIENT_SECRET=test_client_secret",
-    "WHOOP_REDIRECT_URI=http://localhost:8000/callback",
-    "WHOOP_TOKEN_PATH=/tmp/grecohome-test-token.json",
-    "GDRIVE_FOLDER_ID=test_folder",
-    "GDRIVE_SERVICE_ACCOUNT_PATH=/tmp/grecohome-test-sa.json",
     "LOG_LEVEL=DEBUG",
     "ENVIRONMENT=test",
 ]
@@ -64,7 +54,7 @@ env = [
 [tool.ruff]
 target-version = "py314"
 line-length = 100
-src = ["packages/core/src", "packages/whoop/src", "packages/silver/src", "packages/gold/src"]
+src = ["packages/core/src", "packages/silver/src", "packages/gold/src"]
 # scripts/ holds standalone reference/fallback validators (verify_bronze.py,
 # sweep_streams.py) kept byte-faithful to their canonical versions maintained
 # outside this repo; they're imported by nothing, so they're not held to the

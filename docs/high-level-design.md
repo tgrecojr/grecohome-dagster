@@ -1,14 +1,14 @@
 # High-Level Design: grecohome-dagster
 
-LID runs in **Scoped** mode here. Under the arrow: all four bronze subjects (Garmin, Whoop,
-Soil/USCRN, Lingo: `packages/{garmin,whoop,soil,lingo}/**`), the silver layer (`packages/silver/**`),
+LID runs in **Scoped** mode here. Under the arrow: the bronze subject Soil/USCRN
+(`packages/soil/**`), the silver layer (`packages/silver/**`),
 the gold layer (`packages/gold/**`), and the shared core's bronze writer, bronze checks and silver helpers (`grecohome_core.bronze`,
 `grecohome_core.checks`, `grecohome_core.silver`). Sections that describe other parts of the system are short
 orientation summaries. The detailed design for those parts lives in `docs/ARCHITECTURE.md`.
 
 ## Problem
 
-Personal health and environment data (Whoop, Garmin, Lingo glucose, USCRN soil/weather) is
+Personal health and environment data (Whoop, Garmin, USCRN soil/weather) is
 spread across vendor APIs. Those APIs restate history, sync late, rotate credentials and
 sometimes go away. Analysis needs one durable, complete local record of everything each
 source returned, plus typed, joined views built on top of it.
@@ -17,8 +17,10 @@ source returned, plus typed, joined views built on top of it.
 
 A three-layer lake orchestrated by self-hosted Dagster:
 
-- **Bronze**: one code location per source. Each captures raw source responses as immutable,
-  append-only files. Bronze is the only source of truth.
+- **Bronze**: raw source responses captured as immutable, append-only files. Bronze is the
+  only source of truth. USCRN is captured here, in its own code location.
+  Whoop and Garmin are captured by **WearStream** (`chainringlabs/wearstream`), a standalone
+  service outside this repo that writes the same bronze layout into the same tree.
 - **Silver**: one cross-subject code location. Builds typed, deduplicated Parquet from bronze
   (DuckDB), fully rebuilt each run.
 - **Gold**: one code location of analysis marts built from silver, fully rebuilt each run.
@@ -60,12 +62,14 @@ Ordered. The higher tenet wins a conflict.
 
 ```mermaid
 flowchart LR
-  subgraph Bronze["Bronze (one code location per source)"]
-    W[whoop] & G[garmin] & L[lingo] & S[soil/USCRN]
+  subgraph Bronze["Bronze subjects (one code location per source)"]
+    S[soil/USCRN]
   end
+  WS["WearStream (external)<br/>whoop, garmin"]
   Core[grecohome_core<br/>capture_bronze, checks, helpers]
   Bronze -- uses --> Core
   Bronze -- BRONZE_ROOT files --> Silver[silver<br/>DuckDB → Parquet]
+  WS -- same layout, BRONZE_ROOT files --> Silver
   Silver -- SILVER_ROOT files --> Gold[gold<br/>marts]
 ```
 
@@ -79,13 +83,13 @@ are applied in silver at read time.
 | Shared core (bronze writer, bronze checks, silver helpers) | `docs/intent/core/` | The capture and data-quality contracts every bronze subject relies on, and the read/dedup/write helpers silver is built from |
 | Silver | `docs/intent/silver/` | Typed, deduplicated Parquet projections of bronze, one table family per child doc |
 | Gold | `docs/intent/gold/` | Analysis marts built from silver, and the instance-wide run monitors that ship in the gold code location |
-| Garmin | `docs/intent/garmin/` | Garmin Connect bronze subject (capture, authentication) |
-| Whoop | `docs/intent/whoop/` | Whoop bronze subject (capture, token lifecycle) |
 | Soil/USCRN | `docs/intent/soil/` | NOAA USCRN station bronze subject (day-slice capture, late corrections) |
-| Lingo | `docs/intent/lingo/` | Lingo CGM bronze subject (Drive-folder sensor, one partition per uploaded export) |
 
 Subjects depend on the shared core, never the reverse. So a change to a core contract is a
 cross-segment change: it cascades to every subject spec that relies on it.
+
+Whoop and Garmin capture, authentication and bronze checks are designed in the WearStream
+repo, not here. This repo's intent for them starts at the bronze files silver reads.
 
 ## Key Design Decisions
 
@@ -96,6 +100,20 @@ cross-segment change: it cascades to every subject spec that relies on it.
   appends, and silver resolves rescores and deletions at read time. The rejected alternative is
   writing parsed rows to Postgres with a windowed delete-reconcile: it needs a database to run,
   migrate and pool, and it destroys the record of what the source actually returned.
+- **Whoop and Garmin bronze comes from WearStream, an external producer.** WearStream is one
+  self-scheduling container that owns those two sources end to end: OAuth and session
+  handling, the trailing-window re-capture, skip-identical, backfill, its own bronze checks and
+  its own alerts. It writes `whoop/` and `garmin/` under the same `BRONZE_ROOT`, byte-compatible
+  with the core bronze writer (same folder layout, same `.meta.json` sidecar, `schema_version`
+  `v1`). So the bronze layout is a **shared contract**: a change to it in the core writer needs a
+  matching WearStream release before silver can rely on it, and silver's readers must keep
+  reading both producers' files. Silver still declares lineage on the Whoop and Garmin bronze
+  `AssetKey`s (`whoop_bronze_*`, `garmin_bronze_*`). No code location defines those keys, so
+  Dagster shows them as external stubs; silver runs on its own schedules and never waits on a
+  bronze materialization event. The rejected alternative, keeping Whoop and Garmin as Dagster
+  code locations, ties two credential lifecycles (Whoop's rotating refresh token, Garmin's
+  session) to the Dagster host's availability and upgrade cadence, and two refreshers on one
+  Whoop grant revoke it, so exactly one producer may own each source.
 - **Bronze partitions are daily UTC fetch-slices.** A partition is the fetch window
   `[day 00:00Z, next day 00:00Z)`, not a semantic local day. Local-day semantics ("day",
   "night") are applied at read time over bronze's raw timestamps, never inferred from the
@@ -122,13 +140,13 @@ cross-segment change: it cascades to every subject spec that relies on it.
     or `dagster.yaml`. Subjects deploy and fail independently, and adding a subject means
     adding it to the CI image matrix and the workspace. Upgrading Dagster is a coordinated,
     manual step across the host and every image.
-  - **Concurrency pools:** limits (such as `whoop_api` and `garmin_api`) are set on the host
+  - **Concurrency pools:** limits (such as `uscrn_api`) are set on the host
     instance with `dagster instance concurrency set <pool> <limit>`, not in the image; assets
     only tag their pool. Dagster 1.13 can't name a per-pool limit in `dagster.yaml`.
 - **Bronze re-captures a trailing window; it does not capture each day once.** Sources sync
   late and restate history: Whoop rescores, Garmin back-fills data days after the fact, and
   NOAA back-corrects USCRN files. Each bronze schedule therefore re-pulls a trailing window of
-  recent partitions. Every capture that differs from what bronze already holds is kept. Silver
+  recent partitions (WearStream applies the same rule to Whoop and Garmin). Every capture that differs from what bronze already holds is kept. Silver
   resolves multiple captures by taking the latest one per key. The alternative, capturing each
   partition exactly once, freezes each day at its first and often incomplete pull, which
   violates *Completeness over economy*.
@@ -154,13 +172,14 @@ cross-segment change: it cascades to every subject spec that relies on it.
   alerting, so page-worthy conditions emit distinct structured log lines, which ship to Loki,
   and Grafana alert rules route them to a Slack contact point. The signals are:
   - `asset_check_failed`, from any failing ERROR asset check in any layer,
-  - the Whoop token-refresh failure lines,
   - `dagster_run_failed`, from a run-failure sensor in the gold code location that watches every
     code location, so a failed run pages when it fails rather than when a freshness check
     notices,
   - `run_queue_backed_up`, from a queue-depth monitor in the gold code location.
 
-  WARN-level check failures stay in the Dagster UI and don't page. The Slack credential
+  WARN-level check failures stay in the Dagster UI and don't page. WearStream pages through
+  the same Loki → Grafana → Slack path on its own `ERROR` lines, by rules that belong to its
+  deployment rather than to this repo. The Slack credential
   lives only in Grafana, never in this repo. A "Data Platform Health" Grafana dashboard
   shows the same signals.
 - **Capture schedules and sensors start stopped; checks schedules start running.**
@@ -177,8 +196,7 @@ cross-segment change: it cascades to every subject spec that relies on it.
 
 ## Success Metrics
 
-*(not yet specified at project level. See the Garmin capture LLD for scope-specific
-criteria.)*
+*(not yet specified at project level.)*
 
 ## References
 
@@ -186,3 +204,5 @@ criteria.)*
 - `docs/intent/core/`: the bronze writer, bronze checks and silver helpers
 - `docs/intent/silver/`: the silver layer and its table families
 - `docs/intent/gold/`: the gold layer, its marts and the run monitors
+- `https://github.com/chainringlabs/wearstream`: Whoop and Garmin capture (external producer of
+  `bronze/whoop` and `bronze/garmin`)

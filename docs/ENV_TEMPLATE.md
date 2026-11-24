@@ -11,50 +11,15 @@ manager. **Never commit a real `.env`.**
 | `BRONZE_MONITOR_DIR` | no | — | Writable dir for bronze-**check** state (schema-drift baselines), kept **outside** `BRONZE_ROOT`. Unset → schema-drift check no-ops. See [bronze checks](intent/core/checks/checks-design.md) |
 | `LOG_LEVEL` | no | `INFO` | Log level |
 | `ENVIRONMENT` | no | `development` | Environment name |
-| `WHOOP_CLIENT_ID` | yes | — | Whoop OAuth client id |
-| `WHOOP_CLIENT_SECRET` | yes | — | Whoop OAuth client secret |
-| `WHOOP_REDIRECT_URI` | no | `http://localhost:8000/callback` | OAuth callback |
-| `WHOOP_API_BASE_URL` | no | `https://api.prod.whoop.com` | API base |
-| `WHOOP_AUTH_URL` | no | `.../oauth/oauth2/auth` | OAuth authorize endpoint |
-| `WHOOP_TOKEN_URL` | no | `.../oauth/oauth2/token` | OAuth token endpoint |
-| `WHOOP_TOKEN_PATH` | yes | — | Mounted, writable path to the OAuth token JSON file |
-| `MAX_REQUESTS_PER_MINUTE` | no | `60` | Whoop API rate cap |
-| `RECONCILE_WINDOW_DAYS` | no | `7` | Trailing reconcile overlap; schedule re-captures this + 1 partition |
 
-### Garmin (`grecohome-garmin`) — its own container
-
-`BRONZE_ROOT`/`LOG_LEVEL`/`ENVIRONMENT` and the Dagster-instance vars below apply here too.
-
-| Variable | Required | Default | Purpose |
-|---|---|---|---|
-| `GARMINTOKENS` | no | `/secrets/garmin` | Mounted, writable dir for the garminconnect token store (separate from bronze) |
-| `GARMINCONNECT_EMAIL` | yes | — | Garmin Connect login email |
-| `GARMINCONNECT_BASE64_PASSWORD` | yes | — | Base64-encoded Garmin password |
-| `GARMINCONNECT_IS_CN` | no | `false` | Use the Garmin China domain |
-| `LOOKBACK_DAYS` | no | `14` | Trailing completed partitions the daily schedule re-captures on every tick (Garmin back-fills late syncs) |
-| `FETCH_SELECTION` | no | (empty = all) | Allowlist of catalog collection names |
-| `FETCH_EXCLUDE` | no | (empty) | Denylist (wins over selection); empty = capture everything |
-| `RATE_LIMIT_SECONDS` | no | `2.0` | Sleep between API calls within a run |
-| `WEEKLY_WEEKS` | no | `4` | Trailing weeks for the weekly-aggregate endpoints |
-| `CAPTURE_ALT_FORMATS` | no | `false` | Also capture TCX/GPX/KML/CSV activity exports |
-| `PROCESSOR_VERSION` | no | `dev` | Stamped into bronze sidecars |
-
-### Lingo (`grecohome-lingo`) — its own container
-
-`BRONZE_ROOT`/`LOG_LEVEL`/`ENVIRONMENT` and the Dagster-instance vars below apply here too.
-
-| Variable | Required | Default | Purpose |
-|---|---|---|---|
-| `GDRIVE_SERVICE_ACCOUNT_PATH` | yes | — | Mounted, read-only path to the Google service-account key JSON |
-| `GDRIVE_FOLDER_ID` | yes | — | Drive folder id the sensor watches (the folder shared with the SA) |
-| `GDRIVE_POLL_INTERVAL_MINUTES` | no | `5` | Sensor minimum interval between folder listings |
-
-> The SA key is the only credential; it's mounted, never baked into the image and never written to
-> bronze. See [DEPLOYMENT — GCP service-account setup](DEPLOYMENT.md#gcp-service-account-setup).
+These shared vars come from `grecohome-core`'s `BaseSubjectSettings` and apply to every
+container that reads bronze (soil and silver); gold reads `LOG_LEVEL`/`ENVIRONMENT` only. Whoop
+and Garmin credentials belong to [WearStream](https://github.com/chainringlabs/wearstream)'s own
+deployment, not to any container here.
 
 ### Soil / NOAA USCRN (`grecohome-soil`) — its own container
 
-`BRONZE_ROOT`/`LOG_LEVEL`/`ENVIRONMENT` and the Dagster-instance vars below apply here too.
+The shared vars above and the Dagster-instance vars below apply here too.
 **No secrets** — the source is public NOAA HTTP, so there is nothing to mount beyond bronze.
 
 | Variable | Required | Default | Purpose |
@@ -68,7 +33,7 @@ manager. **Never commit a real `.env`.**
 ### Silver (`grecohome-silver`) — its own container, cross-subject
 
 Silver reads bronze and writes Parquet; it makes **no source-API calls** (no secrets, no
-token/key mount). `LOG_LEVEL`/`ENVIRONMENT` and the Dagster-instance vars below apply here
+key mount). `LOG_LEVEL`/`ENVIRONMENT` and the Dagster-instance vars below apply here
 too. Mount `BRONZE_ROOT` **read-only** and `SILVER_ROOT` writable on a separate volume.
 
 | Variable | Required | Default | Purpose |
@@ -120,7 +85,8 @@ settings — Dagster reads them.
 
 ```bash
 cat > .env.example <<'EOF'
-# grecohome-dagster — example environment for the WHOOP code location.
+# grecohome-dagster — example environment for the SOIL code location, plus the
+# silver, gold and Dagster-instance sections (each container reads only its own vars).
 # Copy to .env for local dev. Production injects these via Ansible/secrets manager.
 
 # --- Shared (grecohome-core BaseSubjectSettings) ---
@@ -130,18 +96,12 @@ BRONZE_MONITOR_DIR=/data/bronze-monitor
 LOG_LEVEL=INFO
 ENVIRONMENT=development
 
-# --- Whoop OAuth (grecohome-whoop) ---
-WHOOP_CLIENT_ID=your_whoop_client_id
-WHOOP_CLIENT_SECRET=your_whoop_client_secret
-WHOOP_REDIRECT_URI=http://localhost:8000/callback
-WHOOP_API_BASE_URL=https://api.prod.whoop.com
-WHOOP_AUTH_URL=https://api.prod.whoop.com/oauth/oauth2/auth
-WHOOP_TOKEN_URL=https://api.prod.whoop.com/oauth/oauth2/token
-WHOOP_TOKEN_PATH=/secrets/whoop/token.json
-
-# --- Whoop tuning ---
-MAX_REQUESTS_PER_MINUTE=60
-RECONCILE_WINDOW_DAYS=7
+# --- Soil / NOAA USCRN (grecohome-soil); public source, no secrets ---
+USCRN_STATION=PA_Avondale_2_N
+USCRN_BASE_URL=https://www.ncei.noaa.gov/pub/data/uscrn/products/hourly02
+USCRN_LOOKBACK_DAYS=2
+USCRN_CORRECTION_LOOKBACK_DAYS=400
+USCRN_START_DATE=2010-01-01
 
 # --- Silver (grecohome-silver); cross-subject layer, no source API/secrets ---
 # Mount BRONZE_ROOT read-only here; SILVER_ROOT must be a separate path outside it.
@@ -156,6 +116,8 @@ USCRN_TIMEZONE=America/New_York
 GOLD_ROOT=/data/gold
 # Reserved for the future gold monitor (unused today); MUST be outside GOLD_ROOT.
 GOLD_MONITOR_DIR=/data/gold-monitor
+# gold_daily_weather completeness gate: valid hours per local day (optional).
+GOLD_WEATHER_MIN_VALID_HOURS=22
 
 # --- Dagster instance (deploy only; not needed for local `dagster dev`) ---
 # Required because DefaultRunLauncher executes runs inside this container, which

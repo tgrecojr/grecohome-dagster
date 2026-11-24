@@ -58,34 +58,37 @@ def test_workouts_aggregated_per_day(silver_root: str) -> None:
     assert r["workout_calories"] == pytest.approx(500.0)
 
 
-# @spec GOLD-WELLNESS-MART-007
-def test_glucose_aggregation_and_tir(silver_root: str) -> None:
-    r = _rows(silver_root)["2026-01-03"]
-    assert r["has_glucose"] is True and r["glucose_readings"] == 4
-    assert r["glucose_mean"] == pytest.approx(120.0)
-    assert r["glucose_min"] == 60 and r["glucose_max"] == 200
-    assert r["glucose_tir_pct"] == pytest.approx(50.0)
-    assert r["glucose_pct_below"] == pytest.approx(25.0)
-    assert r["glucose_pct_above"] == pytest.approx(25.0)
+# @spec GOLD-WELLNESS-MART-001, GOLD-WELLNESS-MART-009
+def test_leftover_glucose_table_is_ignored(silver_root: str) -> None:
+    """A silver_glucose Parquet left on disk neither extends the spine nor adds columns."""
+    path = os.path.join(silver_root, "glucose", "silver_glucose.parquet")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    connect().execute(
+        "COPY (SELECT DATE '2026-01-09' AS reading_date, 100 AS mgdl) "
+        f"TO '{path}' (FORMAT parquet)"
+    )
+    rows = _rows(silver_root)
+    assert max(rows) == "2026-01-05"
+    cols = set(rows["2026-01-01"])
+    assert "has_glucose" not in cols
+    assert not {c for c in cols if c.startswith("glucose_")}
 
 
 # @spec GOLD-WELLNESS-MART-001, GOLD-WELLNESS-MART-009
 def test_gap_day_all_null(silver_root: str) -> None:
     """A day with no source data: flags false, aggregates null, workout_count 0."""
-    # 2026-01-01 has sleep+recovery but no workout/glucose; build a true gap by checking
-    # a day present in the spine but absent from every source is impossible here, so
-    # assert the no-workout/no-glucose portions of 2026-01-01 instead.
+    # 2026-01-01 has sleep+recovery but no workout; a day absent from every source can't
+    # occur in this fixture, so assert the no-workout portion of 2026-01-01 instead.
     r = _rows(silver_root)["2026-01-01"]
     assert r["has_workout"] is False and r["workout_count"] == 0
     assert r["workout_total_min"] is None
-    assert r["has_glucose"] is False and r["glucose_mean"] is None
 
 
 # @spec GOLD-WELLNESS-MART-005
 def test_workout_only_day(silver_root: str) -> None:
     r = _rows(silver_root)["2026-01-04"]
     assert r["has_workout"] is True and r["workout_count"] == 1
-    assert r["has_sleep"] is False and r["has_recovery"] is False and r["has_glucose"] is False
+    assert r["has_sleep"] is False and r["has_recovery"] is False
 
 
 # @spec GOLD-WELLNESS-MART-004

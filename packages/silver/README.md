@@ -6,7 +6,7 @@ runs against. Silver is *derived and rebuildable* — it can always be dropped a
 regenerated from bronze, so it is not precious; bronze stays the only source of
 truth and is never touched here.
 
-- **Tables:** sleep (Garmin + Whoop side by side), glucose, recovery and strain,
+- **Tables:** sleep (Garmin + Whoop side by side), recovery and strain,
   workouts (Garmin activities, laps, Whoop workouts), weather, daily summary, body and
   fitness. Designed and specified in `docs/intent/silver/`.
 - Reads bronze from the filesystem (DuckDB over `BRONZE_ROOT`, mounted read-only);

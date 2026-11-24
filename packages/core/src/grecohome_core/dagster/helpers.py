@@ -2,11 +2,9 @@
 
 - :func:`daily_utc_partitions` — the standard daily, UTC-sliced partition set.
 - :func:`trailing_partition_keys` — the trailing window a schedule re-captures.
-- :func:`run_async` — bridge async fetch code into a sync Dagster op/asset.
 """
 
-import asyncio
-from collections.abc import Awaitable, Sequence
+from collections.abc import Sequence
 from datetime import datetime
 
 from dagster import DailyPartitionsDefinition, TimeWindowPartitionsDefinition
@@ -47,12 +45,3 @@ def trailing_partition_keys(
     """
     keys: Sequence[str] = partitions_def.get_partition_keys(current_time=before)
     return list(keys[-count:])
-
-
-def run_async[T](coro: Awaitable[T]) -> T:
-    """Run an awaitable to completion from sync Dagster code.
-
-    Each Dagster run executes in its own process with no running event loop, so a
-    plain ``asyncio.run`` is correct and simplest.
-    """
-    return asyncio.run(coro)

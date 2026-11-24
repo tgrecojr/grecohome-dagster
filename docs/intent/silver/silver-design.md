@@ -68,7 +68,7 @@ belong to gold.
 - **Layout:** `{SILVER_ROOT}/<family>/<table>.parquet`. A table's source intermediates use a
   leading underscore (for example `sleep/_garmin.parquet`).
 - **No partitioning.** Each asset is a whole-table rebuild reading every bronze partition. The
-  data is small (thousands of nights, about 55k glucose readings). Partition by year only if it
+  data is small (thousands of nights and days, and hourly weather since 2010). Partition by year only if it
   grows. After a bronze backfill, the affected family's job is run on demand; there are no silver
   partitions to backfill (`docs/DEPLOYMENT.md`).
 
@@ -113,7 +113,6 @@ past 06:00 UTC means moving this window too. Gold's rebuilds follow silver's che
 | Family | Doc | Tables | Status |
 |---|---|---|---|
 | Sleep | [sleep/sleep-design.md](sleep/sleep-design.md) | `silver_sleep_garmin`, `silver_sleep_whoop`, `silver_sleep` | Specified (`SILVER-SLEEP`). The only two-source join; the other families are single-source reductions of the same shape |
-| Glucose | [glucose/glucose-design.md](glucose/glucose-design.md) | `silver_glucose` | Specified (`SILVER-GLUCOSE`) |
 | Cycles | [cycles/cycles-design.md](cycles/cycles-design.md) | `silver_recovery`, `silver_strain` | Specified (`SILVER-CYCLES`) |
 | Workouts | [workouts/workouts-design.md](workouts/workouts-design.md) | `silver_workouts`, `silver_workout_splits`, `silver_whoop_workouts` | Specified (`SILVER-WORKOUTS`) |
 | Daily | [daily/daily-design.md](daily/daily-design.md) | `silver_daily`, `silver_body`, `silver_fitness` | Specified (`SILVER-DAILY`) |
@@ -143,7 +142,7 @@ projected, on purpose:
   `cycling_ftp`, `running_tolerance`, `endurance_score`, `hill_score`; `body_composition` and
   `weigh_ins`, which overlap `daily_weigh_ins`): deferred until wanted.
 - **Nutrition and hydration** (`nutrition_food_log`, `nutrition_meals`, `hydration`): deferred
-  until wanted; a natural pair with glucose.
+  until wanted.
 - **Other activity detail** (`activity_details`, `activity_summary`, `activity_hr_zones`,
   `activity_split_summaries`, typed splits, power zones, activity weather, exercise sets, gear):
   per-activity detail beyond laps and the activity summary; deferred until wanted.

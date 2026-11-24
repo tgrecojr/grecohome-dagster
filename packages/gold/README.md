@@ -6,7 +6,7 @@ It reads `SILVER_ROOT` Parquet and writes marts under `GOLD_ROOT`; like silver i
 derived and fully rebuildable, and never writes under `SILVER_ROOT`.
 
 - **Marts:** `gold_daily_wellness` (one row per local day: sleep, recovery, strain,
-  daily activity, Garmin and Whoop workouts, glucose with time-in-range, weight) and
+  daily activity, Garmin and Whoop workouts, weight) and
   `gold_daily_weather` (the gardening rollup). Designed in `docs/intent/gold/`.
 - **Run monitors:** `run_failure_monitor` and `run_queue_monitor` watch the whole Dagster
   instance and log the lines Grafana pages on.

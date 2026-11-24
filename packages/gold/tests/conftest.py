@@ -1,9 +1,9 @@
 """Synthetic silver-Parquet fixtures for the gold daily-wellness mart tests.
 
-Writes tiny ``silver_sleep`` / ``silver_recovery`` / ``silver_workouts`` /
-``silver_glucose`` Parquets covering the cases the mart must handle: a 1:1 sleep join,
-two recoveries on one date (dedup to latest), multiple workouts per day (aggregate), a
-glucose day with a known time-in-range split, and a day with no data (gap).
+Writes tiny silver Parquets (sleep, recovery, workouts, strain, daily, body, Whoop
+workouts) covering the cases the mart must handle: a 1:1 sleep join, two recoveries on one
+date (dedup to latest), multiple workouts per day (aggregate), sparse weigh-ins carried
+forward, and days a source is missing from.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ def _copy(con, sql: str, path: str) -> None:
 
 @pytest.fixture
 def silver_root(tmp_path) -> str:
-    """A synthetic SILVER_ROOT with the four tables; spine spans 2026-01-01..2026-01-05."""
+    """A synthetic SILVER_ROOT; the spine spans 2026-01-01..2026-01-05."""
     root = str(tmp_path / "silver")
     con = connect()
 
@@ -31,7 +31,8 @@ def silver_root(tmp_path) -> str:
         SELECT * FROM (VALUES
             (DATE '2026-01-01', 80, 420.0, 55, 86.0, 88.0),
             (DATE '2026-01-02', 85, 400.0, 58, 70.0, 82.0),
-            (DATE '2026-01-03', NULL, 390.0, 56, NULL, NULL)
+            (DATE '2026-01-03', NULL, 390.0, 56, NULL, NULL),
+            (DATE '2026-01-05', 78, 410.0, 57, 75.0, 85.0)
         ) AS t(night_date, garmin_sleep_score, garmin_total_min, garmin_rhr,
                whoop_performance_pct, whoop_efficiency_pct)
     """, os.path.join(root, "sleep", "silver_sleep.parquet"))
@@ -54,15 +55,6 @@ def silver_root(tmp_path) -> str:
             (DATE '2026-01-04', 3600.0, 10000.0, 600.0)
         ) AS t(activity_date, duration_sec, distance_m, calories)
     """, os.path.join(root, "workouts", "silver_workouts.parquet"))
-
-    # 2026-01-03: [60,100,120,200] -> TIR(70-140)=50%, below=25%, above=25%; 2026-01-05: [90,95].
-    _copy(con, """
-        SELECT * FROM (VALUES
-            (DATE '2026-01-03', 60), (DATE '2026-01-03', 100),
-            (DATE '2026-01-03', 120), (DATE '2026-01-03', 200),
-            (DATE '2026-01-05', 90), (DATE '2026-01-05', 95)
-        ) AS t(reading_date, mgdl)
-    """, os.path.join(root, "glucose", "silver_glucose.parquet"))
 
     # Strain joins to the recovery cycle: 101 (2026-01-01) and 103 (2026-01-02, the kept
     # recovery). kilojoules / 4.184 -> 2000 / 2500 kcal.

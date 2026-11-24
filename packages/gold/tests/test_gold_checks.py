@@ -67,7 +67,7 @@ def _rewrite(path: str, select: str) -> None:
 # @spec GOLD-WELLNESS-MART-010, GOLD-WEATHER-MART-006
 def test_materialization_metadata(result) -> None:
     w = result.asset_materializations_for_node("gold_daily_wellness")[0].metadata
-    assert set(w) == {"rows", "tir_range", "path"} and w["tir_range"].value == "70-140"
+    assert set(w) == {"rows", "path"}
     x = result.asset_materializations_for_node("gold_daily_weather")[0].metadata
     assert set(x) == {"rows", "gdd_base_f", "min_valid_hours", "path"}
 

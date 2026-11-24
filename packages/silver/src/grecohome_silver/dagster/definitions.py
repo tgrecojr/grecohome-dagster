@@ -14,8 +14,6 @@ from grecohome_silver.dagster.daily_assets import DAILY_ASSETS
 from grecohome_silver.dagster.daily_checks import DAILY_CHECKS
 from grecohome_silver.dagster.fitness_assets import FITNESS_ASSETS
 from grecohome_silver.dagster.fitness_checks import FITNESS_CHECKS
-from grecohome_silver.dagster.glucose_assets import GLUCOSE_ASSETS
-from grecohome_silver.dagster.glucose_checks import GLUCOSE_CHECKS
 from grecohome_silver.dagster.recovery_assets import RECOVERY_ASSETS
 from grecohome_silver.dagster.recovery_checks import RECOVERY_CHECKS
 from grecohome_silver.dagster.schedules import (
@@ -27,8 +25,6 @@ from grecohome_silver.dagster.schedules import (
     silver_daily_job,
     silver_fitness_daily,
     silver_fitness_job,
-    silver_glucose_daily,
-    silver_glucose_job,
     silver_recovery_daily,
     silver_recovery_job,
     silver_sleep_daily,
@@ -57,18 +53,17 @@ from grecohome_silver.dagster.workout_splits_checks import WORKOUT_SPLITS_CHECKS
 
 defs = Definitions(
     assets=(
-        SLEEP_ASSETS + GLUCOSE_ASSETS + WORKOUT_ASSETS + RECOVERY_ASSETS
+        SLEEP_ASSETS + WORKOUT_ASSETS + RECOVERY_ASSETS
         + WEATHER_ASSETS + DAILY_ASSETS + STRAIN_ASSETS + BODY_ASSETS + FITNESS_ASSETS
         + WORKOUT_SPLITS_ASSETS + WHOOP_WORKOUTS_ASSETS
     ),
     asset_checks=(
-        SLEEP_CHECKS + GLUCOSE_CHECKS + WORKOUT_CHECKS + RECOVERY_CHECKS
+        SLEEP_CHECKS + WORKOUT_CHECKS + RECOVERY_CHECKS
         + WEATHER_CHECKS + DAILY_CHECKS + STRAIN_CHECKS + BODY_CHECKS + FITNESS_CHECKS
         + WORKOUT_SPLITS_CHECKS + WHOOP_WORKOUTS_CHECKS
     ),
     jobs=[
         silver_sleep_job,
-        silver_glucose_job,
         silver_workouts_job,
         silver_recovery_job,
         silver_weather_job,
@@ -82,7 +77,6 @@ defs = Definitions(
     ],
     schedules=[
         silver_sleep_daily,
-        silver_glucose_daily,
         silver_workouts_daily,
         silver_recovery_daily,
         silver_weather_daily,

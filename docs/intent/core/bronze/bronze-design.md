@@ -14,7 +14,9 @@ without re-fetching from rate-limited or non-replayable sources.
 
 One function writes it: `grecohome_core.bronze.capture_bronze(source, collection, raw_bytes,
 meta, *, bronze_root, dt=None, dedupe=True, dedupe_scope="folder", ext=None)`, returning a
-`CaptureResult`. Every subject captures through it.
+`CaptureResult`. Every subject in this repo captures through it. WearStream writes the same
+layout and sidecar for Whoop and Garmin with its own writer, so the layout, naming and sidecar
+rules below are a contract with it too (see the HLD).
 
 ## What to capture
 
@@ -22,7 +24,7 @@ Bronze holds a source's **functional domain data**: the records you would ever w
 reprocess. It is not a log of every byte exchanged with the source. The subject decides **per
 endpoint or call** what counts as data; the writer doesn't infer it.
 
-- **Capture:** domain records (sleep, recovery, workouts, glucose readings, temperature rows)
+- **Capture:** domain records (sleep, recovery, workouts, temperature rows)
   and reference endpoints that give real context (profile, devices, units). Each reference
   endpoint gets **its own collection** (for example `whoop/profile`, `garmin/devices`).
 - **Skip, because it's pointless:** protocol plumbing (keep-alives, health checks, `204`,
@@ -188,7 +190,7 @@ failed, and report per-run counts.
 | Skip-identical scope | Per call: the newest capture in the folder, or the newest capture of the same request | Folder only; compare with every capture in the folder; a caller-supplied key | Folder scope is one cheap read when one request writes a folder. Request scope lets multi-request folders (Garmin's per-activity collections, about 38% of its bytes) skip identical re-captures; matching on the `request_params` sidecars already carry needs no caller-invented key and works on existing bronze. |
 | Write order | Payload, then sidecar; delete the payload if the sidecar fails | Sidecar first; keep an orphan payload; hash the newest payload for skip-identical | A sidecar without its payload would make skip-identical skip data that isn't there. Rolling back keeps every payload paired with its provenance at the cost of one re-capture. |
 | Overwrite protection | Exclusive create, retry with a new `short_id` | Plain rename | A same-millisecond id collision must never replace a capture. |
-| Failure behavior | Log and report a `failed` outcome, never raise | Raise to the caller | Capture is a side effect of fetching. A failed write must not lose the fetched data's processing or fail the run. Callers that must not lose a capture (Lingo) act on the outcome. |
+| Failure behavior | Log and report a `failed` outcome, never raise | Raise to the caller | Capture is a side effect of fetching. A failed write must not lose the fetched data's processing or fail the run. A caller that must not lose a capture can act on the outcome. |
 | Outcome reporting | A `CaptureResult` with an outcome | A path or `None` | `None` meant skipped, refused or failed alike, so a run that wrote nothing looked healthy. |
 
 ## Open Questions & Future Decisions
@@ -198,4 +200,5 @@ No open questions.
 ## References
 
 - `packages/core/src/grecohome_core/bronze/capture.py`
-- `docs/intent/garmin/capture/capture-design.md`, `docs/intent/whoop/capture/capture-design.md`: how each subject uses the writer
+- `docs/intent/soil/soil-design.md`: how the USCRN subject uses the writer
+- WearStream's capture design (`chainringlabs/wearstream`, `docs/intent/capture/capture-design.md`): the other writer of this layout
