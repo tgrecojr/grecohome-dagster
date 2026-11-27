@@ -13,7 +13,7 @@ dependencies = [
     # `scheme: postgresql+psycopg2`. SQLAlchemy 2.1's default is psycopg v3.
     # See tests/test_instance_storage.py.
     "dagster-postgres==0.29.30",
-    "pydantic==2.14.3",
+    "pydantic==2.14.4",
     "pydantic-settings==2.16.3",
     "structlog==26.1.0",
     "python-json-logger==4.2.0",
