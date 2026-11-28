@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 license = "MIT"
 dependencies = [
-    "dagster==1.13.30",
+    "dagster==1.13.31",
     # Lets a run worker (DefaultRunLauncher runs execute inside the code-location
     # container) write to the host instance's Postgres event/run/schedule storage.
     # It ships psycopg2 only, so the host dagster.yaml must pin

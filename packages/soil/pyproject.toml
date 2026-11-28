@@ -7,7 +7,7 @@ requires-python = ">=3.14"
 license = "MIT"
 dependencies = [
     "grecohome-core",
-    "dagster==1.13.30",
+    "dagster==1.13.31",
     # Sync HTTP client for the public NOAA file fetch (no auth). Pinned == like
     # the other application libs.
     "httpx==0.28.1",
