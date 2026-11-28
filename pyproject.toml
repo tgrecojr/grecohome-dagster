@@ -2,6 +2,12 @@
 # This file has no [project] table on purpose: the root is a uv workspace
 # coordinator, not a package. Each data subject lives under packages/ as its
 # own member package, and they all share this single uv.lock.
+[tool.uv]
+# Supply chain: resolve nothing uploaded to PyPI in the last 7 days, so a
+# compromised release has time to be caught and pulled. Applies to `uv lock`
+# and `uv add`; `uv sync --frozen` installs the lockfile as it is.
+exclude-newer = "7 days"
+
 [tool.uv.workspace]
 members = ["packages/core", "packages/soil", "packages/silver", "packages/gold"]
 
