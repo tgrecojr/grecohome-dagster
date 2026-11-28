@@ -1,7 +1,7 @@
 """Silver asset checks for strain — same severity convention as the other silver checks.
 
 Structural/dedup correctness = ERROR; coverage/expectation drift = WARN. Read-only over
-the written Parquet, off the ``*_api`` pools.
+the written Parquet.
 """
 
 from __future__ import annotations

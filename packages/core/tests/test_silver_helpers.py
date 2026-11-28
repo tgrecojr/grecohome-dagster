@@ -9,14 +9,12 @@ import pytest
 
 from grecohome_core.silver import (
     connect,
-    csv_relation_sql,
     dedup_latest_sql,
     json_date,
     json_num,
     json_str,
     list_payload_files,
     payloads_relation_sql,
-    text_lines_relation_sql,
     write_parquet_atomic,
 )
 
@@ -68,26 +66,6 @@ def test_payloads_relation_parses_each_file_and_types_empty(tmp_path):
     cur = con.execute(f"SELECT * FROM ({payloads_relation_sql([])})")
     assert cur.fetchall() == []
     assert [d[0] for d in cur.description] == ["filename", "j"]
-
-
-# @spec CORE-SILVER-004
-def test_csv_relation_maps_headers_by_name_and_types_empty(tmp_path):
-    f1 = _put(str(tmp_path / "a.csv"), "Time [local],Value\n2026-01-01,5\n")
-    f2 = _put(str(tmp_path / "b.csv"), "Value,Extra,Time [local]\n6,x,2026-01-02\n")
-    cols = {"ts": "Time [local]", "v": "Value"}
-    rows = _rows(f"SELECT ts, v FROM ({csv_relation_sql([f1, f2], cols)}) ORDER BY ts")
-    assert rows == [("2026-01-01", "5"), ("2026-01-02", "6")]
-    cur = connect().execute(f"SELECT * FROM ({csv_relation_sql([], cols)})")
-    assert cur.fetchall() == []
-    assert sorted(d[0] for d in cur.description) == ["filename", "ts", "v"]
-
-
-# @spec CORE-SILVER-005
-def test_text_lines_relation_one_row_per_nonblank_line(tmp_path):
-    f = _put(str(tmp_path / "h.txt"), "23803 20260101 0100  1.2\n\n   \n23803 20260101 0200 -0.4\n")
-    rows = _rows(f"SELECT line FROM ({text_lines_relation_sql([f])})")
-    assert rows == [("23803 20260101 0100  1.2",), ("23803 20260101 0200 -0.4",)]
-    assert _rows(f"SELECT * FROM ({text_lines_relation_sql([])})") == []
 
 
 # @spec CORE-SILVER-006

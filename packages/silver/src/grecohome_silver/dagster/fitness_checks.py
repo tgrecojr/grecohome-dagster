@@ -1,8 +1,8 @@
 """Silver asset checks for fitness — same severity convention as the other silver checks.
 
-Structural correctness = ERROR; coverage = WARN. Read-only over the written Parquet, off the
-``*_api`` pools. Coverage is expected to be **sparse** (snapshot endpoints, capture began
-2026-06-03), so the coverage check only fails on a fully-empty table.
+Structural correctness = ERROR; coverage = WARN. Read-only over the written Parquet.
+Coverage is expected to be **sparse** (snapshot endpoints, capture began 2026-06-03), so
+the coverage check only fails on a fully-empty table.
 """
 
 from __future__ import annotations

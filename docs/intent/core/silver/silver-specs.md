@@ -8,8 +8,6 @@ Design: [silver-design.md](silver-design.md). Prefix `CORE-SILVER`. All specs ar
 - [x] **CORE-SILVER-001**: When `connect` is called, the system shall return a new in-memory DuckDB connection.
 - [x] **CORE-SILVER-002**: When `list_payload_files(bronze_root, source, collection)` is called, the system shall return, sorted, every regular file directly inside a `{bronze_root}/{source}/{collection}/dt=*/` folder, excluding `*.meta.json` sidecars, directories and dotfiles, and an empty list when there are none.
 - [x] **CORE-SILVER-003**: When `payloads_relation_sql` is given payload files, the system shall return a SQL relation with one row per file holding `filename` and `j` (the whole file parsed as one JSON value); when given no files, it shall return a relation with the same columns and types and no rows.
-- [x] **CORE-SILVER-004**: When `csv_relation_sql` is given CSV files and an alias-to-header column map, the system shall return a SQL relation holding `filename` and each mapped column as VARCHAR, reading a header row and matching columns by name across files; when given no files, it shall return a relation with the same columns and types and no rows.
-- [x] **CORE-SILVER-005**: When `text_lines_relation_sql` is given text files, the system shall return a SQL relation with one row per non-blank physical line holding `filename` and `line`; when given no files, it shall return a relation with the same columns and types and no rows.
 - [x] **CORE-SILVER-006**: If a file given to `payloads_relation_sql` isn't valid JSON, then any query that reads the relation's `j` column shall raise, rather than skipping the file.
 
 ## SQL idioms

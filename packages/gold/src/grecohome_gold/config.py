@@ -23,14 +23,8 @@ class GoldSettings(BaseSettings):
 
     # Writable dir for future gold-check state, kept OUTSIDE gold_root. Optional and
     # currently unused: declared now (with its deploy mount) so a future gold monitor
-    # needs no config/deploy change. Mirrors bronze_monitor_dir / silver_monitor_dir.
+    # needs no config/deploy change. Mirrors silver_monitor_dir.
     gold_monitor_dir: str | None = None
-
-    # Completeness gate for gold_daily_weather: valid hours a field needs in a local
-    # day before its daily aggregate is reported (else NULL, with the ``*_hours``
-    # count left to explain). 22/24 mirrors NCEI's own daily product. Env:
-    # GOLD_WEATHER_MIN_VALID_HOURS.
-    gold_weather_min_valid_hours: int = 22
 
     log_level: str = "INFO"
     environment: str = "development"

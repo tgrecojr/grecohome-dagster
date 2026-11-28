@@ -5,9 +5,9 @@ framework event in Postgres, not a log line), so there's nothing for an external
 alerting stack to watch. This decorator closes that gap: when a wrapped check returns
 a **failing, ERROR-severity** result it logs one structured ``asset_check_failed``
 line via the app's structlog (which already ships to Loki). A single Grafana Loki →
-Slack rule on that token then covers every layer's page-worthy checks — bronze
-capture freshness/schema drift, silver/gold uniqueness/range — with near-zero false
-positives, because the signal only fires on a real failed check (not framework noise).
+Slack rule on that token then covers every layer's page-worthy checks — silver/gold
+uniqueness, ranges and table freshness — with near-zero false positives, because the
+signal only fires on a real failed check (not framework noise).
 
 WARN-severity failures (coverage/expectation drift) are intentionally *not* emitted —
 they stay UI-only and don't page. A check that *raises* emits the same line
@@ -19,7 +19,7 @@ inner function **below** ``@asset_check``::
     def my_check() -> AssetCheckResult: ...
 
     @asset_check(...)
-    @alerting_check(name="x_freshness", asset=cfg.asset_key)   # parametrized
+    @alerting_check(name="x_freshness", asset=asset_key)   # parametrized
     def _check() -> AssetCheckResult: ...
 """
 

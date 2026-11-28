@@ -4,7 +4,7 @@ One daily job rebuilds all three sleep assets (the unified table's in-location d
 order it after the two sources). A second, checks-only job runs the silver checks
 independently — so a *stopped* silver asset is still caught — reusing the core
 checks-job builders. Both jobs carry **no concurrency pool**: silver makes no source
-API calls and must never contend with the ``*_api`` ingestion pools.
+API calls, so there is nothing to rate-limit.
 
 The rebuild runs daily a few hours after the day's bronze sleep lands (Garmin daily
 + Whoop hourly captures). Silver is a whole-table projection of current bronze, so a
@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dagster import ScheduleDefinition, define_asset_job
 
-from grecohome_core.checks import build_bronze_checks_job, build_bronze_checks_schedule
+from grecohome_core.checks import build_checks_job, build_checks_schedule
 from grecohome_silver.dagster.assets import SLEEP_ASSETS
 from grecohome_silver.dagster.body_assets import BODY_ASSETS
 from grecohome_silver.dagster.body_checks import BODY_CHECKS
@@ -28,8 +28,6 @@ from grecohome_silver.dagster.recovery_assets import RECOVERY_ASSETS
 from grecohome_silver.dagster.recovery_checks import RECOVERY_CHECKS
 from grecohome_silver.dagster.strain_assets import STRAIN_ASSETS
 from grecohome_silver.dagster.strain_checks import STRAIN_CHECKS
-from grecohome_silver.dagster.weather_assets import WEATHER_ASSETS
-from grecohome_silver.dagster.weather_checks import WEATHER_CHECKS
 from grecohome_silver.dagster.whoop_workouts_assets import WHOOP_WORKOUTS_ASSETS
 from grecohome_silver.dagster.whoop_workouts_checks import WHOOP_WORKOUTS_CHECKS
 from grecohome_silver.dagster.workout_assets import WORKOUT_ASSETS
@@ -39,7 +37,7 @@ from grecohome_silver.dagster.workout_splits_checks import WORKOUT_SPLITS_CHECKS
 
 ALL_CHECKS = (
     SLEEP_CHECKS + WORKOUT_CHECKS + RECOVERY_CHECKS
-    + WEATHER_CHECKS + DAILY_CHECKS + STRAIN_CHECKS + BODY_CHECKS + FITNESS_CHECKS
+    + DAILY_CHECKS + STRAIN_CHECKS + BODY_CHECKS + FITNESS_CHECKS
     + WORKOUT_SPLITS_CHECKS + WHOOP_WORKOUTS_CHECKS
 )
 
@@ -98,18 +96,6 @@ silver_strain_daily = ScheduleDefinition(
     execution_timezone="UTC",
 )
 
-# Daily rebuild of the weather table (USCRN hourly; bronze captured a few times a day,
-# a daily rebuild keeps silver a current projection without chasing each capture).
-# @spec SILVER-WEATHER-SCHED-001
-silver_weather_job = define_asset_job("silver_weather_job", selection=WEATHER_ASSETS)
-
-silver_weather_daily = ScheduleDefinition(
-    name="silver_weather_daily",
-    job=silver_weather_job,
-    cron_schedule="55 6 * * *",  # 06:55 UTC
-    execution_timezone="UTC",
-)
-
 # Daily rebuild of the body table (Garmin weigh-ins; after the daily capture).
 # @spec SILVER-DAILY-SCHED-001
 silver_body_job = define_asset_job("silver_body_job", selection=BODY_ASSETS)
@@ -162,8 +148,8 @@ silver_whoop_workouts_daily = ScheduleDefinition(
 # daily, so hourly checks would add nothing). Catches a silver asset that stops
 # materializing.
 # @spec SILVER-CHECKS-JOB-001
-silver_checks_job = build_bronze_checks_job(ALL_CHECKS, name="silver_checks_job")
+silver_checks_job = build_checks_job(ALL_CHECKS, name="silver_checks_job")
 # @spec SILVER-CHECKS-JOB-002
-silver_checks_schedule = build_bronze_checks_schedule(
+silver_checks_schedule = build_checks_schedule(
     silver_checks_job, name="silver_checks_daily", cron_schedule="5 7 * * *"  # 07:05 UTC
 )

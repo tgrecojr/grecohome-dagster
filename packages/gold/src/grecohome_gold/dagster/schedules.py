@@ -1,7 +1,7 @@
 """Jobs + schedules for the gold code location.
 
-A daily rebuild of the marts plus a checks-only job, both off the ``*_api`` pools.
-Gold runs **after** the silver rebuilds (silver finishes by ~06:50 + its 07:00 checks),
+A daily rebuild of the mart plus a checks-only job, neither with a concurrency pool.
+Gold runs **after** the silver rebuilds (silver finishes by ~06:55 + its 07:05 checks),
 so the mart reads fresh silver.
 """
 
@@ -9,11 +9,9 @@ from __future__ import annotations
 
 from dagster import ScheduleDefinition, define_asset_job
 
-from grecohome_core.checks import build_bronze_checks_job, build_bronze_checks_schedule
+from grecohome_core.checks import build_checks_job, build_checks_schedule
 from grecohome_gold.dagster.assets import ALL_ASSETS
 from grecohome_gold.dagster.checks import ALL_CHECKS
-from grecohome_gold.dagster.weather_assets import WEATHER_ASSETS
-from grecohome_gold.dagster.weather_checks import WEATHER_CHECKS
 
 # @spec GOLD-WELLNESS-SCHED-001
 gold_wellness_job = define_asset_job("gold_wellness_job", selection=ALL_ASSETS)
@@ -25,20 +23,9 @@ gold_wellness_daily = ScheduleDefinition(
     execution_timezone="UTC",
 )
 
-# Daily rebuild of the weather mart (reads silver_weather, which lands ~06:55 + checks).
-# @spec GOLD-WEATHER-SCHED-001
-gold_weather_job = define_asset_job("gold_weather_job", selection=WEATHER_ASSETS)
-
-gold_weather_daily = ScheduleDefinition(
-    name="gold_weather_daily",
-    job=gold_weather_job,
-    cron_schedule="40 7 * * *",  # 07:40 UTC — after silver_weather
-    execution_timezone="UTC",
-)
-
 # @spec GOLD-CHECKS-JOB-001
-gold_checks_job = build_bronze_checks_job(ALL_CHECKS + WEATHER_CHECKS, name="gold_checks_job")
+gold_checks_job = build_checks_job(ALL_CHECKS, name="gold_checks_job")
 # @spec GOLD-CHECKS-JOB-002
-gold_checks_schedule = build_bronze_checks_schedule(
+gold_checks_schedule = build_checks_schedule(
     gold_checks_job, name="gold_checks_daily", cron_schedule="5 8 * * *"  # 08:05 UTC
 )

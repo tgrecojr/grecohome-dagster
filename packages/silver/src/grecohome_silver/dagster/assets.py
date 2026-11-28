@@ -16,7 +16,7 @@ packages; it reads ``BRONZE_ROOT`` (mounted read-only) directly via DuckDB.
 Each asset is a whole-table rebuild: it overwrites its Parquet from current bronze
 every run (idempotent; last run wins). No partitioning in v1 — the data is small
 (thousands of nights). Assets carry **no concurrency pool**: silver makes no source
-API calls and must never contend with the ``*_api`` ingestion pools.
+API calls, so there is nothing to rate-limit.
 """
 
 import os

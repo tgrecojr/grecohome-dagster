@@ -11,8 +11,8 @@ Self-hosted Dagster has no push alerting, and two failure modes are invisible to
 
 - **a failed run**: the asset keeps its last good output, every check on it still passes, and
   only a freshness check notices, hours or days later;
-- **a backed-up run queue**: a run holding a concurrency pool, with the hourly schedules piling up
-  behind it.
+- **a backed-up run queue**: a hung or slow run holding the instance's run slots, with the
+  scheduled runs piling up behind it.
 
 Two sensors watch the **whole Dagster instance** for these and emit structured log lines that the
 Loki → Grafana → Slack path pages on (HLD: *Failures page through Loki and Grafana to Slack*).
@@ -48,8 +48,8 @@ A sensor evaluated at most every **60 seconds**. It counts the instance's **queu
 count is **above 15**, it logs `run_queue_backed_up` (with `queued` and `threshold`) at WARNING
 level. It always returns a skip reason ("Run queue backed up: …" or "Run queue healthy: …").
 
-15 sits above a normal top-of-hour burst, when several schedules emit trailing-window runs that
-drain through the per-source pools in minutes. The Grafana rule's 30-minute `for:` means only a
+15 sits well above anything the schedules queue normally: silver's daily rebuilds are staggered
+across 06:00–06:55 UTC and each drains in minutes. The Grafana rule's 30-minute `for:` means only a
 sustained backup pages.
 
 ## Alert rule

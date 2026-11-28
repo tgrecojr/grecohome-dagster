@@ -1,7 +1,7 @@
-"""Shared configuration base for data-subject pipelines.
+"""Shared configuration base for the code locations that read bronze.
 
-``BaseSubjectSettings`` holds the settings every subject needs (the bronze root,
-log level, environment). Each subject subclasses it to add its own fields.
+``BaseSubjectSettings`` holds the settings a bronze reader needs (the bronze root,
+log level, environment). Silver subclasses it to add its own fields.
 :func:`init_settings` constructs a settings class with a friendly, actionable
 error message when required environment variables are missing.
 """
@@ -21,14 +21,8 @@ load_dotenv(find_dotenv(usecwd=True), override=False)
 class BaseSubjectSettings(BaseSettings):
     """Settings common to every data subject."""
 
-    # Root directory for bronze raw capture. Required -- bronze is always on.
+    # Root of the bronze tree (written by WearStream). Required; read-only here.
     bronze_root: str
-
-    # Writable directory for bronze-check *state* (schema-drift baselines), kept
-    # strictly OUTSIDE bronze_root so raw capture stays immutable. Optional: when
-    # unset, the schema-drift check no-ops (records nothing, never fails) rather
-    # than writing a baseline. Mount this in deployment (see docs/DEPLOYMENT.md).
-    bronze_monitor_dir: str | None = None
 
     log_level: str = "INFO"
     environment: str = "development"

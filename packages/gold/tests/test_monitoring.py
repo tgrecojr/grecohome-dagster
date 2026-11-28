@@ -61,13 +61,13 @@ from dagster import DefaultSensorStatus  # noqa: E402
 from grecohome_gold.dagster.definitions import defs  # noqa: E402
 
 
-def _run(*, location: str | None = "soil_ingest", partition: str | None = "2026-10-12"):
+def _run(*, location: str | None = "silver", partition: str | None = "2026-10-12"):
     origin = None
     if location is not None:
         origin = SimpleNamespace(repository_origin=SimpleNamespace(
             code_location_origin=SimpleNamespace(location_name=location)))
     tags = {"dagster/partition": partition} if partition else {}
-    return SimpleNamespace(job_name="uscrn_capture_job", run_id="abc-123", tags=tags,
+    return SimpleNamespace(job_name="silver_sleep_job", run_id="abc-123", tags=tags,
                            remote_job_origin=origin)
 
 
@@ -81,7 +81,7 @@ class TestRunFailureMonitor:
         err.assert_called_once()
         assert err.call_args.args == ("dagster_run_failed",)
         assert err.call_args.kwargs == {
-            "job": "uscrn_capture_job", "location": "soil_ingest",
+            "job": "silver_sleep_job", "location": "silver",
             "run_id": "abc-123", "partition": "2026-10-12",
         }
 

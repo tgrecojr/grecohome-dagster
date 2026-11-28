@@ -20,9 +20,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # One gRPC code-location image per data subject, plus the cross-subject
-        # silver and gold layers.
-        subject: [soil, silver, gold]
+        # One gRPC code-location image per layer.
+        subject: [silver, gold]
     permissions:
       contents: read
       packages: write

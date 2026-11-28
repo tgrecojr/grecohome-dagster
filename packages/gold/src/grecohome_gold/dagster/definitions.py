@@ -12,18 +12,14 @@ from grecohome_gold.dagster.monitoring import run_failure_monitor, run_queue_mon
 from grecohome_gold.dagster.schedules import (
     gold_checks_job,
     gold_checks_schedule,
-    gold_weather_daily,
-    gold_weather_job,
     gold_wellness_daily,
     gold_wellness_job,
 )
-from grecohome_gold.dagster.weather_assets import WEATHER_ASSETS
-from grecohome_gold.dagster.weather_checks import WEATHER_CHECKS
 
 defs = Definitions(
-    assets=ALL_ASSETS + WEATHER_ASSETS,
-    asset_checks=ALL_CHECKS + WEATHER_CHECKS,
-    jobs=[gold_wellness_job, gold_weather_job, gold_checks_job],
-    schedules=[gold_wellness_daily, gold_weather_daily, gold_checks_schedule],
+    assets=ALL_ASSETS,
+    asset_checks=ALL_CHECKS,
+    jobs=[gold_wellness_job, gold_checks_job],
+    schedules=[gold_wellness_daily, gold_checks_schedule],
     sensors=[run_queue_monitor, run_failure_monitor],
 )

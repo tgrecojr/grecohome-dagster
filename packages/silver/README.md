@@ -7,13 +7,13 @@ regenerated from bronze, so it is not precious; bronze stays the only source of
 truth and is never touched here.
 
 - **Tables:** sleep (Garmin + Whoop side by side), recovery and strain,
-  workouts (Garmin activities, laps, Whoop workouts), weather, daily summary, body and
+  workouts (Garmin activities, laps, Whoop workouts), daily summary, body and
   fitness. Designed and specified in `docs/intent/silver/`.
 - Reads bronze from the filesystem (DuckDB over `BRONZE_ROOT`, mounted read-only);
   declares its bronze upstreams by `AssetKey` so lineage renders across code
   locations. Writes Parquet under `SILVER_ROOT`, never under `BRONZE_ROOT`.
-- Asset checks (uniqueness, ranges, coverage, freshness) and a daily rebuild schedule, all
-  **off** the `*_api` concurrency pools — silver makes no source calls.
+- Asset checks (uniqueness, ranges, coverage, freshness) and a daily rebuild schedule, with
+  no concurrency pool — silver makes no source calls.
 
 Ships as its own gRPC **code-location image** that registers with the host Dagster
 daemon/webserver. See `docs/DEPLOYMENT.md`.
