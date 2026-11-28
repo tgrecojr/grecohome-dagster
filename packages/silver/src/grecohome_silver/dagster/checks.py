@@ -3,8 +3,7 @@
 Severities mirror the bronze convention: structural/parse/dedup correctness = ERROR
 (the whole point of silver is one typed row per logical record); coverage and
 expectation drift = WARN (visible each run, not run-blocking). Checks read the
-written Parquet read-only and carry **no concurrency pool**, so they never contend
-with the ``*_api`` ingestion pools (silver makes no source calls).
+written Parquet read-only and carry **no concurrency pool** (silver makes no source calls).
 """
 
 from __future__ import annotations

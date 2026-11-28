@@ -1,7 +1,7 @@
 """Silver asset checks for recovery — same severity convention as the other tables.
 
 Structural/dedup correctness = ERROR; coverage = WARN. Read-only over the written
-Parquet, off the ``*_api`` pools.
+Parquet.
 """
 
 from __future__ import annotations

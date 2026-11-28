@@ -1,16 +1,16 @@
-"""A checks-only job + schedule, so bronze checks also run *independently* of
+"""A checks-only job + schedule, so asset checks also run *independently* of
 materialization.
 
-Per-materialization checks can't catch the one failure we most need: an asset that
-**stops** materializing. This builds a job that executes the given asset checks
+Per-materialization checks can't catch the one failure we most need: a table whose
+rebuild **stops**. This builds a job that executes the given asset checks
 *without* materializing their assets (``AssetSelection.checks(...)`` runs the check
 steps alone), plus a schedule to run it on a cadence. Each code location wires its
 own pair into its ``Definitions``.
 
 The job runs **in-process**: a check is a sub-second local read, and a per-step
 subprocess would spend nearly all of its CPU importing the code location, on every
-core at once. It carries **no concurrency pool** — checks make no source-API calls,
-so they must never contend with (or be wedged by) the ``*_api`` ingestion pools.
+core at once. It carries **no concurrency pool** — checks read local files only, so
+nothing they contend for needs a limit.
 
 The schedule's cron is **chosen per code location** (no default), and its minute
 field must be one literal minute 1–59: the host's own cron jobs land on minute 0,
@@ -39,8 +39,8 @@ if TYPE_CHECKING:
 
 
 # @spec CORE-CHECKS-JOB-001, CORE-CHECKS-JOB-003
-def build_bronze_checks_job(
-    checks: Sequence[AssetChecksDefinition], *, name: str = "bronze_checks_job"
+def build_checks_job(
+    checks: Sequence[AssetChecksDefinition], *, name: str = "checks_job"
 ) -> UnresolvedAssetJobDefinition:
     """A job that runs ``checks`` only (their assets are *not* materialized), in-process."""
     return define_asset_job(
@@ -61,7 +61,7 @@ def _require_literal_off_minute(cron_schedule: str) -> None:
 
 
 # @spec CORE-CHECKS-JOB-002, CORE-CHECKS-JOB-004
-def build_bronze_checks_schedule(
+def build_checks_schedule(
     job: UnresolvedAssetJobDefinition,
     *,
     cron_schedule: str,
@@ -70,9 +70,9 @@ def build_bronze_checks_schedule(
     """A UTC schedule that runs a checks-only job on the given cron.
 
     ``cron_schedule`` is required and must tick on a literal off-minute (see the
-    module docstring). Match the cadence to what the checks can detect: freshness
-    only fails once a capture is older than its tolerance, so checking much more
-    often than the subject captures buys CPU, not earlier detection.
+    module docstring). Match the cadence to what the checks can detect: table
+    freshness only fails once a table is older than its limit, so checking much more
+    often than the layer rebuilds buys CPU, not earlier detection.
 
     Starts RUNNING: a safety net that waits for someone to switch it on can silently
     never run. A schedule stopped deliberately in the UI stays stopped (the UI state

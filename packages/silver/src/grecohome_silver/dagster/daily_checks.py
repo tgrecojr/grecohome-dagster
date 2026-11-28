@@ -1,8 +1,8 @@
 """Silver asset checks for the daily summary — same severity convention as the others.
 
 Structural/dedup correctness = ERROR; coverage/expectation drift = WARN. Read-only over
-the written Parquet, off the ``*_api`` pools. Bounds are generous envelopes sized to catch
-a field/unit bug, not to police the data.
+the written Parquet. Bounds are generous envelopes sized to catch a field/unit bug, not to
+police the data.
 """
 
 from __future__ import annotations

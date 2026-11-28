@@ -27,21 +27,17 @@ rebuild per run, so there's no persistent database and no state shared between r
   captured yields an empty list, which is a valid state.
   - The glob is one level deep (`dt=*/*`): a file nested deeper inside a `dt=` folder is never
     read.
-  - Dotfiles don't match, so the bronze writer's in-flight hidden temporary files are never read.
-- **Each reader returns a SQL subquery**, always with a `filename` column, so a table can break
-  ties by capture time (the 13-digit fetch time in the bronze filename). Each returns a
-  **correctly typed empty relation** (`… WHERE false`) when there are no files, so a table over
-  a not-yet-captured collection gets the right columns instead of an error on an empty glob.
+  - Dotfiles don't match, so a producer's in-flight hidden temporary files are never read.
+- **`payloads_relation_sql(files)` returns a SQL subquery** with a `filename` column and `j`, the
+  whole file parsed as one `JSON` value (via `read_text` → `json(content)`). The `filename`
+  column lets a table break ties by capture time (the 13-digit fetch time in the bronze
+  filename). It returns a **correctly typed empty relation** (`… WHERE false`) when there are no
+  files, so a table over a not-yet-captured collection gets the right columns instead of an error
+  on an empty glob.
 
-| Reader | Yields | For |
-|---|---|---|
-| `payloads_relation_sql(files)` | `filename`, `j` (the whole file parsed as one `JSON` value, via `read_text` → `json(content)`) | JSON payloads |
-| `csv_relation_sql(files, columns)` | `filename` plus the named columns (an alias → exact header map, since headers can hold spaces and brackets), read all-VARCHAR with a header row (`header=true`) and `union_by_name` to tolerate column drift | CSV payloads |
-| `text_lines_relation_sql(files)` | `filename`, `line` (one row per non-blank physical line, read with a delimiter, ASCII Unit Separator, that never occurs in the data; DuckDB's default `"` quoting still applies, which is harmless for quote-free data) | Headerless, whitespace- or fixed-width text (USCRN) |
-
-JSON payloads are read as raw text rather than struct-typed (`read_json_auto`): heterogeneous,
-drifting bronze breaks struct typing, while JSON-path extraction from a raw value returns NULL
-for a missing key.
+Every bronze collection silver reads is JSON. Payloads are read as raw text rather than
+struct-typed (`read_json_auto`): heterogeneous, drifting bronze breaks struct typing, while
+JSON-path extraction from a raw value returns NULL for a missing key.
 
 **A file that isn't valid JSON (corrupt or empty) raises** when a query reads its `j` value, failing
 the table's whole rebuild. Bronze writes are atomic, so this means real corruption, and failing

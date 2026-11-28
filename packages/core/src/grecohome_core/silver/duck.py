@@ -1,7 +1,6 @@
 """DuckDB plumbing for silver: read bronze payloads, write Parquet atomically.
 
-Two invariants carried over from the bronze-check work (so no silver subject
-re-hits them):
+Two invariants every silver table relies on:
 
 1. *Sidecars are never read as payloads.* ``*.meta.json`` sits beside every
    payload; :func:`list_payload_files` excludes them in Python, so the meta keys
@@ -73,50 +72,6 @@ def payloads_relation_sql(files: list[str]) -> str:
     return (
         "SELECT filename, json(content) AS j "
         f"FROM read_text({_sql_str_list(files)})"
-    )
-
-
-# @spec CORE-SILVER-004
-def csv_relation_sql(files: list[str], columns: dict[str, str]) -> str:
-    """A SQL subquery selecting named CSV columns (+ ``filename``) for the given files.
-
-    ``columns`` maps a safe output alias to the exact source header (CSV headers can
-    contain spaces/brackets, e.g. Lingo's reading-time column), so callers reference
-    clean identifiers downstream. Files are read ``all_varchar`` with header detection
-    and ``union_by_name`` (tolerating minor column drift across captures); typing is
-    the caller's job. With no files, returns a correctly-typed empty relation so a
-    not-yet-captured collection yields the right columns instead of erroring.
-    """
-    aliases = list(columns)
-    if not files:
-        cols = ", ".join(f"NULL::VARCHAR AS {a}" for a in aliases)
-        return f"SELECT {cols}, NULL::VARCHAR AS filename WHERE false"
-    sel = ", ".join(f'"{hdr}" AS {a}' for a, hdr in columns.items())
-    return (
-        f"SELECT {sel}, filename FROM read_csv({_sql_str_list(files)}, "
-        "header=true, all_varchar=true, union_by_name=true, filename=true)"
-    )
-
-
-# @spec CORE-SILVER-005
-def text_lines_relation_sql(files: list[str]) -> str:
-    """A SQL subquery yielding ``(filename VARCHAR, line VARCHAR)`` — one row per line.
-
-    For line-oriented bronze with no header and no single field delimiter — fixed-width
-    / whitespace-delimited text such as the NOAA USCRN hourly product. Each file is read
-    with a delimiter that never occurs in the payload (ASCII Unit Separator, ``chr(31)``)
-    so every physical line lands in one ``VARCHAR`` cell, plus ``filename`` for
-    capture-recency tie-breaks. Blank lines are dropped; splitting and typing the line is
-    the caller's job. With no files, returns a correctly-typed empty relation so a
-    not-yet-captured collection yields the right columns instead of erroring on an empty
-    glob (mirrors :func:`csv_relation_sql` / :func:`payloads_relation_sql`).
-    """
-    if not files:
-        return "SELECT NULL::VARCHAR AS filename, NULL::VARCHAR AS line WHERE false"
-    return (
-        f"SELECT filename, line FROM read_csv({_sql_str_list(files)}, "
-        "delim=chr(31), header=false, columns={'line': 'VARCHAR'}, filename=true) "
-        "WHERE trim(line) <> ''"
     )
 
 

@@ -15,8 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # One package per data subject, plus the cross-subject silver and gold layers.
-        subject: [soil, silver, gold]
+        # One package per layer image.
+        subject: [silver, gold]
     concurrency:
       group: ghcr-cleanup-${{ github.repository }}-${{ matrix.subject }}
     steps:

@@ -8,8 +8,7 @@ license = "MIT"
 dependencies = [
     "grecohome-core",
     "dagster==1.13.31",
-    # DuckDB is silver's transform + Parquet engine; it lives only in this image,
-    # never in the bronze capture images (which need no query engine).
+    # DuckDB is silver's transform + Parquet engine.
     "duckdb==2.0.1",
     "pydantic==2.14.4",
     "pydantic-settings==2.16.3",

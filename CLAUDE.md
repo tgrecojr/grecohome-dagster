@@ -5,11 +5,10 @@
 A monorepo of personal data pipelines orchestrated by self-hosted Dagster, in three layers:
 
 - **Bronze** — the immutable source of truth: raw source responses as files under
-  `BRONZE_ROOT`. Soil/USCRN is captured here by its own code location. Whoop and Garmin are
-  captured by **WearStream** (`chainringlabs/wearstream`), an external service writing the
-  same layout into the same tree.
+  `BRONZE_ROOT`, written entirely by **WearStream** (`chainringlabs/wearstream`), an external
+  service that captures Whoop and Garmin. This repo only reads bronze.
 - **Silver** — one cross-subject code location of derived, typed, deduplicated Parquet
-  (sleep, workouts, recovery, daily, weather), read from bronze.
+  (sleep, workouts, recovery, daily, …), read from bronze.
 - **Gold** — one code location of analysis marts (daily wellness), read from silver.
 
 Each layer = its own gRPC code-location image. Silver/gold are *derived and rebuildable* (they
@@ -20,7 +19,7 @@ can be dropped and regenerated); bronze is the only source of truth.
 - Language: Python 3.14 (managed via uv; single `.python-version`)
 - Packaging: uv workspace — one root `pyproject.toml`, one `uv.lock`, member packages under `packages/`
 - Orchestration: Dagster (self-hosted; daemon + webserver run on the host)
-- Bronze capture: httpx; config: pydantic-settings; logging: structlog
+- Config: pydantic-settings; logging: structlog
 - Silver/gold transforms: DuckDB over Parquet (no transactional database)
 
 ## Commands
@@ -28,29 +27,27 @@ can be dropped and regenerated); bronze is the only source of truth.
 - `uv sync --frozen` — install the workspace from the lock
 - `uv run ruff check` — lint
 - `uv run pytest` — run all tests
-- `uv run dagster dev -m grecohome_soil.dagster.definitions` — load the Soil/USCRN code location
-  locally (swap the module for `grecohome_silver` / `grecohome_gold`)
+- `uv run dagster dev -m grecohome_silver.dagster.definitions` — load the silver code location
+  locally (swap the module for `grecohome_gold`)
 
 ## Architecture
 
-- `packages/core` (`grecohome_core`) — shared, source-agnostic framework: bronze capture
-  (atomic, append-only, content-hash dedup), `BaseSubjectSettings`, logging, Dagster helpers
-  (partitions, trailing window keys), bronze asset-check builders, and the **silver helpers**
+- `packages/core` (`grecohome_core`) — shared, table-agnostic library: `BaseSubjectSettings`,
+  logging, the **check helpers** (`grecohome_core.checks`: `alerting_check`, the checks-only
+  job/schedule builders, `table_freshness_check`) and the **silver helpers**
   (`grecohome_core.silver`: DuckDB connection, sidecar-safe bronze reading, dedup idiom,
   atomic Parquet write guarded by `protected_root`).
-- **Bronze subject** — `packages/soil`: a code location that captures NOAA USCRN (public
-  file, daily row-slice + dedup) to bronze.
 - **External producer** — WearStream writes `bronze/whoop` and `bronze/garmin` (auth,
-  trailing-window re-capture, its own checks and alerts). The bronze layout is a shared
-  contract with it; silver keeps `AssetKey` lineage on `whoop_bronze_*` / `garmin_bronze_*`,
+  trailing-window re-capture, its own checks and alerts). The bronze layout is a read
+  contract WearStream owns; silver keeps `AssetKey` lineage on `whoop_bronze_*` / `garmin_bronze_*`,
   which no code location defines (external stubs). See the HLD.
 - `packages/silver` (`grecohome_silver`) — one cross-subject code location: typed, deduped
   Parquet tables — `silver_sleep` (Garmin+Whoop FULL OUTER JOIN), `silver_workouts`,
   `silver_recovery`, and the other derived tables — plus their asset
   checks. Reads `BRONZE_ROOT`, writes `SILVER_ROOT`.
 - `packages/gold` (`grecohome_gold`) — analysis marts: `gold_daily_wellness` (one row per
-  local day joining the silver health tables) and `gold_daily_weather`. Reads `SILVER_ROOT`,
-  writes `GOLD_ROOT`.
+  local day joining the silver health tables), plus the instance-wide run monitors. Reads
+  `SILVER_ROOT`, writes `GOLD_ROOT`.
 - Cross-layer lineage is declared by `AssetKey` (silver→bronze, gold→silver); the reads are
   **filesystem reads** of the upstream root, not gRPC calls. Each layer ships its own gRPC
   code-location image; the host registers them via `workspace.yaml`. We ship code locations
@@ -58,7 +55,7 @@ can be dropped and regenerated); bronze is the only source of truth.
 
 ## Hard constraints
 
-- **Pins:** `dagster==1.13.30` and all `dagster-*==0.29.30` (must match the host so the
+- **Pins:** `dagster==1.13.31` and all `dagster-*==0.29.31` (must match the host so the
   daemon ↔ code-location gRPC protocol stays in sync). Other libs pinned `==`; pure-data
   deps (`tzdata`) use `>=`. DuckDB (silver/gold) is pinned `==`.
 - **No transactional database.** Bronze is files; silver/gold are Parquet via DuckDB. No
@@ -78,11 +75,13 @@ can be dropped and regenerated); bronze is the only source of truth.
   (2026-11); Lingo glucose was dropped entirely (with `silver_glucose` and the gold glucose
   columns). Never run a second Whoop/Garmin capture against the same accounts: two refreshers
   on one Whoop grant revoke it.
+- **Soil/USCRN and weather are retired here.** USCRN capture, `silver_weather` and
+  `gold_daily_weather` were removed in 2026-11; TurfOps (`~/code/turfops`) owns soil and weather
+  data. Don't reintroduce weather processing here.
 
 ## Environment Variables
 
 See `docs/ENV_TEMPLATE.md` (and `.env.example`). Per layer:
-- **soil** — `BRONZE_ROOT` (+ `USCRN_*`).
 - **silver** — `BRONZE_ROOT` (read-only), `SILVER_ROOT` (+ reserved `SILVER_MONITOR_DIR`).
 - **gold** — `SILVER_ROOT` (read-only), `GOLD_ROOT` (+ reserved `GOLD_MONITOR_DIR`).
 
@@ -93,10 +92,8 @@ See `docs/ENV_TEMPLATE.md` (and `.env.example`). Per layer:
 ## LID Scope
 
 Paths in scope:
-- `packages/soil/**`
 - `packages/silver/**`
 - `packages/gold/**`
-- `packages/core/src/grecohome_core/bronze/**`
 - `packages/core/src/grecohome_core/checks/**`
 - `packages/core/src/grecohome_core/silver/**`
 
@@ -136,6 +133,6 @@ Stop after each phase for user review. **Docs carry current intent, written to b
 
 ### Code annotations
 
-Annotate code and tests with `@spec` comments citing EARS IDs (Python: `# @spec SOIL-CAPTURE-001`).
+Annotate code and tests with `@spec` comments citing EARS IDs (Python: `# @spec SILVER-SLEEP-SCHED-001`).
 
 Place the annotation at the *entry point of the behavior's implementation graph* — the topmost function or module owning the specified behavior, not every helper. Tests follow the same rule: annotate the test that directly exercises the spec, not every inner assertion.

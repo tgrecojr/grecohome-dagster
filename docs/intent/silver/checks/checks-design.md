@@ -23,8 +23,8 @@ A rebuild's own job also runs that table's checks. The daily checks job is what 
 whose rebuild has stopped or keeps failing: a per-run check never runs for an asset that doesn't
 materialize.
 
-It's built with core's checks-only job and schedule builders (`build_bronze_checks_job`,
-`build_bronze_checks_schedule`), which set the running default status.
+It's built with core's checks-only job and schedule builders (`build_checks_job`,
+`build_checks_schedule`), which set the running default status.
 
 ## Table freshness
 

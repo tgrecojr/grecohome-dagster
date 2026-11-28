@@ -34,8 +34,8 @@ from grecohome_core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-# Above a normal top-of-hour burst (several schedules emit trailing-window runs that
-# drain through the per-source pools in a few minutes). Paired with the Grafana rule's
+# Well above anything the schedules queue normally (silver's daily rebuilds are
+# staggered across 06:00-06:55 UTC and each drains in minutes). Paired with the Grafana rule's
 # long `for:` so a brief burst that drains doesn't page — only a sustained backup does.
 QUEUE_DEPTH_THRESHOLD = 15
 

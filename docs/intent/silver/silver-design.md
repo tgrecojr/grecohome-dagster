@@ -31,14 +31,14 @@ belong to gold.
   sees a file.
 - **The event date comes from the payload, never the bronze `dt=` folder.** Bronze partitions
   are UTC fetch slices or capture dates; each table derives its own event date and local-day
-  meaning (HLD: *Bronze partitions are daily UTC fetch-slices*). The one exception is Garmin
+  meaning (HLD: *Silver reads bronze as re-captured UTC fetch-slices*). The one exception is Garmin
   **race predictions** in `silver_fitness`: they carry no date that tracks the snapshot, so the
   day of the once-daily capture is the meaningful day.
 - **Bronze is re-captured, so deduplication is mandatory.** Every table that reads a
   re-captured collection keeps the latest capture or restatement per logical key, and tolerates
   the same record appearing in several captures or folders.
-- **No source calls, no `*_api` pool.** Silver reads files only, so its assets and checks never
-  contend with ingestion.
+- **No source calls, no concurrency pool.** Silver reads files only, so its assets and checks
+  have nothing to rate-limit.
 - **A bad read fails the rebuild loudly.** A bronze payload that can't be parsed, or a payload
   shape a table can't convert, fails that table's run. The previous Parquet stays in place,
   because the write is atomic, so a failed rebuild leaves the last good table rather than a
@@ -48,15 +48,14 @@ belong to gold.
 
 - **Generic machinery lives in core** (`grecohome_core.silver`, see
   [core silver helpers](../core/silver/silver-design.md)): an in-memory DuckDB connection,
-  sidecar-safe readers for JSON, CSV and line-oriented bronze, the
+  the sidecar-safe JSON payload reader, the
   `row_number() … = 1` dedup idiom, JSON-path helpers, and the atomic Parquet writer guarded by
   `protected_root`.
 - **Each table family's column mapping lives in one silver module**, the only place payload
   field names appear (for example `grecohome_silver.sleep`).
 - **Bronze upstreams are declared by `AssetKey`** for cross-code-location lineage. The reads are
-  filesystem reads of `BRONZE_ROOT` through DuckDB, never calls into the subject code locations,
-  so the silver image includes no subject package. DuckDB lives only in the silver and gold
-  images; the bronze capture images carry no query engine.
+  filesystem reads of `BRONZE_ROOT` through DuckDB, never calls into the producer,
+  so the silver image includes no capture code. DuckDB lives only in the silver and gold images.
 - **Payloads are read as raw JSON text** and extracted by JSON path, so a missing or renamed key
   yields `NULL` rather than an error: heterogeneous, drifting bronze never crashes a rebuild.
 
@@ -68,13 +67,12 @@ belong to gold.
 - **Layout:** `{SILVER_ROOT}/<family>/<table>.parquet`. A table's source intermediates use a
   leading underscore (for example `sleep/_garmin.parquet`).
 - **No partitioning.** Each asset is a whole-table rebuild reading every bronze partition. The
-  data is small (thousands of nights and days, and hourly weather since 2010). Partition by year only if it
-  grows. After a bronze backfill, the affected family's job is run on demand; there are no silver
+  data is small (thousands of nights and days). Partition by year only if it grows. After a bronze backfill, the affected family's job is run on demand; there are no silver
   partitions to backfill (`docs/DEPLOYMENT.md`).
 
 ## Asset checks
 
-Every table has `@asset_check`s, following the bronze convention:
+Every table has `@asset_check`s:
 
 - **Structural correctness is ERROR:** a unique, non-null key; values in plausible ranges (which
   catches unit and parsing bugs); and the table's Parquet existing.
@@ -92,21 +90,21 @@ Every table has `@asset_check`s, following the bronze convention:
   pages. That includes a WARN check whose table's Parquet is missing: a missing table is an ERROR
   failure for every check on it.
 - **No concurrency pool.** A checks-only job (`silver_checks_job`) runs every table's checks
-  daily at **07:00 UTC** (`silver_checks_daily`, which starts running), so a stopped rebuild is
+  daily at **07:05 UTC** (`silver_checks_daily`, which starts running), so a stopped rebuild is
   still caught. Checks also run after each table's rebuild. The job and the freshness builder are
   specified in the [layer checks leaf](checks/checks-design.md).
 
 ## Schedules
 
 Each table family has its own job and **daily** rebuild schedule, staggered between **06:00 and
-06:55 UTC** (sleep at 06:00). Rebuild schedules start **stopped**, like all capture and build
-schedules (HLD), and are listed in `docs/DEPLOYMENT.md`. A daily cadence is enough: silver is a
+06:55 UTC** (sleep at 06:00). Rebuild schedules start **stopped**, like all build schedules
+(HLD), and are listed in `docs/DEPLOYMENT.md`. A daily cadence is enough: silver is a
 whole-table projection, with nothing intraday to chase.
 
-The window sits **after the day's bronze captures**: Garmin's daily tick (05:30 UTC), Whoop's
-hourly ticks (:17) and USCRN's 6-hourly ticks. A bronze capture that lands after silver's
-rebuild reaches silver, gold and the dashboards a day late, so a capture schedule that moves
-past 06:00 UTC means moving this window too. Gold's rebuilds follow silver's checks.
+The window sits **after the day's bronze captures**: WearStream's daily Garmin capture (05:30
+UTC) and its hourly Whoop captures (:17). A bronze capture that lands after silver's rebuild
+reaches silver, gold and the dashboards a day late, so a WearStream schedule that moves past
+06:00 UTC means moving this window too. Gold's rebuilds follow silver's checks.
 
 ## Table families
 
@@ -116,7 +114,6 @@ past 06:00 UTC means moving this window too. Gold's rebuilds follow silver's che
 | Cycles | [cycles/cycles-design.md](cycles/cycles-design.md) | `silver_recovery`, `silver_strain` | Specified (`SILVER-CYCLES`) |
 | Workouts | [workouts/workouts-design.md](workouts/workouts-design.md) | `silver_workouts`, `silver_workout_splits`, `silver_whoop_workouts` | Specified (`SILVER-WORKOUTS`) |
 | Daily | [daily/daily-design.md](daily/daily-design.md) | `silver_daily`, `silver_body`, `silver_fitness` | Specified (`SILVER-DAILY`) |
-| Weather | [weather/weather-design.md](weather/weather-design.md) | `silver_weather` | Specified (`SILVER-WEATHER`) |
 
 | Layer checks | [checks/checks-design.md](checks/checks-design.md) | `silver_checks_job`, the freshness builder | Specified (`SILVER-CHECKS`) |
 
@@ -156,7 +153,6 @@ projected, on purpose:
 | `BRONZE_ROOT` | Required; bronze, read-only |
 | `SILVER_ROOT` | Required; silver output, never under `BRONZE_ROOT` |
 | `SILVER_MONITOR_DIR` | Optional, reserved for future silver-check state, outside `SILVER_ROOT` |
-| `USCRN_TIMEZONE` | The USCRN station's IANA zone for weather's local day (default `America/New_York`) |
 
 ## References
 

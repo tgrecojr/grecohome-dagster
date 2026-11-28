@@ -1,7 +1,7 @@
 """Asset checks for the gold daily wellness mart.
 
 Same convention as silver: structural correctness = ERROR; coverage = WARN. Read-only
-over the written Parquet, off the ``*_api`` pools.
+over the written Parquet.
 """
 
 from __future__ import annotations
